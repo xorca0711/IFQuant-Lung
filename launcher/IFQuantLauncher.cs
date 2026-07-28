@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace IFQuantLauncher
 {
@@ -82,8 +82,8 @@ namespace IFQuantLauncher
         private static readonly Dictionary<string, string> PanelDescriptions =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses uniquely nucleus-owned apical ciliary components; a negative call still requires an airway ROI." },
-                { "R", "20x alveolar panel: DAPI, T1alpha/PDPN, tdTOM, mRAGE (channels 1-4)." },
+                { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses uniquely nucleus-owned apical ciliary components. Strict positive evidence can be retained when context is unresolved; a negative still requires an airway ROI." },
+                { "R", "20x alveolar panel: DAPI, T1alpha/PDPN, tdTOM, mRAGE (channels 1-4). T1alpha and mRAGE negatives require an alveolar ROI; strict evidence in unresolved context is reported separately." },
                 { "M", "4x mapping panel: DAPI, CC10, tdTOM (channels 1-3)." },
                 { "A", "DAPI, KRT5, AGER (channels 1-3)." },
                 { "B", "DAPI, KRT5, ProSPC (channels 1-3)." },
@@ -330,7 +330,7 @@ namespace IFQuantLauncher
             toolTips.SetToolTip(projectionBox, "Maximum intensity is typical for z-stacks. YAP nuclear-to-cytoplasmic analysis should use a single plane.");
             toolTips.SetToolTip(singlePlaneBox, "Used only when Z-stack handling is single. -1 asks the pipeline to use the middle plane.");
             toolTips.SetToolTip(tissueModeBox, "Auto excludes empty background. Whole field is appropriate only when the entire image should be analyzed.");
-            toolTips.SetToolTip(compartmentModeBox, "Required is stricter. Positivity can be rejected when the cell is outside a marker's expected anatomy.");
+            toolTips.SetToolTip(compartmentModeBox, "Required protects the negative denominator. Strict marker evidence may be retained when anatomy is unresolved, but a negative requires a compatible compartment; a known incompatible compartment remains indeterminate.");
             toolTips.SetToolTip(wholeCompartmentBox, "Use this only when the whole image contains one known tissue compartment.");
             toolTips.SetToolTip(includeRegexBox, "Leave .* to include every supported microscope image. This is an expert regular-expression filter.");
             toolTips.SetToolTip(maxImagesBox, "0 analyzes all matching images. Use 1 for a quick pilot run.");

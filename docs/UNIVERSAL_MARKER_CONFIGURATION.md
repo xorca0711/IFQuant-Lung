@@ -194,6 +194,7 @@ marker, declare it explicitly. Useful optional channel fields are:
 | `minNuclearEnrichment` | Nuclear marker enrichment override |
 | `minNucCytoRatio` | Nuclear localization ratio override |
 | `supportExpandUm` | Ciliary/support-zone distance override |
+| `allowPositiveWithoutCompartment` | Default `true`; retain strict evidence as an exploratory context-unresolved marker-positive call. Set `false` when even positivity is uninterpretable without geography |
 
 Custom panels cannot replace built-in panel keys. This prevents a study file
 from silently changing a previously validated acquisition map.
@@ -217,6 +218,26 @@ An ROI name may contain more than one tag, for example
 The complete set is exported as `region_tags`. `compartment` remains as a
 single backward-compatible primary label. A marker with multiple
 `expectedCompartments` is evaluable when at least one expected tag is present.
+
+### Universal context decision policy
+
+The same hierarchy applies to built-in and custom cell-call markers:
+
+| Marker evidence | Anatomical context | Marker call | Compound phenotype use |
+|---|---|---|---|
+| Passes all role-specific gates | Compatible or not required | Positive | Allowed |
+| Fails role-specific gates | Compatible or not required | Evaluable negative | Allowed |
+| Passes all role-specific gates | Unassigned or ambiguous | Exploratory context-unresolved positive | Not allowed |
+| Fails role-specific gates | Unassigned or ambiguous | Indeterminate | Not allowed |
+| Passes or fails | Known incompatible | Indeterminate for the intended endpoint | Not allowed |
+| Any | Invalid projection, empty support, or shared ownership | Indeterminate | Not allowed |
+
+This asymmetry prevents an unresolved ROI from increasing the biological
+negative denominator. The output still preserves strict positive evidence in
+`<marker>_marker_evidence_pass` and reports aggregate
+`<marker>_context_unresolved_positive_count` and
+`<marker>_context_excluded_evidence_positive_count`. Marker positivity does not
+by itself establish lineage, disease, malignancy, mutation, or anatomy.
 
 ## 7. Control and validation checklist
 

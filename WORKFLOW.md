@@ -22,6 +22,8 @@ comparing experimental groups.
   morphology and literature notes.
 - [`docs/UNIVERSAL_MARKER_CONFIGURATION.md`](docs/UNIVERSAL_MARKER_CONFIGURATION.md):
   reusable marker, disease-context, panel, and ROI-tag hierarchy.
+- [`docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
+  cross-marker context/evaluability audit and representative Fiji regressions.
 - [`config/lung_marker_registry.json`](config/lung_marker_registry.json): marker
   aliases, localization, lineage/state notes, and analytical-role defaults.
 - [`config/custom_panels.example.json`](config/custom_panels.example.json):
@@ -66,26 +68,33 @@ mutation, malignancy, or disease state by itself.
 
 ```mermaid
 flowchart TD
-    A[Original Bio-Formats image] --> B[Confirm image identity, channel map, calibration, and Z handling]
-    B --> C[Define blinded tissue and anatomical ROIs]
-    C --> D[Segment and QC DAPI nuclei]
-    D --> E{Is this marker evaluable for this nucleus?}
-    E -- No: invalid projection, missing compartment, empty or shared support --> F[Indeterminate]
-    E -- Yes --> G[Apply fixed or exploratory intensity cutoff to pixels]
-    G --> H{Enough positive spatial coverage?}
-    H -- No --> I[Negative]
-    H -- Yes --> J{Connected spatial pattern passes?}
-    J -- No --> I
-    J -- Yes --> K{Localization or enrichment passes?}
-    K -- No --> I
-    K -- Yes --> L{Required anatomical compartment passes?}
-    L -- No --> F
-    L -- Yes --> M[Positive]
-    F --> N[Export cell CSV, masks, call QC, and provenance]
-    I --> N
-    M --> N
-    N --> O[Review QC and exclude failed fields]
-    O --> P[Aggregate accepted regions to mouse level]
+    A[Original Bio-Formats image] --> B[Verify file identity, channel map, calibration, bit depth, and Z policy]
+    B --> C[Define blinded tissue and anatomical/context ROIs]
+    C --> D[Split channels and project each channel using the declared Z policy]
+    D --> E[Segment DAPI nuclei and reject undersized or edge-touching candidates]
+    E --> F{Nucleus and marker support technically evaluable?}
+    F -- No: invalid projection, empty support, or shared ownership --> U[Indeterminate]
+    F -- Yes --> G[Resolve fixed control-derived or exploratory pixel cutoff]
+    G --> H[Measure role-specific support: nucleus, ring, membrane, ciliary component, or regional area]
+    H --> I{Coverage, connectedness, localization, enrichment, and ownership pass?}
+    I -- Yes --> J[Strict marker evidence positive]
+    I -- No --> K[Strict marker evidence absent]
+    J --> L{Expected anatomical context}
+    K --> L
+    L -- Compatible or not required --> M{Marker evidence positive?}
+    M -- Yes --> P[Positive]
+    M -- No --> N[Evaluable negative]
+    L -- Unresolved + marker evidence positive --> Q[Exploratory context-unresolved positive]
+    L -- Unresolved + evidence absent --> U
+    L -- Known incompatible --> U
+    P --> V[Evaluate compound phenotype rules]
+    N --> V
+    Q --> W[Do not authorize compound lineage/state class]
+    U --> W
+    V --> X[Export cell CSV, summaries, masks, call-QC overlays, and provenance]
+    W --> X
+    X --> Y[Review QC; exclude failed fields without relabeling them negative]
+    Y --> Z[Aggregate accepted regions to section or mouse level]
 ```
 
 ## Decision authority and three-state semantics
@@ -107,6 +116,25 @@ This hierarchy has three important consequences:
 3. Missing spatial information is indeterminate, not negative. Segmentation
    failure, ambiguous ownership, invalid projection, or an unassigned required
    compartment must not silently inflate the negative group.
+
+For every cell-call marker with `expectedCompartment` or
+`expectedCompartments`, context is asymmetric:
+
+- strict localization-correct marker evidence may be retained as an
+  `exploratory_positive_context_unresolved` call when anatomy is unassigned or
+  ambiguous;
+- absence becomes negative only inside a compatible, independently assigned
+  compartment;
+- evidence in a known incompatible compartment remains indeterminate for the
+  intended endpoint and is separately counted as
+  `<marker>_context_excluded_evidence_positive_count`;
+- context-unresolved positives cannot authorize compound lineage/state
+  classifications.
+
+This preserves observable marker expression without allowing the marker channel
+to declare its own negative population or anatomical identity. A custom channel
+can set `allowPositiveWithoutCompartment: false` when even marker positivity is
+not interpretable without geography.
 
 Adaptive Otsu thresholds are allowed for pilot exploration and produce
 `exploratory_positive` or `exploratory_negative` status. Confirmatory analysis

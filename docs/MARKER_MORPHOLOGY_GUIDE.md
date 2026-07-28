@@ -14,18 +14,22 @@ experimental groups.
 
 ```mermaid
 flowchart TD
-    A[Valid DAPI nucleus in a predefined tissue ROI] --> B{Marker is evaluable?}
-    B -- No: invalid projection, unassigned required compartment, empty or shared support --> I[Indeterminate]
-    B -- Yes --> C[Apply predeclared intensity cutoff to pixels]
-    C --> D{Enough positive spatial coverage?}
-    D -- No --> N[Negative]
-    D -- Yes --> E{Positive pixels form a sufficiently connected pattern?}
-    E -- No --> N
-    E -- Yes --> F{Localization rule passes?}
-    F -- No --> N
-    F -- Yes --> G{Required anatomical compartment passes?}
-    G -- No --> N
-    G -- Yes --> P[Positive]
+    A[Valid DAPI nucleus in a predefined tissue ROI] --> B{Technical support evaluable?}
+    B -- No: invalid projection, empty support, or shared ownership --> I[Indeterminate]
+    B -- Yes --> C[Apply fixed or exploratory cutoff to candidate pixels]
+    C --> D{Coverage, connected pattern, localization, and ownership pass?}
+    D -- Yes --> E[Strict marker evidence positive]
+    D -- No --> F[Strict marker evidence absent]
+    E --> G{Expected anatomical context}
+    F --> G
+    G -- Compatible or not required --> H{Evidence positive?}
+    H -- Yes --> P[Positive]
+    H -- No --> N[Evaluable negative]
+    G -- Unresolved + evidence positive --> U[Exploratory context-unresolved positive]
+    G -- Unresolved + evidence absent --> I
+    G -- Known incompatible --> I
+    U --> X[Exclude from compound lineage/state classes]
+    I --> X
 ```
 
 The hierarchy has three important consequences:
@@ -36,6 +40,13 @@ The hierarchy has three important consequences:
 3. Missing spatial information is `indeterminate`, not negative. This prevents
    failed segmentation, ambiguous ownership, or an unassigned compartment from
    silently increasing the negative group.
+
+For every compartment-dependent cell-call marker, strict marker evidence may be
+retained as an exploratory positive when anatomy is unresolved, but evidence
+absence cannot become negative until a compatible compartment is independently
+assigned. Evidence in a known incompatible compartment is retained in audit
+fields but remains indeterminate for the intended endpoint. Context-unresolved
+positives cannot authorize compound lineage/state classes.
 
 An image-specific Otsu cutoff is allowed for pilot exploration. Calls using it
 are exported as `exploratory_positive` or `exploratory_negative`. A confirmatory
@@ -53,11 +64,14 @@ For a marker-specific support region, the pipeline calculates:
   ratio for YAP, or the appropriate perinuclear/apical support for other roles.
 - **Ownership:** whether another included nucleus lies inside the same support
   region. Shared support is indeterminate when unique attribution is required.
-- **Compartment:** whether a marker restricted to airway or alveolar
-  interpretation is being evaluated in the correct anatomical ROI.
+- **Compartment/context:** whether the endpoint is in a compatible airway,
+  alveolar, tumor, fibrotic, stromal, vascular, or immune ROI. Missing context
+  is asymmetric: strict positive evidence may be retained; negative evidence
+  remains indeterminate.
 
-The final positive is the logical AND of all applicable morphology gates. A
-final negative is allowed only when the marker is evaluable.
+The final positive is the logical AND of all applicable morphology gates and
+the context policy. A final negative is allowed only when technical support and
+any required anatomical context are evaluable.
 
 ## 3. Current pilot defaults
 
@@ -317,15 +331,20 @@ The per-cell CSV includes:
 - `<marker>_fraction_pass`, `<marker>_connected_pattern_pass`,
   `<marker>_ownership_clear`, `<marker>_enrichment_pass`, and
   `<marker>_compartment_pass`;
+- `<marker>_marker_evidence_pass`, `<marker>_context_resolved`,
+  `<marker>_context_state`, and `<marker>_negative_eligible`;
 - `<marker>_final_call`: `1`, `0`, or blank;
-- `<marker>_call_status`: positive, negative, exploratory positive/negative, or
-  indeterminate;
+- `<marker>_call_status`: positive, negative, exploratory positive/negative,
+  exploratory context-unresolved positive, or indeterminate;
 - `<marker>_call_reason`;
 - `<marker>_true_pos`: compatibility alias for the final call.
 
 The region summary separately reports raw mean-intensity counts, morphology
-positive counts, morphology negative counts, indeterminate counts, and evaluable
-counts. Classification rules use `<marker>_final_call`, never `<marker>_pos`.
+positive counts, morphology negative counts, indeterminate counts, strict
+marker-evidence-positive counts, context-unresolved positives,
+context-excluded positive evidence, and separate context-resolved positive,
+evaluable, and positive-fraction fields. Classification rules use
+`<marker>_final_call` plus resolved context, never `<marker>_pos`.
 
 Each marker also receives a morphology-positive nuclei label mask and an
 indeterminate nuclei label mask for QC, plus a call-QC PNG with positives in

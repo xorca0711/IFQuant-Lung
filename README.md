@@ -129,9 +129,13 @@ The final marker call has three states: positive, negative, or indeterminate.
 An intensity cutoff first defines candidate positive pixels. A final positive
 then requires the marker-specific minimum spatial coverage, connected pattern,
 localization/enrichment rule, unique ownership where applicable, and anatomical
-compartment. A final negative is assigned only when the marker is evaluable.
-Missing compartment, invalid YAP projection, empty support, or shared support is
-indeterminate rather than negative.
+context policy. For a compartment-dependent endpoint, strict marker evidence
+may be retained as an exploratory context-unresolved positive, but a final
+negative is assigned only inside a compatible, independently defined
+compartment. A known incompatible compartment, missing context with no positive
+evidence, invalid YAP projection, empty support, or shared support is
+indeterminate rather than negative. Context-unresolved positives do not
+authorize compound lineage/state classifications.
 
 `<marker>_pos` is the legacy mean-intensity audit result. Classifications and
 counts use `<marker>_final_call`; they do not use the raw mean-intensity result.
@@ -389,6 +393,16 @@ biological marker name is used.
 - `<marker>_morphology_pos_count`, `<marker>_morphology_negative_count`,
   `<marker>_indeterminate_count`, `<marker>_morphology_evaluable_count` — the
   authoritative three-state decision summary.
+- `<marker>_marker_evidence_pos_count`,
+  `<marker>_context_unresolved_positive_count`, and
+  `<marker>_context_excluded_evidence_positive_count` — strict evidence before
+  or alongside anatomical eligibility. These fields make context-related loss
+  visible instead of allowing it to resemble a biological negative.
+- `<marker>_context_resolved_positive_count`,
+  `<marker>_context_resolved_evaluable_count`, and
+  `<marker>_context_resolved_positive_fraction` — the context-resolved
+  denominator for confirmatory biological summaries; do not substitute the
+  unresolved-positive-only fraction.
 - `KRT5_pod_area_um2`, `KRT5_pod_area_frac`, `KRT5_n_pods`,
   `KRT5_mean_pod_area_um2`, `KRT5_pod_threshold` — **primary endpoint**.
 - `<marker>_positive_area_um2`, `<marker>_positive_area_frac`,
@@ -397,7 +411,9 @@ biological marker name is used.
   Components below the declared physical minimum are excluded from the saved
   mask and from the area endpoint.
 - `class_<rule>_count`, `class_<rule>_evaluable_count`, and
-  `class_<rule>_indeterminate_count` — classifications consume only final calls.
+  `class_<rule>_indeterminate_count` — every declared class is emitted even
+  when all cells are indeterminate; classifications consume only
+  context-resolved final calls.
 
 After `aggregate_to_mouse.py` you also get:
 

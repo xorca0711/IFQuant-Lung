@@ -578,6 +578,11 @@ PANELS.each { panelKey, panelDef ->
         failRun(field + " must be between 0 and 1 for marker '" + c.marker + "'")
       }
     }
+    if (c.allowPositiveWithoutCompartment != null &&
+        !(c.allowPositiveWithoutCompartment instanceof Boolean)) {
+      failRun("allowPositiveWithoutCompartment must be true/false for marker '" +
+              c.marker + "'")
+    }
   }
   def indexes = panelDef.channels.collect { it.idx as int }
   if (indexes.unique().size() != indexes.size()) {
@@ -1562,6 +1567,13 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     // false-positive or false-negative labels.
     def rawPosFinalNegCount = [:].withDefault { 0 }
     def rawNegFinalPosCount = [:].withDefault { 0 }
+    // Strict marker evidence is counted separately from endpoint context. This
+    // prevents localization-correct signal from disappearing when anatomy is
+    // unresolved, while still preventing unsupported negatives and compound
+    // cell identities.
+    def markerEvidencePosCount = [:].withDefault { 0 }
+    def contextUnresolvedPosCount = [:].withDefault { 0 }
+    def contextExcludedEvidencePosCount = [:].withDefault { 0 }
     def classCount = [:].withDefault { 0 }
     def classEvaluableCount = [:].withDefault { 0 }
     def allNucRois = []
@@ -1590,6 +1602,7 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
 
       def calls = [:]       // morphology-authoritative three-state calls: 1, 0, or ""
       def rawCalls = [:]    // legacy mean-intensity calls retained for audit only
+      def callContextResolved = [:] // compound classes require resolved context
       cellChannels.each { c ->
         def m = c.marker
         def img = markerImg[m]
@@ -1702,26 +1715,41 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         }
 
         def expectedCompartments = expectedCompartmentsFor(c)
+        boolean hasCompartmentRequirement = !expectedCompartments.isEmpty()
         boolean compartmentAssigned = !regionTags.isEmpty() && !regionTags.contains("ambiguous")
         boolean compartmentPass = expectedCompartments.isEmpty() ||
                                   (compartmentAssigned && expectedCompartments.any { regionTags.contains(it) })
-        boolean contextualApicalPositive = c.role == "apical_cilia" &&
-                                           componentContextPass &&
-                                           !compartmentAssigned
+        boolean knownWrongCompartment = hasCompartmentRequirement &&
+                                        compartmentAssigned && !compartmentPass
+        boolean allowPositiveWithoutCompartment =
+          c.allowPositiveWithoutCompartment != null ?
+            (c.allowPositiveWithoutCompartment as boolean) : true
+        boolean localizationPatternPass = c.role == "apical_cilia" ?
+                                          componentContextPass :
+                                          (fractionPass && connectedPass && enrichmentPass)
+        boolean markerEvidencePass = localizationPatternPass &&
+                                     ownershipClear && projectionValid &&
+                                     supportStats.total > 0
+
+        row[m + "_mean"] = val
+        boolean intensityPos = val >= chThresh[m]
+        rawCalls[m] = intensityPos ? 1 : 0
+        row[m + "_pos"] = intensityPos ? 1 : 0  // legacy/raw audit field
+
+        // Compartment-dependent endpoints use an asymmetric context policy.
+        // Strong marker evidence can establish an exploratory marker-positive
+        // call when anatomy is unresolved, but absence cannot establish a
+        // negative. A known incompatible compartment is never overridden.
+        boolean authorityPositiveEvidence = cfg.morphologyPrimary ?
+                                            markerEvidencePass : intensityPos
+        boolean contextUnresolvedPositive = hasCompartmentRequirement &&
+                                            !compartmentAssigned &&
+                                            allowPositiveWithoutCompartment &&
+                                            authorityPositiveEvidence
         boolean evaluable = supportStats.total > 0 && projectionValid
         def indeterminateReasons = []
-        if (c.role == "apical_cilia") {
-          // Positive evidence is asymmetric: a uniquely nucleus-owned ciliary
-          // component can establish a local AcTub-associated cellular context
-          // in an unassigned/ambiguous field. Absence is not a valid negative
-          // unless the ROI was independently identified as airway. A known
-          // non-airway ROI is never overridden by the target marker.
-          evaluable = supportStats.total > 0 && projectionValid &&
-                      (compartmentPass || contextualApicalPositive)
-          if (!compartmentPass && !contextualApicalPositive) {
-            indeterminateReasons << (compartmentAssigned ? "wrong_compartment" : "compartment_unassigned")
-          }
-        } else if (!expectedCompartments.isEmpty() && !compartmentPass) {
+        if (hasCompartmentRequirement && !compartmentPass &&
+            !contextUnresolvedPositive) {
           evaluable = false
           indeterminateReasons << (compartmentAssigned ? "wrong_compartment" : "compartment_unassigned")
         }
@@ -1738,10 +1766,6 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           indeterminateReasons << "empty_spatial_support"
         }
 
-        row[m + "_mean"] = val
-        boolean intensityPos = val >= chThresh[m]
-        rawCalls[m] = intensityPos ? 1 : 0
-        row[m + "_pos"] = intensityPos ? 1 : 0  // legacy/raw audit field
         row[m + "_threshold_source"] = chThreshSource[m]
         row[m + "_support_fraction_above_threshold"] = supportStats.fraction
         row[m + "_minimum_support_fraction"] = minFraction
@@ -1754,6 +1778,17 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         row[m + "_projection_valid"] = projectionValid ? 1 : 0
         row[m + "_expected_compartment"] = expectedCompartments.isEmpty() ? "none" : expectedCompartments.join("|")
         row[m + "_compartment_pass"] = compartmentPass ? 1 : 0
+        row[m + "_context_resolved"] =
+          (!hasCompartmentRequirement || compartmentPass) ? 1 : 0
+        row[m + "_context_policy"] = hasCompartmentRequirement ?
+          "asymmetric_positive_evidence_negative_requires_compartment" : "not_required"
+        row[m + "_context_state"] = !hasCompartmentRequirement ? "not_required" :
+          (compartmentPass ? "compatible" :
+           (knownWrongCompartment ? "known_incompatible" :
+            (contextUnresolvedPositive ? "unresolved_positive_evidence" : "unresolved")))
+        row[m + "_allow_positive_without_compartment"] =
+          allowPositiveWithoutCompartment ? 1 : 0
+        row[m + "_marker_evidence_pass"] = markerEvidencePass ? 1 : 0
         row[m + "_enrichment_pass"] = enrichmentPass ? 1 : 0
         if (c.role == "membrane" || c.role == "cyto") {
           row[m + "_ring_fraction_above_threshold"] = supportStats.fraction
@@ -1769,9 +1804,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           posCount[m] = posCount[m] + 1
         }
 
-        boolean morphologyPass = c.role == "apical_cilia" ?
-                                 (componentContextPass && (compartmentPass || contextualApicalPositive)) :
-                                 (fractionPass && connectedPass && enrichmentPass && compartmentPass)
+        boolean morphologyPass = markerEvidencePass &&
+                                 (compartmentPass || contextUnresolvedPositive)
         def finalCall = ""
         String callStatus
         def failureReasons = []
@@ -1785,20 +1819,40 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         }
         if (!enrichmentPass) failureReasons << (c.role == "nuc_ratio" ? "nuc_cyto_ratio_below_minimum" : "nuclear_enrichment_below_minimum")
 
-        if (!cfg.morphologyPrimary) {
-          finalCall = intensityPos ? 1 : 0
-          callStatus = intensityPos ? "legacy_intensity_positive" : "legacy_intensity_negative"
-        } else if (!evaluable) {
+        // Evaluability always precedes the selected decision authority. The
+        // former ordering allowed legacy mean intensity to turn unresolved
+        // anatomy, invalid projection, or shared support into false negatives.
+        if (!evaluable) {
           finalCall = ""
           callStatus = "indeterminate"
           indeterminateCount[m] = indeterminateCount[m] + 1
+        } else if (!cfg.morphologyPrimary) {
+          finalCall = intensityPos ? 1 : 0
+          callStatus = intensityPos ?
+            (contextUnresolvedPositive ?
+              "legacy_intensity_positive_context_unresolved" :
+              "legacy_intensity_positive") :
+            "legacy_intensity_negative"
         } else {
           finalCall = morphologyPass ? 1 : 0
           boolean fixedThreshold = chThreshSource[m] == "fixed_predeclared"
           callStatus = morphologyPass ?
-                       (contextualApicalPositive ? "exploratory_positive_cellular_context" :
+                       (contextUnresolvedPositive ?
+                        (c.role == "apical_cilia" ?
+                         "exploratory_positive_cellular_context" :
+                         "exploratory_positive_context_unresolved") :
                         (fixedThreshold ? "positive" : "exploratory_positive")) :
                        (fixedThreshold ? "negative" : "exploratory_negative")
+        }
+        if (markerEvidencePass) {
+          markerEvidencePosCount[m] = markerEvidencePosCount[m] + 1
+          if (knownWrongCompartment) {
+            contextExcludedEvidencePosCount[m] =
+              contextExcludedEvidencePosCount[m] + 1
+          }
+        }
+        if (contextUnresolvedPositive && finalCall == 1) {
+          contextUnresolvedPosCount[m] = contextUnresolvedPosCount[m] + 1
         }
         if (finalCall == 1) {
           finalPosCount[m] = finalPosCount[m] + 1
@@ -1811,20 +1865,30 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           indeterminateRois[m] << nuc
         }
         calls[m] = finalCall
+        callContextResolved[m] = !hasCompartmentRequirement || compartmentPass
         row[m + "_morphology_pass"] = (evaluable && morphologyPass) ? 1 : 0
+        row[m + "_negative_eligible"] =
+          (evaluable && !authorityPositiveEvidence &&
+           (!hasCompartmentRequirement || compartmentPass)) ? 1 : 0
         row[m + "_final_call"] = finalCall
         row[m + "_true_pos"] = finalCall       // compatibility alias
         row[m + "_call_status"] = callStatus
         def callReasons = (indeterminateReasons + failureReasons).unique()
-        if (contextualApicalPositive && finalCall == 1) {
-          callReasons << "unique_apical_ciliary_component_context_without_airway_roi"
+        if (contextUnresolvedPositive && finalCall == 1) {
+          callReasons << (c.role == "apical_cilia" ?
+            "unique_apical_ciliary_component_context_without_airway_roi" :
+            "strict_marker_evidence_with_anatomical_context_unresolved")
         }
         row[m + "_call_reason"] = callReasons.unique().join(";")
       }
       // classifications
       panelDef.classify.each { rule ->
         def key = rule.collect { mk, want -> mk + (want ? "+" : "-") }.join("_")
-        boolean classEvaluable = rule.every { mk, want -> calls[mk] == 0 || calls[mk] == 1 }
+        // A marker-positive call may be retained when its anatomical context is
+        // unresolved, but it cannot authorize a compound lineage/state class.
+        boolean classEvaluable = rule.every { mk, want ->
+          (calls[mk] == 0 || calls[mk] == 1) && callContextResolved[mk] != false
+        }
         if (!classEvaluable) {
           row["class_" + key] = ""
           row["class_" + key + "_status"] = "indeterminate"
@@ -1899,7 +1963,17 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_morphology_pos_count"] = finalPosCount[c.marker]
       srow[c.marker + "_morphology_negative_count"] = finalNegCount[c.marker]
       srow[c.marker + "_indeterminate_count"] = indeterminateCount[c.marker]
+      srow[c.marker + "_marker_evidence_pos_count"] =
+        markerEvidencePosCount[c.marker]
+      srow[c.marker + "_context_unresolved_positive_count"] =
+        contextUnresolvedPosCount[c.marker]
+      srow[c.marker + "_context_excluded_evidence_positive_count"] =
+        contextExcludedEvidencePosCount[c.marker]
       def evaluableCount = finalPosCount[c.marker] + finalNegCount[c.marker]
+      def contextResolvedPosCount =
+        finalPosCount[c.marker] - contextUnresolvedPosCount[c.marker]
+      def contextResolvedEvaluableCount =
+        contextResolvedPosCount + finalNegCount[c.marker]
       def discordantCount = rawPosFinalNegCount[c.marker] + rawNegFinalPosCount[c.marker]
       def reviewBurdenCount = indeterminateCount[c.marker] + discordantCount
       srow[c.marker + "_morphology_evaluable_count"] = evaluableCount
@@ -1907,6 +1981,16 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         (evaluableCount > 0 ? finalPosCount[c.marker] / (double)evaluableCount : 0)
       srow[c.marker + "_morphology_negative_fraction_of_evaluable"] =
         (evaluableCount > 0 ? finalNegCount[c.marker] / (double)evaluableCount : 0)
+      srow[c.marker + "_context_resolved_positive_count"] =
+        contextResolvedPosCount
+      srow[c.marker + "_context_resolved_evaluable_count"] =
+        contextResolvedEvaluableCount
+      srow[c.marker + "_context_resolved_positive_fraction"] =
+        (contextResolvedEvaluableCount > 0 ?
+          contextResolvedPosCount / (double)contextResolvedEvaluableCount : 0)
+      srow[c.marker + "_context_unresolved_positive_fraction_of_included"] =
+        (!nuclei.isEmpty() ?
+          contextUnresolvedPosCount[c.marker] / (double)nuclei.size() : 0)
       srow[c.marker + "_indeterminate_fraction_of_included"] =
         (!nuclei.isEmpty() ? indeterminateCount[c.marker] / (double)nuclei.size() : 0)
       srow[c.marker + "_raw_positive_final_negative_count"] = rawPosFinalNegCount[c.marker]
@@ -1922,6 +2006,9 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_true_pos_count"] = finalPosCount[c.marker] // compatibility alias
       def expectedForSummary = expectedCompartmentsFor(c)
       srow[c.marker + "_expected_compartment"] = expectedForSummary.isEmpty() ? "none" : expectedForSummary.join("|")
+      srow[c.marker + "_context_policy"] = expectedForSummary.isEmpty() ?
+        "not_required" :
+        "asymmetric_positive_evidence_negative_requires_compartment"
       if (c.role == "apical_cilia") {
         def assignment = apicalComponentAssignments[c.marker]
         def ownedNucleusCount = assignment == null ? 0 :
@@ -1951,12 +2038,14 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       def areaExpectedCompartments = areaChannel == null ? [] : expectedCompartmentsFor(areaChannel)
       if (!areaExpectedCompartments.isEmpty() &&
           (compartment == "unassigned" || compartment == "ambiguous")) {
-        srow[m + "_area_call_status"] = as.threshold_source == "fixed_predeclared" ?
-                                         "indeterminate_compartment_unassigned" :
-                                         "exploratory_compartment_unassigned"
+        srow[m + "_area_call_status"] = as.area_um2 > 0 ?
+          "positive_area_evidence_context_unresolved" :
+          "indeterminate_context_unresolved"
       } else if (!areaExpectedCompartments.isEmpty() &&
                  !areaExpectedCompartments.any { regionTags.contains(it) }) {
-        srow[m + "_area_call_status"] = "wrong_compartment_not_interpretable"
+        srow[m + "_area_call_status"] = as.area_um2 > 0 ?
+          "context_excluded_positive_area_evidence" :
+          "wrong_compartment_not_interpretable"
       } else {
         srow[m + "_area_call_status"] = as.threshold_source == "fixed_predeclared" ?
                                          "fixed_threshold_area" :
@@ -1971,10 +2060,15 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         srow[m + "_pod_threshold"] = as.threshold
       }
     }
-    (classCount.keySet() + classEvaluableCount.keySet()).unique().each { k ->
+    // Emit every declared class even when no cell is context-resolved enough
+    // to evaluate it. Omitting an all-indeterminate class can be misread as
+    // "not tracked" or zero positive.
+    panelDef.classify.each { rule ->
+      def k = rule.collect { mk, want -> mk + (want ? "+" : "-") }.join("_")
       srow["class_" + k + "_count"] = classCount[k]
       srow["class_" + k + "_evaluable_count"] = classEvaluableCount[k]
-      srow["class_" + k + "_indeterminate_count"] = nuclei.size() - classEvaluableCount[k]
+      srow["class_" + k + "_indeterminate_count"] =
+        nuclei.size() - classEvaluableCount[k]
     }
     summaryRows << srow
     qcMasks.each { k, v -> v.close() }
@@ -2031,7 +2125,10 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     decision_hierarchy: [ authority: cfg.morphologyPrimary ? "morphology_primary" : "legacy_mean_intensity",
                           call_states: ["positive", "negative", "indeterminate"],
                           intensity_role: "candidate-pixel threshold and audit field; not final-call authority",
-                          fixed_threshold_requirement: "confirmatory calls require predeclared control-derived thresholds" ],
+                          fixed_threshold_requirement: "confirmatory calls require predeclared control-derived thresholds",
+                          evaluability_precedes_authority: true,
+                          compartment_policy: "strict marker evidence may be retained as context-unresolved positive; negative requires compatible compartment; known incompatible compartment remains indeterminate",
+                          compound_class_policy: "context-unresolved marker positives cannot authorize compound lineage/state classes" ],
     morphology_rules: cfg.morphologyRules,
     role_morphology_defaults: cfg.roleMorphologyDefaults,
     marker_registry: [path:cfg.markerRegistryPath, schema_version:cfg.markerRegistrySchema],

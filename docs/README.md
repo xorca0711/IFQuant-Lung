@@ -9,6 +9,9 @@
   and panel R, including post-run improvements and caveats.
 - [`SCRIPT_SELF_REVIEW_20260723.md`](SCRIPT_SELF_REVIEW_20260723.md): software-defect audit,
   corrections, verification evidence, and unresolved validation limits.
+- [`UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
+  marker-wide context/evaluability audit, corrected decision matrix, and Fiji
+  regression results.
 - [`../WORKFLOW.md`](../WORKFLOW.md): concise current operational workflow.
 - [`../README.md`](../README.md): installation, configuration, output schema,
   and statistics.

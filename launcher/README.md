@@ -45,11 +45,14 @@ options**; new users should leave that section closed. **Restore recommended
 settings** safely resets processing choices without changing the experiment's
 folders or staining panel.
 
-For panel E, the review dialog explains AcTub's asymmetric cellular-context
-rule. In an ambiguous/unassigned whole field, strict apical component evidence
-can authorize an exploratory positive association, but absence remains
-indeterminate. AcTub-negative calls require an independently assigned airway
-ROI. Regional ciliary area remains the primary 20x measurement.
+All compartment-dependent cell markers use the same safe asymmetry. In an
+ambiguous/unassigned field, strict localization-correct marker evidence can be
+retained as an exploratory context-unresolved positive, but absence remains
+indeterminate. A negative requires an independently assigned compatible ROI,
+and a known incompatible ROI remains indeterminate. Context-unresolved
+positives cannot authorize compound lineage/state classes. For panel E, AcTub
+additionally requires a uniquely nucleus-owned apical ciliary component;
+regional ciliary area remains the primary 20x measurement.
 
 The launcher opens maximized by default. Its contents are DPI-aware and
 scrollable so the **Run Fiji analysis**, readiness status, and log remain
