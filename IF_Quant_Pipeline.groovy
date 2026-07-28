@@ -2360,7 +2360,8 @@ def xlsxColumnName = { int zeroBased ->
   return out.toString()
 }
 
-def xlsxSheetXml = { rows ->
+def xlsxSheetXml = { sheet ->
+  def rows = sheet.rows
   def safeRows = rows == null ? [] : rows
   def columns = [] as LinkedHashSet
   safeRows.each { row -> columns.addAll(row.keySet()) }
@@ -2372,18 +2373,27 @@ def xlsxSheetXml = { rows ->
   def xml = new StringBuilder()
   xml.append('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
   xml.append('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
+  String tabColor = sheet.name == "Image Positive Counts" ? "FF2F75B5" :
+                    (sheet.name == "Skipped Inputs" ? "FFF4B183" : "FF70AD47")
+  xml.append('<sheetPr><tabColor rgb="').append(tabColor).append('"/></sheetPr>')
   xml.append('<dimension ref="A1:').append(lastColumn).append(lastRow).append('"/>')
-  xml.append('<sheetViews><sheetView workbookViewId="0">')
+  xml.append('<sheetViews><sheetView workbookViewId="0" showGridLines="0">')
   xml.append('<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>')
   xml.append('</sheetView></sheetViews>')
   xml.append('<cols>')
   cols.eachWithIndex { col, i ->
-    double width = Math.max(12.0d, Math.min(48.0d, col.toString().length() + 2.0d))
+    int contentLength = safeRows.collect { row ->
+      def value = row.containsKey(col) ? row[col] : ""
+      value == null ? 0 : value.toString().length()
+    }.max() ?: 0
+    double maximumWidth = col.toString() == "Image" ? 70.0d : 42.0d
+    double width = Math.max(12.0d,
+      Math.min(maximumWidth, Math.max(col.toString().length(), contentLength) + 2.0d))
     xml.append('<col min="').append(i + 1).append('" max="').append(i + 1)
        .append('" width="').append(width).append('" customWidth="1"/>')
   }
   xml.append('</cols><sheetData>')
-  xml.append('<row r="1">')
+  xml.append('<row r="1" ht="32" customHeight="1">')
   cols.eachWithIndex { col, i ->
     String ref = xlsxColumnName(i) + "1"
     xml.append('<c r="').append(ref).append('" s="1" t="inlineStr"><is><t>')
@@ -2397,15 +2407,21 @@ def xlsxSheetXml = { rows ->
       def value = row.containsKey(col) ? row[col] : ""
       String ref = xlsxColumnName(colIndex) + excelRow
       boolean percentage = col.toString().toLowerCase().contains("fraction")
+      boolean alternate = rowIndex % 2 == 1
+      int style = percentage ? (alternate ? 4 : 2) : (alternate ? 3 : 0)
       if (value instanceof Number) {
         xml.append('<c r="').append(ref).append('"')
-        if (percentage) xml.append(' s="2"')
+        if (style > 0) xml.append(' s="').append(style).append('"')
         xml.append('><v>').append(value.toString()).append('</v></c>')
       } else if (value instanceof Boolean) {
-        xml.append('<c r="').append(ref).append('" t="b"><v>')
+        xml.append('<c r="').append(ref).append('"')
+        if (style > 0) xml.append(' s="').append(style).append('"')
+        xml.append(' t="b"><v>')
            .append(value ? "1" : "0").append('</v></c>')
       } else {
-        xml.append('<c r="').append(ref).append('" t="inlineStr"><is><t>')
+        xml.append('<c r="').append(ref).append('"')
+        if (style > 0) xml.append(' s="').append(style).append('"')
+        xml.append(' t="inlineStr"><is><t>')
            .append(xlsxXmlEscape(value)).append('</t></is></c>')
       }
     }
@@ -2473,77 +2489,53 @@ def writeXlsxWorkbook = { List sheets, String path ->
     putText("xl/styles.xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
-      '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
+      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+      '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF2F75B5"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/><bgColor indexed="64"/></patternFill></fill></fills>' +
       '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-      '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
-      '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
-      '<xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
+      '<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+      '<xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="10" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1" applyNumberFormat="1"/></cellXfs>' +
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
       '</styleSheet>')
     sheets.eachWithIndex { sheet, i ->
-      putText("xl/worksheets/sheet" + (i + 1) + ".xml", xlsxSheetXml(sheet.rows))
+      putText("xl/worksheets/sheet" + (i + 1) + ".xml", xlsxSheetXml(sheet))
     }
   } finally {
     zip.close()
   }
 }
 
-def buildMouseFinalQuantification = { summaryRows ->
-  def groups = [:].withDefault { [] }
-  summaryRows.each { row ->
-    def key = [row.mouse_id ?: "NA", row.genotype ?: "NA",
-               row.condition ?: "NA", row.panel ?: "NA"]
-    groups[key] << row
-  }
+def buildPerImagePositiveQuantification = { summaryRows ->
   def output = []
-  groups.keySet().sort { a, b -> a.join("|") <=> b.join("|") }.each { key ->
-    def rows = groups[key]
+  summaryRows.each { row ->
     def markerNames = [] as LinkedHashSet
-    rows.each { row ->
-      row.keySet().findAll { it.toString().endsWith("_final_positive_cell_count") }.each { name ->
-        markerNames << name.toString().replaceFirst(/_final_positive_cell_count$/, "")
-      }
+    row.keySet().findAll { it.toString().endsWith("_final_positive_cell_count") }.each { name ->
+      markerNames << name.toString().replaceFirst(/_final_positive_cell_count$/, "")
     }
-    def sectionNames = rows.collect { it.section_id ?: "NA" }.toSet()
-    markerNames.sort().each { marker ->
-      long total = rows.sum { ((it.n_nuclei ?: 0) as Number).longValue() } as long
-      long positive = rows.sum { ((it[marker + "_final_positive_cell_count"] ?: 0) as Number).longValue() } as long
-      long negative = rows.sum { ((it[marker + "_final_negative_cell_count"] ?: 0) as Number).longValue() } as long
-      long indeterminate = rows.sum { ((it[marker + "_final_indeterminate_cell_count"] ?: 0) as Number).longValue() } as long
-      long contextResolvedPositive = rows.sum {
-        ((it[marker + "_context_resolved_positive_count"] ?: 0) as Number).longValue()
-      } as long
-      long contextResolvedEvaluable = rows.sum {
-        ((it[marker + "_context_resolved_evaluable_count"] ?: 0) as Number).longValue()
-      } as long
-      long contextUnresolvedPositive = rows.sum {
-        ((it[marker + "_context_unresolved_positive_count"] ?: 0) as Number).longValue()
-      } as long
-      long markerEvidencePositive = rows.sum {
-        ((it[marker + "_marker_evidence_pos_count"] ?: 0) as Number).longValue()
-      } as long
-      output << [
-        mouse_id: key[0], genotype: key[1], condition: key[2], panel: key[3],
-        n_regions: rows.size(), n_sections: sectionNames.size(), marker: marker,
-        total_cell_count: total,
-        final_positive_cell_count: positive,
-        final_positive_fraction_of_total_cells: total > 0 ? positive / (double)total : 0,
-        final_negative_cell_count: negative,
-        final_negative_fraction_of_total_cells: total > 0 ? negative / (double)total : 0,
-        final_indeterminate_cell_count: indeterminate,
-        final_indeterminate_fraction_of_total_cells: total > 0 ? indeterminate / (double)total : 0,
-        marker_evidence_positive_cell_count: markerEvidencePositive,
-        context_unresolved_positive_cell_count: contextUnresolvedPositive,
-        context_resolved_positive_cell_count: contextResolvedPositive,
-        context_resolved_evaluable_cell_count: contextResolvedEvaluable,
-        context_resolved_positive_fraction_of_total_cells:
-          total > 0 ? contextResolvedPositive / (double)total : 0,
-        context_resolved_positive_fraction_of_evaluable_cells:
-          contextResolvedEvaluable > 0 ? contextResolvedPositive / (double)contextResolvedEvaluable : 0
-      ]
+    long total = ((row.n_nuclei ?: 0) as Number).longValue()
+    def record = [
+      "Image": row.image ?: "NA",
+      "Region": row.region ?: "NA",
+      "Mouse": row.mouse_id ?: "NA",
+      "Section": row.section_id ?: "NA",
+      "Genotype": row.genotype ?: "NA",
+      "Condition": row.condition ?: "NA",
+      "Panel": row.panel ?: "NA",
+      "Total cells": total
+    ]
+    markerNames.each { marker ->
+      long positive =
+        ((row[marker + "_final_positive_cell_count"] ?: 0) as Number).longValue()
+      record[marker + " positive cells"] = positive
+      record[marker + " positive fraction of total cells"] =
+        total > 0 ? positive / (double)total : 0
     }
+    output << record
   }
   return output
 }
@@ -2804,7 +2796,7 @@ files.eachWithIndex { f, fileIndex ->
 
 // master summary + manifest
 writeCsv(masterSummary, OUTPUT_DIR + "/run_summary.csv")
-def finalQuantification = buildMouseFinalQuantification(masterSummary)
+def finalQuantification = buildPerImagePositiveQuantification(masterSummary)
 def skippedInputs = manifest.images.findAll { it.status == "skipped" }.collect { record ->
   [
     file: record.file,
@@ -2817,13 +2809,14 @@ def skippedInputs = manifest.images.findAll { it.status == "skipped" }.collect {
 def workbookFailure = null
 try {
   writeXlsxWorkbook([
+    [name: "Image Positive Counts", rows: finalQuantification],
     [name: "Run Summary", rows: masterSummary],
-    [name: "Final Quantification", rows: finalQuantification],
     [name: "Skipped Inputs", rows: skippedInputs]
   ], OUTPUT_DIR + "/run_summary.xlsx")
   manifest.summary_workbook = "run_summary.xlsx"
   manifest.summary_workbook_status = "complete"
-  manifest.final_quantification_level = "mouse"
+  manifest.final_quantification_level = "image_region"
+  manifest.final_quantification_sheet = "Image Positive Counts"
 } catch (Throwable t) {
   workbookFailure = t
   manifest.output_failure_count = 1

@@ -337,7 +337,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`dist/IFQuantLauncher.exe`](dist/IFQuantLauncher.exe). It exposes the
+[`IFQuantLauncher-v1.4.1.exe`](IFQuantLauncher-v1.4.1.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.
@@ -364,12 +364,13 @@ also exits with code 1 after preserving the partial summary.
 
 Run `IF_Quant_Pipeline.groovy` headlessly or through Fiji's Groovy script editor.
 Every run must retain `run_manifest.json`, per-image `__params.json`, cell CSVs,
-region summaries, decision masks, and call-QC PNGs. `run_summary.xlsx` contains
-the complete region-level table, a mouse-pooled **Final Quantification** sheet
-with marker cell counts and fractions of total included cells, and an auditable
-**Skipped Inputs** sheet. Microscope `Map_A##.oir` navigation acquisitions are
-classified as deliberate skips before analysis and do not make an otherwise
-successful run fail.
+region summaries, decision masks, and call-QC PNGs. `run_summary.xlsx` opens on
+**Image Positive Counts**, with one aligned row per image/region containing
+total cells and every marker's final-positive cell count and fraction of that
+row's total cells. The complete three-state audit remains on **Run Summary**,
+and deliberate exclusions remain on **Skipped Inputs**. Microscope
+`Map_A##.oir` navigation acquisitions are classified as deliberate skips
+before analysis and do not make an otherwise successful run fail.
 
 ## Exported decision fields
 

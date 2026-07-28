@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.4.1.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -12,10 +12,11 @@ From the repository root:
 powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 ```
 
-The build uses the C# compiler included with Windows .NET Framework and creates:
+The build reads the assembly version and writes versioned artifacts directly
+to the repository root:
 
-- `dist/IFQuantLauncher.exe`
-- `dist/SHA256SUMS.txt`
+- `IFQuantLauncher-v1.4.1.exe`
+- `IFQuantLauncher-v1.4.1.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -88,11 +89,12 @@ The completed folder contains the normal Fiji pipeline outputs plus
 - the exact `IFQ_*` environment used for the run.
 
 `run_summary.csv` remains the primary machine-readable region-level summary.
-`run_summary.xlsx` contains the same table plus a **Final Quantification**
-sheet with mouse-pooled marker cell counts and fractions of all included
-cells, and a **Skipped Inputs** sheet. A run is shown as complete only when
-Fiji exits successfully, the manifest status is `complete`, and both summary
-files exist.
+`run_summary.xlsx` opens on **Image Positive Counts**, with one aligned row per
+image/region showing total cells plus every marker's final-positive cell count
+and fraction of that image/region's total cells. **Run Summary** retains the
+complete audit fields, and **Skipped Inputs** records deliberate exclusions. A
+run is shown as complete only when Fiji exits successfully, the manifest
+status is `complete`, and both summary files exist.
 
 When an installation folder is selected, the launcher detects the Windows
 architecture and chooses Fiji in this order:

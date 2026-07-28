@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`dist/IFQuantLauncher.exe`](dist/IFQuantLauncher.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.4.1.exe`](IFQuantLauncher-v1.4.1.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,7 +25,7 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher.exe`](dist/IFQuantLauncher.exe), then select:
+Run [`IFQuantLauncher-v1.4.1.exe`](IFQuantLauncher-v1.4.1.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
@@ -357,11 +357,12 @@ injury.
 
 Written under `OUTPUT_DIR`:
 
-`run_summary.xlsx` preserves the full region-level table on **Run Summary**,
-adds mouse-pooled final marker counts and fractions on **Final
-Quantification**, and records deliberately excluded microscope map
-acquisitions on **Skipped Inputs**. The CSV remains the machine-readable input
-to `aggregate_to_mouse.py`.
+`run_summary.xlsx` opens on **Image Positive Counts**, with one aligned row per
+image/region containing total cells plus every marker's final-positive cell
+count and fraction of that row's total cells. **Run Summary** preserves the
+complete audit table, including indeterminate states, while **Skipped Inputs**
+records deliberately excluded microscope map acquisitions. The CSV remains
+the machine-readable input to `aggregate_to_mouse.py`.
 
 ```
 OUTPUT_DIR/
