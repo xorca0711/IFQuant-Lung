@@ -122,6 +122,7 @@ def classify_columns(header):
         and not c.endswith("_morphology_pos_count")
         and not c.endswith("_raw_mean_pos_count")
         and not c.endswith("_true_pos_count")
+        and not c.endswith("_marker_evidence_pos_count")
     ]
     raw_mean_pos_count = [c for c in header if c.endswith("_raw_mean_pos_count")]
     morphology_pos_count = [c for c in header if c.endswith("_morphology_pos_count")]
@@ -131,6 +132,18 @@ def classify_columns(header):
         and not c.startswith("class_")
     ]
     morphology_evaluable_count = [c for c in header if c.endswith("_morphology_evaluable_count")]
+    final_cell_state_count = [
+        c for c in header
+        if c.endswith((
+            "_final_positive_cell_count",
+            "_final_negative_cell_count",
+            "_final_indeterminate_cell_count",
+            "_context_resolved_positive_count",
+            "_context_resolved_evaluable_count",
+            "_context_unresolved_positive_count",
+            "_marker_evidence_pos_count",
+        ))
+    ]
     marker_audit_count = [
         c for c in header
         if c.endswith((
@@ -166,7 +179,8 @@ def classify_columns(header):
     state_counts = (set(raw_mean_pos_count) | set(morphology_pos_count) |
                     set(morphology_negative_count) | set(marker_indeterminate_count) |
                     set(morphology_evaluable_count) | set(class_evaluable_count) |
-                    set(class_indeterminate_count) | set(marker_audit_count))
+                    set(class_indeterminate_count) | set(marker_audit_count) |
+                    set(final_cell_state_count))
     sum_cols = (set(["region_area_um2", "n_nuclei"]) | set(pos_count) |
                 set(pod_area) | set(n_pods) | set(class_count) | state_counts |
                 set(nucleus_qc_count) | set(positive_area) | set(n_components))
@@ -175,6 +189,7 @@ def classify_columns(header):
         "pos_count": pos_count,
         "raw_mean_pos_count": raw_mean_pos_count,
         "state_counts": sorted(state_counts),
+        "final_cell_state_count": final_cell_state_count,
         "marker_audit_count": marker_audit_count,
         "nucleus_qc_count": nucleus_qc_count,
         "positive_area": positive_area,
@@ -272,6 +287,29 @@ def aggregate_mice(header, rows):
             rec[f"{marker}_indeterminate_fraction_of_included"] = indeterminate / included if included > 0 else 0.0
             rec[f"{marker}_intensity_morphology_discordant_fraction_of_evaluable"] = discordant / evaluable if evaluable > 0 else 0.0
             rec[f"{marker}_review_burden_proxy_fraction_of_included"] = review / included if included > 0 else 0.0
+
+        # --- explicit final cell counts and fractions among all included cells ---
+        # These are the human-facing "eventual quantification" fields used by
+        # the Excel workbook. Pool counts first, then divide by the pooled
+        # nucleus denominator; never average region-level fractions.
+        for c in [x for x in header if x.endswith("_final_positive_cell_count")]:
+            marker = marker_of(c, "_final_positive_cell_count")
+            included = sums.get("n_nuclei", 0.0)
+            for state in ("positive", "negative", "indeterminate"):
+                source = f"{marker}_final_{state}_cell_count"
+                count = sums.get(source, 0.0)
+                rec[f"{source}_total"] = count
+                rec[f"{marker}_final_{state}_fraction_of_total_cells"] = (
+                    count / included if included > 0 else 0.0
+                )
+            context_positive = sums.get(f"{marker}_context_resolved_positive_count", 0.0)
+            context_evaluable = sums.get(f"{marker}_context_resolved_evaluable_count", 0.0)
+            rec[f"{marker}_context_resolved_positive_fraction_of_total_cells"] = (
+                context_positive / included if included > 0 else 0.0
+            )
+            rec[f"{marker}_context_resolved_positive_fraction"] = (
+                context_positive / context_evaluable if context_evaluable > 0 else 0.0
+            )
 
         # --- generic regional area endpoints (AcTub, membranes, reporter, ECM) ---
         for c in cats["positive_area"]:

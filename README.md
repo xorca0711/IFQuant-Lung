@@ -113,6 +113,10 @@ used by declaring its role explicitly.
 See
 [`docs/UNIVERSAL_MARKER_CONFIGURATION.md`](docs/UNIVERSAL_MARKER_CONFIGURATION.md)
 for the IPF, acute-injury, lung-adenocarcinoma, ROI-tag, and control hierarchy.
+See
+[`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md)
+for every anatomical tag, analytical subcellular role, multi-tag precedence,
+ROI naming example, and the complete tag-to-call progression.
 
 See [`docs/MARKER_MORPHOLOGY_GUIDE.md`](docs/MARKER_MORPHOLOGY_GUIDE.md) for the complete
 marker-by-marker measurement, compartment-gating, optical-sectioning, control,
@@ -330,7 +334,7 @@ groups are compared; the example values above are not validated cutoffs.
 | `POD_THRESH_METHOD` | auto-threshold method for the pod mask (`Otsu`, `Li`, …) |
 | `POS_SENSITIVITY` | per-marker multiplier on the auto threshold (`>1` stricter, `<1` more permissive) |
 | `IFQ_MORPHOLOGY_PRIMARY` | Must remain `true`; `false` is rejected because intensity-only final calls are unsupported |
-| `IFQ_WHOLE_FIELD_COMPARTMENT` | explicit compartment for a visually reviewed homogeneous field: `airway`, `alveolar`, `ambiguous`, or `unassigned` |
+| `IFQ_WHOLE_FIELD_COMPARTMENT` | explicit context for a visually reviewed homogeneous field: `airway`, `alveolar`, `tumor`, `fibrotic`, `stromal`, `vascular`, `immune`, `ambiguous`, or `unassigned` |
 | `IFQ_<MARKER>_THRESHOLD` | fixed control-derived candidate-pixel cutoff for a marker |
 | `IFQ_<MARKER>_MIN_POSITIVE_FRACTION` | minimum fraction of the role-specific support above cutoff |
 | `IFQ_<MARKER>_MIN_LARGEST_COMPONENT_SHARE` | minimum connectedness of positive support |
@@ -352,6 +356,12 @@ injury.
 ## 8. Outputs
 
 Written under `OUTPUT_DIR`:
+
+`run_summary.xlsx` preserves the full region-level table on **Run Summary**,
+adds mouse-pooled final marker counts and fractions on **Final
+Quantification**, and records deliberately excluded microscope map
+acquisitions on **Skipped Inputs**. The CSV remains the machine-readable input
+to `aggregate_to_mouse.py`.
 
 ```
 OUTPUT_DIR/
@@ -393,6 +403,11 @@ biological marker name is used.
 - `<marker>_morphology_pos_count`, `<marker>_morphology_negative_count`,
   `<marker>_indeterminate_count`, `<marker>_morphology_evaluable_count` — the
   authoritative three-state decision summary.
+- `<marker>_final_positive_cell_count`,
+  `<marker>_final_negative_cell_count`,
+  `<marker>_final_indeterminate_cell_count`, and their
+  `_fraction_of_total_cells` companions provide explicit final
+  quantifications using `n_nuclei` as the denominator.
 - `<marker>_marker_evidence_pos_count`,
   `<marker>_context_unresolved_positive_count`, and
   `<marker>_context_excluded_evidence_positive_count` — strict evidence before

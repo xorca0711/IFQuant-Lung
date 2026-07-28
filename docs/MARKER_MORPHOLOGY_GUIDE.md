@@ -311,9 +311,9 @@ required compartment produces indeterminate calls for compartment-dependent
 markers.
 
 For a visually reviewed, anatomically homogeneous field only,
-`IFQ_WHOLE_FIELD_COMPARTMENT` can record an explicit `airway` or `alveolar`
-assignment in provenance. Do not use this override on a mixed field; draw
-separate compartment ROIs instead.
+`IFQ_WHOLE_FIELD_COMPARTMENT` can record any supported explicit anatomical
+context in provenance. Do not use this override on a mixed field; draw separate
+compartment ROIs or use `ambiguous` instead.
 
 ### Analytical sectioning
 

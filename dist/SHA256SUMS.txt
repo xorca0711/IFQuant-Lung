@@ -1,1 +1,1 @@
-0acd102ee7467dcd7911b04462dd1c581abd17d294f05db6bfb305f6c374e0c9  IFQuantLauncher.exe
+645c552ff4abaaed54432df5ca2a29b7d0e3023507d8dcb4f0252e602bf5b832  IFQuantLauncher.exe

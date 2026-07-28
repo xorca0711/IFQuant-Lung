@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 
 namespace IFQuantLauncher
 {
@@ -435,7 +435,7 @@ namespace IFQuantLauncher
             actions.Controls.Add(openOutputButton);
 
             openSummaryButton = new Button();
-            openSummaryButton.Text = "Open summary CSV";
+            openSummaryButton.Text = "Open summary Excel";
             openSummaryButton.Enabled = false;
             openSummaryButton.AutoSize = true;
             openSummaryButton.Padding = new Padding(8, 5, 8, 5);
@@ -599,7 +599,7 @@ namespace IFQuantLauncher
                 "3. Output parent folder: choose where a new timestamped result folder should be created.\r\n\r\n" +
                 "4. Staining panel: match both the marker names and their acquisition channel order. This is the most important setting.\r\n\r\n" +
                 "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
-                "6. Click Review and run analysis. Watch the progress bar and status text. A successful run enables Open summary CSV.\r\n\r\n" +
+                "6. Click Review and run analysis. Watch the progress bar and status text. A successful run enables Open summary Excel.\r\n\r\n" +
                 "Always inspect the QC overlays. The software quantifies fluorescence patterns for research and does not make a diagnosis.",
                 "First-time guide",
                 MessageBoxButtons.OK,
@@ -1055,10 +1055,13 @@ namespace IFQuantLauncher
         {
             SetRunningState(false);
             string manifestPath = Path.Combine(config.OutputDirectory, "run_manifest.json");
-            string summaryPath = Path.Combine(config.OutputDirectory, "run_summary.csv");
+            string summaryCsvPath = Path.Combine(config.OutputDirectory, "run_summary.csv");
+            string summaryWorkbookPath = Path.Combine(config.OutputDirectory, "run_summary.xlsx");
             string manifestStatus = "missing";
             string successCount = "?";
+            string skippedCount = "?";
             string failureCount = "?";
+            string outputFailureCount = "?";
 
             if (File.Exists(manifestPath))
             {
@@ -1069,7 +1072,9 @@ namespace IFQuantLauncher
                         json.Deserialize<Dictionary<string, object>>(File.ReadAllText(manifestPath, Encoding.UTF8));
                     manifestStatus = GetDictionaryValue(manifest, "status", "unknown");
                     successCount = GetDictionaryValue(manifest, "success_count", "?");
+                    skippedCount = GetDictionaryValue(manifest, "skipped_count", "0");
                     failureCount = GetDictionaryValue(manifest, "failure_count", "?");
+                    outputFailureCount = GetDictionaryValue(manifest, "output_failure_count", "0");
                 }
                 catch (Exception ex)
                 {
@@ -1082,18 +1087,24 @@ namespace IFQuantLauncher
             AppendLog("");
             AppendLog("Fiji exit code: " + exitCode);
             AppendLog("Manifest status: " + manifestStatus);
-            AppendLog("Successful images: " + successCount + "; failed images: " + failureCount);
+            AppendLog("Analytical images: " + successCount + " successful; " + failureCount + " failed.");
+            AppendLog("Non-analysis acquisitions deliberately skipped: " + skippedCount + ".");
+            if (!string.Equals(outputFailureCount, "0", StringComparison.OrdinalIgnoreCase))
+                AppendLog("Output-generation failures: " + outputFailureCount + ".");
 
             if (waitError != null)
                 AppendLog("Process wait error: " + waitError);
 
-            lastSummaryPath = File.Exists(summaryPath) ? summaryPath : null;
+            lastSummaryPath = File.Exists(summaryWorkbookPath)
+                ? summaryWorkbookPath
+                : (File.Exists(summaryCsvPath) ? summaryCsvPath : null);
             openSummaryButton.Enabled = lastSummaryPath != null;
             openOutputButton.Enabled = Directory.Exists(config.OutputDirectory);
 
             bool complete = exitCode == 0 &&
                 string.Equals(manifestStatus, "complete", StringComparison.OrdinalIgnoreCase) &&
-                lastSummaryPath != null;
+                File.Exists(summaryCsvPath) &&
+                File.Exists(summaryWorkbookPath);
             if (cancellationRequested)
             {
                 SetProgressTerminal(
@@ -1104,16 +1115,19 @@ namespace IFQuantLauncher
             else if (complete)
             {
                 SetProgressTerminal(
-                    "Finished successfully: " + successCount + " image(s) analyzed, " + failureCount + " failed.",
+                    "Finished successfully: " + successCount + " analytical image(s) processed, " +
+                    skippedCount + " non-analysis acquisition(s) skipped, " + failureCount + " failed.",
                     true,
                     false);
-                AppendLog("Summary: " + summaryPath);
+                AppendLog("Excel summary: " + summaryWorkbookPath);
+                AppendLog("Region-level CSV: " + summaryCsvPath);
             }
             else
             {
                 SetProgressTerminal(
                     "Analysis terminated or was incomplete: " + successCount + " image(s) succeeded, " + failureCount +
-                    " failed. Check the log below and run_manifest.json.",
+                    " failed; " + skippedCount + " non-analysis acquisition(s) were skipped. " +
+                    "Check the log below and run_manifest.json.",
                     false,
                     false);
             }
@@ -1527,8 +1541,12 @@ namespace IFQuantLauncher
                 RuntimePaths paths = EnsureExtracted();
                 if (!File.Exists(paths.ScriptPath) || new FileInfo(paths.ScriptPath).Length < 1000)
                     return 11;
-                if (File.ReadAllText(paths.ScriptPath, Encoding.UTF8).IndexOf("[IFQ_PROGRESS]", StringComparison.Ordinal) < 0)
+                string pipelineText = File.ReadAllText(paths.ScriptPath, Encoding.UTF8);
+                if (pipelineText.IndexOf("[IFQ_PROGRESS]", StringComparison.Ordinal) < 0)
                     return 16;
+                if (pipelineText.IndexOf("non_analytical_map_acquisition", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("run_summary.xlsx", StringComparison.Ordinal) < 0)
+                    return 17;
                 if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
                     return 12;
                 JavaScriptSerializer json = new JavaScriptSerializer();

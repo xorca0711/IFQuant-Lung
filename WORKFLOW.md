@@ -24,6 +24,9 @@ comparing experimental groups.
   reusable marker, disease-context, panel, and ROI-tag hierarchy.
 - [`docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
   cross-marker context/evaluability audit and representative Fiji regressions.
+- [`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md):
+  anatomical tag meanings, subcellular analytical roles, ROI naming, and
+  image-to-call progression.
 - [`config/lung_marker_registry.json`](config/lung_marker_registry.json): marker
   aliases, localization, lineage/state notes, and analytical-role defaults.
 - [`config/custom_panels.example.json`](config/custom_panels.example.json):
@@ -253,19 +256,30 @@ no marker-specific Z projection is needed for those files.
 
 ### Anatomical sectioning
 
-Draw ROIs without consulting the target marker channel, then use recognizable
-names:
+Draw ROIs without consulting the target marker channel. The supported
+anatomical/context tags are:
 
-- `airway`, `airway_01`, or `bronchial_01`;
-- `alveoli` or `alveolar_01`;
-- `tumor_01` or `luad_01`;
-- `alveolar_fibrotic_01`, `honeycomb_01`, or `uip_01`;
-- `stromal_01`, `vascular_01`, or `immune_01`;
-- `ambiguous` or `ambiguous_01`.
+| Tag/state | Short description |
+|---|---|
+| `airway` | Conducting-airway or bronchiolar anatomy; names containing `airway` or `bronch` |
+| `alveolar` | Distal gas-exchange parenchyma; names containing `alveol` |
+| `tumor` | Histologically/experimentally defined tumor region; `tumor`, `tumour`, or `luad` |
+| `fibrotic` | Scarred/remodeled, honeycomb, or UIP-pattern region; `fibrot`, `honeycomb`, or `uip` |
+| `stromal` | Mesenchymal/connective-tissue region; `strom` or `mesench` |
+| `vascular` | Vessel/capillary-associated region; `vascul`, `vessel`, or `capillar` |
+| `immune` | Immune-rich/inflammatory/lymphoid region; `immune`, `inflamm`, or `lymph` |
+| `ambiguous` | Mixed or uncertain anatomy; it never authorizes a negative |
+| `unassigned` | No recognized tag and no override; missing context, not negative/background |
 
 The pipeline exports all recognized labels as `region_tags`, while
 `compartment` remains a single backward-compatible primary label. A panel can
 accept any of several tags through `expectedCompartments`.
+
+Multiple tags may coexist, such as `alveolar_fibrotic_01` or
+`tumor_stromal_02`. Decisions use the complete `region_tags` set. The display
+field `compartment` uses `ambiguous > alveolar > airway > unassigned > first
+other tag` precedence. If `ambig` occurs anywhere in the ROI name, all other
+tags are intentionally discarded.
 
 For study runs:
 
@@ -277,9 +291,14 @@ An unrecognized or ambiguous required compartment produces indeterminate calls
 for compartment-dependent markers.
 
 For a visually reviewed, anatomically homogeneous field only,
-`IFQ_WHOLE_FIELD_COMPARTMENT` can record an explicit `airway` or `alveolar`
-assignment in provenance. Never force a mixed field into one compartment; draw
-separate ROIs instead.
+`IFQ_WHOLE_FIELD_COMPARTMENT` can record any supported explicit context
+(`airway`, `alveolar`, `tumor`, `fibrotic`, `stromal`, `vascular`, `immune`, or
+`ambiguous`) in provenance. Never force a mixed field into one compartment;
+draw separate ROIs or use `ambiguous` instead.
+
+The complete tag definitions, analytical subcellular roles, ROI naming
+examples, and image-to-call progression are in
+[`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md).
 
 ### Analytical sectioning
 
@@ -345,7 +364,12 @@ also exits with code 1 after preserving the partial summary.
 
 Run `IF_Quant_Pipeline.groovy` headlessly or through Fiji's Groovy script editor.
 Every run must retain `run_manifest.json`, per-image `__params.json`, cell CSVs,
-region summaries, decision masks, and call-QC PNGs.
+region summaries, decision masks, and call-QC PNGs. `run_summary.xlsx` contains
+the complete region-level table, a mouse-pooled **Final Quantification** sheet
+with marker cell counts and fractions of total included cells, and an auditable
+**Skipped Inputs** sheet. Microscope `Map_A##.oir` navigation acquisitions are
+classified as deliberate skips before analysis and do not make an otherwise
+successful run fail.
 
 ## Exported decision fields
 

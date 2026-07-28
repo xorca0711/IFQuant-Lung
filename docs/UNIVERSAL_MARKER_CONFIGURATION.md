@@ -218,6 +218,9 @@ An ROI name may contain more than one tag, for example
 The complete set is exported as `region_tags`. `compartment` remains as a
 single backward-compatible primary label. A marker with multiple
 `expectedCompartments` is evaluable when at least one expected tag is present.
+Detailed tag meanings, multi-tag precedence, subcellular analytical roles, and
+the full assignment-to-call sequence are documented in
+[`COMPARTMENT_TAGS_AND_PROGRESSION.md`](COMPARTMENT_TAGS_AND_PROGRESSION.md).
 
 ### Universal context decision policy
 

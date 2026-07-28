@@ -12,6 +12,9 @@
 - [`UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
   marker-wide context/evaluability audit, corrected decision matrix, and Fiji
   regression results.
+- [`COMPARTMENT_TAGS_AND_PROGRESSION.md`](COMPARTMENT_TAGS_AND_PROGRESSION.md):
+  descriptions of every anatomical tag and subcellular analytical role,
+  multi-tag precedence, naming examples, and the complete call progression.
 - [`../WORKFLOW.md`](../WORKFLOW.md): concise current operational workflow.
 - [`../README.md`](../README.md): installation, configuration, output schema,
   and statistics.

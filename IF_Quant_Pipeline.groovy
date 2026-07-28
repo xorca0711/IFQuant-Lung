@@ -97,7 +97,9 @@ import groovy.json.JsonSlurper
 import java.awt.Color
 import java.awt.Font
 import java.awt.Rectangle
+import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 // ============================================================================
 //  1. USER CONFIG
@@ -153,6 +155,11 @@ def PANEL       = envOr("IFQ_PANEL", "T")
 def MARKER_REGISTRY_PATH = envOr("IFQ_MARKER_REGISTRY", new File("config/lung_marker_registry.json").getAbsolutePath())
 def PANEL_CONFIG_PATH = envOr("IFQ_PANEL_CONFIG", "")
 def FILE_GLOB   = ~/(?i).*\.(czi|lif|nd2|oir|oib|oif|ics|tif|tiff)$/
+// Microscope navigation maps such as Map_A01.oir are acquisition metadata/
+// overview files, not analytical fields. They are retained in the manifest as
+// deliberate skips and never allowed to turn an otherwise complete batch into
+// a failed run.
+def NON_ANALYTICAL_MAP_FILE = ~/(?i)^Map_A\d+\.(oir|oib|oif)$/
 def RECURSIVE   = envBool("IFQ_RECURSIVE", false)
 def INCLUDE_REGEX = envOr("IFQ_INCLUDE_REGEX", ".*")
 def MAX_IMAGES  = envInt("IFQ_MAX_IMAGES", 0) // 0 = all
@@ -1963,6 +1970,19 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_morphology_pos_count"] = finalPosCount[c.marker]
       srow[c.marker + "_morphology_negative_count"] = finalNegCount[c.marker]
       srow[c.marker + "_indeterminate_count"] = indeterminateCount[c.marker]
+      // Explicit, human-readable final quantification columns. These repeat
+      // the authoritative three-state counts with an unambiguous denominator
+      // so the CSV and Excel workbook can be read without reconstructing the
+      // endpoint from audit fields.
+      srow[c.marker + "_final_positive_cell_count"] = finalPosCount[c.marker]
+      srow[c.marker + "_final_positive_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ? finalPosCount[c.marker] / (double)nuclei.size() : 0)
+      srow[c.marker + "_final_negative_cell_count"] = finalNegCount[c.marker]
+      srow[c.marker + "_final_negative_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ? finalNegCount[c.marker] / (double)nuclei.size() : 0)
+      srow[c.marker + "_final_indeterminate_cell_count"] = indeterminateCount[c.marker]
+      srow[c.marker + "_final_indeterminate_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ? indeterminateCount[c.marker] / (double)nuclei.size() : 0)
       srow[c.marker + "_marker_evidence_pos_count"] =
         markerEvidencePosCount[c.marker]
       srow[c.marker + "_context_unresolved_positive_count"] =
@@ -1988,6 +2008,9 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_context_resolved_positive_fraction"] =
         (contextResolvedEvaluableCount > 0 ?
           contextResolvedPosCount / (double)contextResolvedEvaluableCount : 0)
+      srow[c.marker + "_context_resolved_positive_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ?
+          contextResolvedPosCount / (double)nuclei.size() : 0)
       srow[c.marker + "_context_unresolved_positive_fraction_of_included"] =
         (!nuclei.isEmpty() ?
           contextUnresolvedPosCount[c.marker] / (double)nuclei.size() : 0)
@@ -2320,6 +2343,211 @@ def writeCsv(rows, String path) {
   new File(path).setText(sb.toString(), "UTF-8")
 }
 
+def xlsxXmlEscape = { value ->
+  def s = value == null ? "" : value.toString()
+  return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+          .replace("\"", "&quot;").replace("'", "&apos;")
+}
+
+def xlsxColumnName = { int zeroBased ->
+  int value = zeroBased + 1
+  def out = new StringBuilder()
+  while (value > 0) {
+    int remainder = (value - 1) % 26
+    out.insert(0, (char)(('A' as char) + remainder))
+    value = (int)((value - 1) / 26)
+  }
+  return out.toString()
+}
+
+def xlsxSheetXml = { rows ->
+  def safeRows = rows == null ? [] : rows
+  def columns = [] as LinkedHashSet
+  safeRows.each { row -> columns.addAll(row.keySet()) }
+  def cols = columns as List
+  if (cols.isEmpty()) cols = ["message"]
+
+  int lastRow = Math.max(1, safeRows.size() + 1)
+  String lastColumn = xlsxColumnName(cols.size() - 1)
+  def xml = new StringBuilder()
+  xml.append('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
+  xml.append('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
+  xml.append('<dimension ref="A1:').append(lastColumn).append(lastRow).append('"/>')
+  xml.append('<sheetViews><sheetView workbookViewId="0">')
+  xml.append('<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>')
+  xml.append('</sheetView></sheetViews>')
+  xml.append('<cols>')
+  cols.eachWithIndex { col, i ->
+    double width = Math.max(12.0d, Math.min(48.0d, col.toString().length() + 2.0d))
+    xml.append('<col min="').append(i + 1).append('" max="').append(i + 1)
+       .append('" width="').append(width).append('" customWidth="1"/>')
+  }
+  xml.append('</cols><sheetData>')
+  xml.append('<row r="1">')
+  cols.eachWithIndex { col, i ->
+    String ref = xlsxColumnName(i) + "1"
+    xml.append('<c r="').append(ref).append('" s="1" t="inlineStr"><is><t>')
+       .append(xlsxXmlEscape(col)).append('</t></is></c>')
+  }
+  xml.append('</row>')
+  safeRows.eachWithIndex { row, rowIndex ->
+    int excelRow = rowIndex + 2
+    xml.append('<row r="').append(excelRow).append('">')
+    cols.eachWithIndex { col, colIndex ->
+      def value = row.containsKey(col) ? row[col] : ""
+      String ref = xlsxColumnName(colIndex) + excelRow
+      boolean percentage = col.toString().toLowerCase().contains("fraction")
+      if (value instanceof Number) {
+        xml.append('<c r="').append(ref).append('"')
+        if (percentage) xml.append(' s="2"')
+        xml.append('><v>').append(value.toString()).append('</v></c>')
+      } else if (value instanceof Boolean) {
+        xml.append('<c r="').append(ref).append('" t="b"><v>')
+           .append(value ? "1" : "0").append('</v></c>')
+      } else {
+        xml.append('<c r="').append(ref).append('" t="inlineStr"><is><t>')
+           .append(xlsxXmlEscape(value)).append('</t></is></c>')
+      }
+    }
+    xml.append('</row>')
+  }
+  xml.append('</sheetData>')
+  if (!safeRows.isEmpty()) {
+    xml.append('<autoFilter ref="A1:').append(lastColumn).append(lastRow).append('"/>')
+  }
+  xml.append('</worksheet>')
+  return xml.toString()
+}
+
+def writeXlsxWorkbook = { List sheets, String path ->
+  def zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(path)))
+  def putText = { String entryName, String text ->
+    zip.putNextEntry(new ZipEntry(entryName))
+    zip.write(text.getBytes("UTF-8"))
+    zip.closeEntry()
+  }
+  try {
+    def contentTypes = new StringBuilder(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>')
+    sheets.eachWithIndex { sheet, i ->
+      contentTypes.append('<Override PartName="/xl/worksheets/sheet').append(i + 1)
+        .append('.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>')
+    }
+    contentTypes.append('</Types>')
+    putText("[Content_Types].xml", contentTypes.toString())
+    putText("_rels/.rels",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>')
+
+    def workbook = new StringBuilder(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>')
+    sheets.eachWithIndex { sheet, i ->
+      workbook.append('<sheet name="').append(xlsxXmlEscape(sheet.name))
+        .append('" sheetId="').append(i + 1).append('" r:id="rId').append(i + 1).append('"/>')
+    }
+    workbook.append('</sheets></workbook>')
+    putText("xl/workbook.xml", workbook.toString())
+
+    def workbookRels = new StringBuilder(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">')
+    sheets.eachWithIndex { sheet, i ->
+      workbookRels.append('<Relationship Id="rId').append(i + 1)
+        .append('" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet')
+        .append(i + 1).append('.xml"/>')
+    }
+    workbookRels.append('<Relationship Id="rId').append(sheets.size() + 1)
+      .append('" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>')
+    workbookRels.append('</Relationships>')
+    putText("xl/_rels/workbook.xml.rels", workbookRels.toString())
+
+    putText("xl/styles.xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+      '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
+      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+      '<xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+      '</styleSheet>')
+    sheets.eachWithIndex { sheet, i ->
+      putText("xl/worksheets/sheet" + (i + 1) + ".xml", xlsxSheetXml(sheet.rows))
+    }
+  } finally {
+    zip.close()
+  }
+}
+
+def buildMouseFinalQuantification = { summaryRows ->
+  def groups = [:].withDefault { [] }
+  summaryRows.each { row ->
+    def key = [row.mouse_id ?: "NA", row.genotype ?: "NA",
+               row.condition ?: "NA", row.panel ?: "NA"]
+    groups[key] << row
+  }
+  def output = []
+  groups.keySet().sort { a, b -> a.join("|") <=> b.join("|") }.each { key ->
+    def rows = groups[key]
+    def markerNames = [] as LinkedHashSet
+    rows.each { row ->
+      row.keySet().findAll { it.toString().endsWith("_final_positive_cell_count") }.each { name ->
+        markerNames << name.toString().replaceFirst(/_final_positive_cell_count$/, "")
+      }
+    }
+    def sectionNames = rows.collect { it.section_id ?: "NA" }.toSet()
+    markerNames.sort().each { marker ->
+      long total = rows.sum { ((it.n_nuclei ?: 0) as Number).longValue() } as long
+      long positive = rows.sum { ((it[marker + "_final_positive_cell_count"] ?: 0) as Number).longValue() } as long
+      long negative = rows.sum { ((it[marker + "_final_negative_cell_count"] ?: 0) as Number).longValue() } as long
+      long indeterminate = rows.sum { ((it[marker + "_final_indeterminate_cell_count"] ?: 0) as Number).longValue() } as long
+      long contextResolvedPositive = rows.sum {
+        ((it[marker + "_context_resolved_positive_count"] ?: 0) as Number).longValue()
+      } as long
+      long contextResolvedEvaluable = rows.sum {
+        ((it[marker + "_context_resolved_evaluable_count"] ?: 0) as Number).longValue()
+      } as long
+      long contextUnresolvedPositive = rows.sum {
+        ((it[marker + "_context_unresolved_positive_count"] ?: 0) as Number).longValue()
+      } as long
+      long markerEvidencePositive = rows.sum {
+        ((it[marker + "_marker_evidence_pos_count"] ?: 0) as Number).longValue()
+      } as long
+      output << [
+        mouse_id: key[0], genotype: key[1], condition: key[2], panel: key[3],
+        n_regions: rows.size(), n_sections: sectionNames.size(), marker: marker,
+        total_cell_count: total,
+        final_positive_cell_count: positive,
+        final_positive_fraction_of_total_cells: total > 0 ? positive / (double)total : 0,
+        final_negative_cell_count: negative,
+        final_negative_fraction_of_total_cells: total > 0 ? negative / (double)total : 0,
+        final_indeterminate_cell_count: indeterminate,
+        final_indeterminate_fraction_of_total_cells: total > 0 ? indeterminate / (double)total : 0,
+        marker_evidence_positive_cell_count: markerEvidencePositive,
+        context_unresolved_positive_cell_count: contextUnresolvedPositive,
+        context_resolved_positive_cell_count: contextResolvedPositive,
+        context_resolved_evaluable_cell_count: contextResolvedEvaluable,
+        context_resolved_positive_fraction_of_total_cells:
+          total > 0 ? contextResolvedPositive / (double)total : 0,
+        context_resolved_positive_fraction_of_evaluable_cells:
+          contextResolvedEvaluable > 0 ? contextResolvedPositive / (double)contextResolvedEvaluable : 0
+      ]
+    }
+  }
+  return output
+}
+
 // ============================================================================
 //  7. SAMPLESHEET / METADATA
 // ============================================================================
@@ -2488,20 +2716,39 @@ else listed = (inDir.listFiles() ?: [] as File[]).toList()
 def includePattern
 try { includePattern = ~/(?i)${INCLUDE_REGEX}/ }
 catch (Throwable t) { failRun("Invalid IFQ_INCLUDE_REGEX='" + INCLUDE_REGEX + "': " + t.message, t) }
-def files = listed.findAll { it.isFile() && (it.name ==~ FILE_GLOB) && (it.getAbsolutePath() ==~ includePattern) }
-                  .sort { it.getAbsolutePath() }
+def matchedFiles = listed.findAll {
+  it.isFile() && (it.name ==~ FILE_GLOB) && (it.getAbsolutePath() ==~ includePattern)
+}.sort { it.getAbsolutePath() }
+def deliberatelySkippedFiles = matchedFiles.findAll { it.name ==~ NON_ANALYTICAL_MAP_FILE }
+def files = matchedFiles.findAll { !(it.name ==~ NON_ANALYTICAL_MAP_FILE) }
 if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)
-IJ.log("Found " + files.size() + " image(s).")
+IJ.log("Found " + files.size() + " analytical image(s); deliberately skipped " +
+       deliberatelySkippedFiles.size() + " non-analysis acquisition(s).")
+deliberatelySkippedFiles.each { f ->
+  IJ.log("[IFQ_SKIP] " + f.name + " | non_analytical_map_acquisition")
+}
 if (files.isEmpty()) {
-  failRun("No images matched INPUT_DIR='" + INPUT_DIR +
-    "', IFQ_INCLUDE_REGEX='" + INCLUDE_REGEX + "', and the supported image extensions")
+  failRun("No analytical images matched INPUT_DIR='" + INPUT_DIR +
+    "', IFQ_INCLUDE_REGEX='" + INCLUDE_REGEX + "', and the supported image extensions. " +
+    deliberatelySkippedFiles.size() + " non-analysis map acquisition(s) were deliberately skipped.")
 }
 
 def masterSummary = []
 def manifest = [ run_timestamp: versions.timestamp, versions: versions, config: cfg,
                   input_dir: INPUT_DIR, output_dir: OUTPUT_DIR, recursive: RECURSIVE,
                   include_regex: INCLUDE_REGEX, max_images: MAX_IMAGES,
-                  status: "running", success_count: 0, failure_count: 0, images: [] ]
+                  matched_input_count: matchedFiles.size(),
+                  analytical_input_count: files.size(),
+                  status: "running", success_count: 0, skipped_count: deliberatelySkippedFiles.size(),
+                  failure_count: 0, output_failure_count: 0, images: [] ]
+deliberatelySkippedFiles.each { f ->
+  def relativePath = inDir.toPath().relativize(f.toPath()).toString()
+  manifest.images << [
+    file: f.name, relative_path: relativePath, output_key: null, panel: null,
+    status: "skipped", skip_reason: "non_analytical_map_acquisition",
+    message: "Microscope map/overview acquisition excluded before image analysis"
+  ]
+}
 
 def safeToken = { value ->
   def s = (value == null || value.toString().trim().isEmpty()) ? "NA" : value.toString().trim()
@@ -2556,17 +2803,51 @@ files.eachWithIndex { f, fileIndex ->
 }
 
 // master summary + manifest
-manifest.status = failures.isEmpty() ? "complete" : (manifest.success_count > 0 ? "partial_failure" : "failed")
 writeCsv(masterSummary, OUTPUT_DIR + "/run_summary.csv")
+def finalQuantification = buildMouseFinalQuantification(masterSummary)
+def skippedInputs = manifest.images.findAll { it.status == "skipped" }.collect { record ->
+  [
+    file: record.file,
+    relative_path: record.relative_path,
+    status: record.status,
+    skip_reason: record.skip_reason,
+    message: record.message
+  ]
+}
+def workbookFailure = null
+try {
+  writeXlsxWorkbook([
+    [name: "Run Summary", rows: masterSummary],
+    [name: "Final Quantification", rows: finalQuantification],
+    [name: "Skipped Inputs", rows: skippedInputs]
+  ], OUTPUT_DIR + "/run_summary.xlsx")
+  manifest.summary_workbook = "run_summary.xlsx"
+  manifest.summary_workbook_status = "complete"
+  manifest.final_quantification_level = "mouse"
+} catch (Throwable t) {
+  workbookFailure = t
+  manifest.output_failure_count = 1
+  manifest.summary_workbook = "run_summary.xlsx"
+  manifest.summary_workbook_status = "failed"
+  manifest.summary_workbook_error = t.getMessage()
+  IJ.log("ERROR writing run_summary.xlsx: " + t)
+}
+manifest.status = failures.isEmpty() && workbookFailure == null ?
+  "complete" : (manifest.success_count > 0 ? "partial_failure" : "failed")
 new File(OUTPUT_DIR, "run_manifest.json").setText(
   JsonOutput.prettyPrint(JsonOutput.toJson(manifest)), "UTF-8")
 
-IJ.log("DONE. Wrote run_summary.csv and run_manifest.json to " + OUTPUT_DIR +
-       " | success=" + manifest.success_count + " failure=" + manifest.failure_count)
+IJ.log("DONE. Wrote run_summary.csv, run_summary.xlsx, and run_manifest.json to " + OUTPUT_DIR +
+       " | success=" + manifest.success_count + " skipped=" + manifest.skipped_count +
+       " failure=" + manifest.failure_count)
 IJ.log("Reminder: aggregate run_summary.csv to MOUSE level before stats (n = mice, not sections).")
 if (!failures.isEmpty()) {
   failRun("Batch completed with " + failures.size() +
     " failed image(s): " + failures.join(", ") + ". See run_manifest.json and the Fiji log.")
+}
+if (workbookFailure != null) {
+  failRun("Image analysis completed, but run_summary.xlsx could not be written: " +
+    workbookFailure.getMessage() + ". See run_manifest.json and the Fiji log.", workbookFailure)
 }
 
 // ImageJ starts non-daemon UI/event threads even with --headless. Exit after

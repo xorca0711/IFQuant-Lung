@@ -67,7 +67,9 @@ The progress area distinguishes these states:
   pipeline emits `[IFQ_PROGRESS] current/total` events for the launcher.
 - **Finalizing**: images are finished and summary files are being verified.
 - **Complete**: Fiji exited successfully, `run_manifest.json` says `complete`,
-  and `run_summary.csv` exists.
+  and both `run_summary.csv` and `run_summary.xlsx` exist. Microscope
+  `Map_A##.oir` acquisitions may be listed as deliberate non-analysis skips
+  without making the run fail.
 - **Stopped with a problem**: Fiji terminated or required outputs are missing;
   inspect the visible log and `run_manifest.json`.
 - **Cancelled**: the user terminated Fiji. Partial files are diagnostic only
@@ -85,9 +87,12 @@ The completed folder contains the normal Fiji pipeline outputs plus
 - pipeline and registry SHA-256 hashes;
 - the exact `IFQ_*` environment used for the run.
 
-`run_summary.csv` remains the primary region-level summary. A run is shown as
-complete only when Fiji exits successfully, the manifest status is `complete`,
-and `run_summary.csv` exists.
+`run_summary.csv` remains the primary machine-readable region-level summary.
+`run_summary.xlsx` contains the same table plus a **Final Quantification**
+sheet with mouse-pooled marker cell counts and fractions of all included
+cells, and a **Skipped Inputs** sheet. A run is shown as complete only when
+Fiji exits successfully, the manifest status is `complete`, and both summary
+files exist.
 
 When an installation folder is selected, the launcher detects the Windows
 architecture and chooses Fiji in this order:
