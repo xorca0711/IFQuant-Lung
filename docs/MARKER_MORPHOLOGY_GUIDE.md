@@ -81,7 +81,7 @@ final negative is allowed only when the marker is evaluable.
 | Aqp5 | Perinuclear support | 0.20 | 0.40 | Unique ownership |
 | CC10/SCGB1A1 | Perinuclear secretory cytoplasm | 0.20 | 0.40 | Unique ownership |
 | tdTomato | Perinuclear reporter support; independent reporter area also reported | 0.20 | 0.40 | Unique ownership |
-| Acetylated tubulin | Nucleus-adjacent 6 um apical-cilia support | 0.10 | 0.30 | Airway ROI; unique ownership; regional patches are primary at 20x |
+| Acetylated tubulin | Unique nearest ciliary component in a 1-6 um apical shell | 0.10 | 0.30 | Contextual positive allowed if all gates pass; negative requires airway ROI; regional patches are primary at 20x |
 | mRAGE | Membrane-support ring | 0.30 | 0.40 | Alveolar ROI; unique ownership |
 
 The AcTub regional patch filter is 2.0 um2. The previous 0.5 um2 filter was only
@@ -245,10 +245,19 @@ Ki-67 scoring is not universally standardized.
 ### Acetylated alpha-tubulin
 
 AcTub is concentrated in apical cilia. At 20x, the primary endpoint is regional
-ciliary-patch area and component distribution, not an individual-cilium or exact
-cell-ownership count. A per-nucleus association is allowed only inside an airway
-ROI with unambiguous support ownership. Whole-field or unassigned-compartment
-per-cell calls are indeterminate.
+ciliary-patch area and component distribution, not an individual-cilium count.
+For a cellular association, each accepted ciliary component is assigned to one
+nearest nucleus only. Its centroid must be 1-6 um outside the approximate
+nuclear boundary, while the nucleus-centered support must satisfy the 0.10
+positive-coverage and 0.30 connected-pattern requirements.
+
+In an ambiguous or unassigned field, passing this full rule authorizes only an
+`exploratory_positive_cellular_context` call. Non-passing nuclei remain
+indeterminate because the field was not independently established as airway.
+Known non-airway ROIs remain non-interpretable for this endpoint. A negative
+AcTub cell call requires an independently drawn/named airway ROI. This
+asymmetry prevents the target channel from declaring its own negatives while
+still allowing strict positive cellular associations.
 
 ## 5. Sectioning rules
 

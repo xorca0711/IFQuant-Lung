@@ -8,6 +8,9 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
+- **[`dist/IFQuantLauncher.exe`](dist/IFQuantLauncher.exe)** — portable Windows
+  launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
+  without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
 - **`aggregate_to_mouse.py`** — rolls per-region results up to the **mouse**
   (biological replicate) level and produces a stats-ready group summary.
@@ -17,6 +20,30 @@ antibody combination.
 - **[`config/`](config/README.md)** — universal marker registry and custom-panel
   examples.
 - **[`legacy/`](legacy/README.md)** — non-authoritative historical archive.
+
+---
+
+## Windows launcher — recommended
+
+Run [`IFQuantLauncher.exe`](dist/IFQuantLauncher.exe), then select:
+
+1. the folder containing the original confocal images;
+2. the Fiji executable or Fiji installation folder;
+3. an output parent folder;
+4. the acquisition panel and optional filename filter.
+
+The same `AnyCPU` executable supports Windows ARM64 and Windows x64. When a Fiji
+folder is selected, ARM64 Windows prefers `fiji-windows-arm64.exe`; x64 Windows
+prefers `fiji-windows-x64.exe` or `ImageJ-win64.exe`. Selecting an executable
+directly overrides automatic selection.
+
+Each click creates a new timestamped output folder and runs the embedded,
+version-matched Groovy pipeline and marker registry. The output includes QC
+images, per-cell tables, `run_summary.csv`, `run_manifest.json`, and
+`launcher_run.txt` with executable paths, settings, and SHA-256 provenance.
+
+See [`launcher/README.md`](launcher/README.md) for building, advanced thresholds,
+custom panels, cancellation behavior, and runtime requirements.
 
 ---
 

@@ -148,7 +148,7 @@ allowed only when the marker is evaluable.
 | Aqp5 | Perinuclear support | 0.20 | 0.40 | Unique ownership |
 | CC10/SCGB1A1 | Perinuclear secretory cytoplasm | 0.20 | 0.40 | Unique ownership |
 | tdTomato | Perinuclear reporter support | 0.20 | 0.40 | Unique ownership; independent reporter area also reported |
-| Acetylated tubulin | Nucleus-adjacent 6 um ciliary support | 0.10 | 0.30 | Airway ROI; unique ownership; regional ciliary patches are primary at 20x |
+| Acetylated tubulin | Unique nearest ciliary component in a 1-6 um apical shell | 0.10 | 0.30 | Contextual positive allowed if all gates pass; negative requires airway ROI; regional patches are primary at 20x |
 
 The AcTub regional patch filter is 2.0 um2. The former 0.5 um2 filter was only
 about five pixels at the tested 0.311 um/pixel calibration and was too permissive
@@ -193,10 +193,21 @@ different questions and must be reported separately.
 ### Acetylated alpha-tubulin
 
 AcTub is concentrated in apical cilia. At 20x, the primary endpoint is regional
-ciliary-patch area and component distribution, not an individual-cilium or exact
-cell-ownership count. A per-nucleus association is allowed only inside an airway
-ROI with unambiguous support ownership. Whole-field or unassigned-compartment
-per-cell calls are indeterminate.
+ciliary-patch area and component distribution, not an individual-cilium count.
+For a cellular association, accepted ciliary components (at least 2 um2) are
+assigned to exactly one nearest nucleus. The component centroid must lie at
+least 1 um outside the equivalent-radius nuclear boundary, no farther than the
+6 um apical support shell, and the local support must pass both 0.10 coverage
+and 0.30 connected-pattern gates.
+
+This is an asymmetric decision. A nucleus satisfying all component and spatial
+rules may be reported as
+`exploratory_positive_cellular_context` when the whole field is unassigned or
+ambiguous. Failure to find such a component is **not** an AcTub-negative call
+without an independently defined airway ROI; it remains indeterminate. A known
+non-airway ROI is never overridden by the target marker. Inside a validated
+airway ROI, both positive and negative calls are allowed. Regional ciliary area
+remains the primary 20x endpoint.
 
 ## Sectioning rules
 
@@ -277,6 +288,14 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 `mRAGE` becomes `IFQ_MRAGE_THRESHOLD`.
 
 ## Minimal Fiji batch configuration
+
+The recommended Windows route is
+[`dist/IFQuantLauncher.exe`](dist/IFQuantLauncher.exe). It exposes the
+directories and settings below in a GUI, creates a fresh timestamped output
+folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
+ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.
+
+For command-line or development runs, configure the same values manually:
 
 ```powershell
 $env:IFQ_INPUT_DIR = 'G:\path\to\originals'

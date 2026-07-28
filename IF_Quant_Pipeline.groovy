@@ -194,6 +194,15 @@ def MIN_RING_POS_FRACTION = [
 def ACTUB_SUPPORT_EXPAND_UM = envDouble("IFQ_ACTUB_SUPPORT_EXPAND_UM", 6.0d)
 def ACTUB_MIN_SUPPORT_FRACTION = envDouble("IFQ_ACTUB_MIN_SUPPORT_FRACTION", 0.10d)
 def ACTUB_MIN_PATCH_AREA_UM2 = envDouble("IFQ_ACTUB_MIN_PATCH_AREA_UM2", 2.0d)
+// A regional ciliary component is assigned to exactly one nearest nucleus.
+// This preserves cell context in dense airway epithelium without rejecting
+// every 6-um support zone merely because another nucleus overlaps it.
+def ACTUB_MAX_COMPONENT_DISTANCE_UM = envDouble("IFQ_ACTUB_MAX_COMPONENT_DISTANCE_UM", 12.0d)
+// Require the component centroid to sit outside an equivalent-radius nuclear
+// boundary. This rejects intranuclear/central puncta while retaining a
+// conservative apical shell for one-plane 20x sections.
+def ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM =
+  envDouble("IFQ_ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM", 1.0d)
 
 // Morphology is the authoritative marker call. Intensity thresholds define
 // candidate pixels; a final positive additionally requires role-appropriate
@@ -327,6 +336,9 @@ requireFiniteNonnegative("IFQ_RING_EXPAND_UM", RING_EXPAND_UM, false)
 requireFiniteNonnegative("IFQ_MIN_NUCLEUS_AREA_UM2", MIN_NUCLEUS_AREA_UM2, false)
 requireFiniteNonnegative("IFQ_ACTUB_SUPPORT_EXPAND_UM", ACTUB_SUPPORT_EXPAND_UM, false)
 requireFiniteNonnegative("IFQ_ACTUB_MIN_PATCH_AREA_UM2", ACTUB_MIN_PATCH_AREA_UM2, false)
+requireFiniteNonnegative("IFQ_ACTUB_MAX_COMPONENT_DISTANCE_UM", ACTUB_MAX_COMPONENT_DISTANCE_UM, false)
+requireFiniteNonnegative("IFQ_ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM",
+                         ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM, true)
 requireFiniteNonnegative("IFQ_DAPI_BACKGROUND_RADIUS_UM", DAPI_BACKGROUND_RADIUS_UM, false)
 requireFiniteNonnegative("IFQ_DAPI_LOCAL_RADIUS_UM", DAPI_LOCAL_RADIUS_UM, false)
 requireFiniteNonnegative("IFQ_DAPI_BLUR_SIGMA_PX", DAPI_BLUR_SIGMA_PX, true)
@@ -911,6 +923,73 @@ def measureRoi(ImagePlus imp, Roi roi) {
   return [mean: st.mean, area: st.area, cx: st.xCentroid, cy: st.yCentroid]
 }
 
+// Assign every accepted ciliary component to at most one nearby nucleus. A
+// spatial grid avoids an O(components x nuclei) scan in dense 2k fields.
+// Distances and centroids are calibrated because measureRoi uses image
+// calibration. This is a nucleus-associated ciliary-component endpoint, not
+// reconstruction of a complete cell boundary or an individual axoneme count.
+def assignCiliaryComponentsToNuclei(componentStats, nucleusStats,
+                                    double maxCentroidDistanceUm,
+                                    double minBoundaryDistanceUm,
+                                    double maxBoundaryDistanceUm) {
+  def byNucleus = [:].withDefault { [] }
+  if (componentStats == null || componentStats.isEmpty() ||
+      nucleusStats == null || nucleusStats.isEmpty()) {
+    return [by_nucleus:byNucleus, assigned_component_count:0,
+            unassigned_component_count:(componentStats == null ? 0 : componentStats.size())]
+  }
+
+  double cellSize = Math.max(maxCentroidDistanceUm, 0.001d)
+  def grid = [:].withDefault { [] }
+  nucleusStats.eachWithIndex { ns, ni ->
+    int gx = (int)Math.floor(ns.cx / cellSize)
+    int gy = (int)Math.floor(ns.cy / cellSize)
+    double equivalentRadius = Math.sqrt(Math.max(0.0d, ns.area as double) / Math.PI)
+    grid[gx + ":" + gy] << [index:ni, cx:ns.cx as double, cy:ns.cy as double,
+                             equivalent_radius_um:equivalentRadius]
+  }
+
+  int assigned = 0
+  componentStats.eachWithIndex { cs, ci ->
+    int gx = (int)Math.floor(cs.cx / cellSize)
+    int gy = (int)Math.floor(cs.cy / cellSize)
+    def nearest = null
+    double nearestDistance = Double.POSITIVE_INFINITY
+    for (int dx = -1; dx <= 1; dx++) {
+      for (int dy = -1; dy <= 1; dy++) {
+        grid[(gx + dx) + ":" + (gy + dy)].each { candidate ->
+          double xdiff = cs.cx - (double)candidate.cx
+          double ydiff = cs.cy - (double)candidate.cy
+          double distance = Math.sqrt(xdiff * xdiff + ydiff * ydiff)
+          if (distance < nearestDistance ||
+              (distance == nearestDistance && nearest != null &&
+               (int)candidate.index < (int)nearest.index)) {
+            nearest = candidate
+            nearestDistance = distance
+          }
+        }
+      }
+    }
+    double boundaryDistance = nearest == null ? Double.POSITIVE_INFINITY :
+      nearestDistance - (double)nearest.equivalent_radius_um
+    if (nearest != null && nearestDistance <= maxCentroidDistanceUm &&
+        boundaryDistance >= minBoundaryDistanceUm &&
+        boundaryDistance <= maxBoundaryDistanceUm) {
+      byNucleus[(int)nearest.index] << [
+        component_index:ci + 1,
+        area_um2:cs.area as double,
+        centroid_x_um:cs.cx as double,
+        centroid_y_um:cs.cy as double,
+        nucleus_centroid_distance_um:nearestDistance,
+        nucleus_boundary_distance_um:boundaryDistance
+      ]
+      assigned++
+    }
+  }
+  return [by_nucleus:byNucleus, assigned_component_count:assigned,
+          unassigned_component_count:componentStats.size() - assigned]
+}
+
 // Count positive (>0) pixels of a mask inside an ROI -> calibrated area.
 def positiveAreaInRoi(ImagePlus maskImp, Roi roi) {
   ImageProcessor mp = maskImp.getProcessor()
@@ -1009,12 +1088,47 @@ def spatialSupportStats(ImagePlus imp, Roi roi, double threshold) {
           largestShare:(positive > 0 ? largest / (double)positive : 0.0d)]
 }
 
+// Spatial index for the strict ownership screen below. Every nucleus centroid
+// belongs to one fixed-size pixel cell, so a local support ROI checks only
+// neighboring grid cells rather than scanning every nucleus in the image.
+def buildNucleusCentroidGrid(nuclei, int cellSizePx = 32) {
+  int size = Math.max(4, cellSizePx)
+  def cells = [:].withDefault { [] }
+  nuclei.eachWithIndex { nucleus, ni ->
+    Rectangle nb = nucleus.getBounds()
+    int cx = (int)Math.round(nb.getCenterX())
+    int cy = (int)Math.round(nb.getCenterY())
+    cells[((int)Math.floor(cx / (double)size)) + ":" +
+          ((int)Math.floor(cy / (double)size))] << [index:ni, x:cx, y:cy]
+  }
+  return [cell_size_px:size, cells:cells]
+}
+
 // Strict ownership screen for nucleus-associated measurements. If a support
 // territory encloses another nucleus centroid, pixels cannot be assigned to one
 // cell unambiguously without a full membrane/cell segmentation; leave the final
 // call indeterminate instead of double-counting shared signal.
-def supportHasOtherNucleus(Roi support, int currentIndex, nuclei) {
+def supportHasOtherNucleus(Roi support, int currentIndex, nuclei, spatialGrid = null) {
   if (support == null) return true
+  if (spatialGrid != null) {
+    Rectangle sb = support.getBounds()
+    int size = spatialGrid.cell_size_px as int
+    int minGX = (int)Math.floor(sb.x / (double)size)
+    int maxGX = (int)Math.floor((sb.x + Math.max(0, sb.width - 1)) / (double)size)
+    int minGY = (int)Math.floor(sb.y / (double)size)
+    int maxGY = (int)Math.floor((sb.y + Math.max(0, sb.height - 1)) / (double)size)
+    for (int gx = minGX; gx <= maxGX; gx++) {
+      for (int gy = minGY; gy <= maxGY; gy++) {
+        def candidates = spatialGrid.cells[gx + ":" + gy]
+        for (int k = 0; k < candidates.size(); k++) {
+          def candidate = candidates[k]
+          if ((int)candidate.index != currentIndex &&
+              support.contains((int)candidate.x, (int)candidate.y)) return true
+        }
+      }
+    }
+    return false
+  }
   for (int j = 0; j < nuclei.size(); j++) {
     if (j == currentIndex) continue
     Rectangle nb = nuclei[j].getBounds()
@@ -1343,6 +1457,14 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
   def qcRegionOverlays = [:]
 
   tissue.regions.eachWithIndex { reg, ri ->
+    long stageStartedNs = System.nanoTime()
+    def logStage = { String stage ->
+      long nowNs = System.nanoTime()
+      IJ.log("[IFQ_STAGE] " + stage + " " +
+             String.format(java.util.Locale.US, "%.3f",
+                           (nowNs - stageStartedNs) / 1.0e9d) + "s")
+      stageStartedNs = nowNs
+    }
     def region = reg.roi
     def regName = reg.name
     def regFileToken = fileSafe(regName)
@@ -1404,7 +1526,12 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       def maskReg = mask.duplicate(); maskReg.setCalibration(cal); maskReg.setRoi(region)
       transientImages << maskReg
       def componentRois = particlesToRois(maskReg, minComponentArea, false)
-      def componentAreas = componentRois.collect { measureRoi(mask, it).area }
+      def componentStats = componentRois.collect { component ->
+        def measured = measureRoi(mask, component)
+        [roi:component, area:measured.area as double,
+         cx:measured.cx as double, cy:measured.cy as double]
+      }
+      def componentAreas = componentStats.collect { it.area as double }
       def areaThr = mask.getProperty("thresholdValue")
       areaStats[c.marker] = [ mode: areaMode, area_um2: positiveArea,
                               frac_of_region: (regionAreaUm2 > 0 ? positiveArea/regionAreaUm2 : 0),
@@ -1412,14 +1539,19 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                               mean_component_area_um2: (componentAreas.isEmpty()? 0 : componentAreas.sum()/componentAreas.size()),
                               min_component_area_um2: minComponentArea,
                               threshold: (areaThr != null ? areaThr : -1),
-                              threshold_source: areaThresholdSources[c.marker] ]
+                              threshold_source: areaThresholdSources[c.marker],
+                              component_stats: componentStats ]
       maskReg.close()
     }
+    logStage("area_components")
 
     // ---- Nuclei -> cells ----
     def segmentation = segmentNuclei(dapi, region, cfg)
     if (segmentation.candidateMask != null) transientImages << segmentation.candidateMask
     def nuclei = segmentation.included
+    def nucleusStats = nuclei.collect { measureRoi(dapi, it) }
+    def nucleusCentroidGrid = buildNucleusCentroidGrid(nuclei)
+    logStage("nucleus_segmentation_and_stats")
     def rejectedNuclei = segmentation.rejected ?: []
     def posCount = [:].withDefault { 0 }
     def finalPosCount = [:].withDefault { 0 }
@@ -1435,6 +1567,16 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     def allNucRois = []
     def finalPositiveRois = [:].withDefault { [] }
     def indeterminateRois = [:].withDefault { [] }
+    def apicalComponentAssignments = [:]
+    cellChannels.findAll { it.role == "apical_cilia" }.each { c ->
+      def stats = areaStats[c.marker]
+      apicalComponentAssignments[c.marker] = assignCiliaryComponentsToNuclei(
+        stats != null ? stats.component_stats : [], nucleusStats,
+        cfg.actubMaxComponentDistanceUm,
+        cfg.actubMinComponentBoundaryDistanceUm,
+        cfg.actubSupportExpandUm)
+    }
+    logStage("apical_component_ownership")
 
     nuclei.eachWithIndex { nuc, ni ->
       allNucRois << nuc
@@ -1443,7 +1585,7 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                   compartment: compartment, region_tags: regionTags.join("|"), cell_id: (ni + 1) ]
       row.mouse_id = meta.mouse_id; row.section_id = meta.section_id
       row.genotype = meta.genotype; row.condition = meta.condition
-      def cs = measureRoi(dapi, nuc)
+      def cs = nucleusStats[ni]
       row.centroid_x_um = cs.cx; row.centroid_y_um = cs.cy; row.nucleus_area_um2 = cs.area
 
       def calls = [:]       // morphology-authoritative three-state calls: 1, 0, or ""
@@ -1463,6 +1605,9 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         if (c.minNucCytoRatio != null) rule.minNucCytoRatio = c.minNucCytoRatio as double
         def spatialRoi = nuc
         def ownershipSupport = null
+        boolean componentContextPass = false
+        boolean componentOwnershipPass = false
+        def ownedCiliaryComponents = []
         double val, nucVal = 0.0d, cytoVal = 0.0d, enrichmentRatio = 0.0d
         boolean projectionValid = true
         if (c.role == "nuc_marker") {
@@ -1499,8 +1644,28 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           spatialRoi = support ?: cellRoi
           ownershipSupport = spatialRoi
           val = measureRoi(img, spatialRoi).mean
+          def assignment = apicalComponentAssignments[m]
+          ownedCiliaryComponents = assignment != null ? (assignment.by_nucleus[ni] ?: []) : []
+          componentOwnershipPass = !ownedCiliaryComponents.isEmpty()
+          double ownedArea = ownedCiliaryComponents.isEmpty() ? 0.0d :
+                             ownedCiliaryComponents.collect { it.area_um2 as double }.sum() as double
+          double nearestCentroidDistance = ownedCiliaryComponents.isEmpty() ? Double.NaN :
+            ownedCiliaryComponents.collect { it.nucleus_centroid_distance_um as double }.min() as double
+          double nearestBoundaryDistance = ownedCiliaryComponents.isEmpty() ? Double.NaN :
+            ownedCiliaryComponents.collect { it.nucleus_boundary_distance_um as double }.min() as double
           row[m + "_support_expand_um"] = supportExpandUm
           row[m + "_measurement_model"] = c.measurement ?: "apical_cilia_proximity"
+          row[m + "_cellular_context_model"] = "unique_nearest_nucleus_ciliary_component"
+          row[m + "_owned_ciliary_component_count"] = ownedCiliaryComponents.size()
+          row[m + "_owned_ciliary_component_area_um2"] = ownedArea
+          row[m + "_nearest_ciliary_component_centroid_distance_um"] =
+            Double.isFinite(nearestCentroidDistance) ? nearestCentroidDistance : ""
+          row[m + "_nearest_ciliary_component_boundary_distance_um"] =
+            Double.isFinite(nearestBoundaryDistance) ? nearestBoundaryDistance : ""
+          row[m + "_maximum_component_distance_um"] = cfg.actubMaxComponentDistanceUm
+          row[m + "_minimum_component_boundary_distance_um"] =
+            cfg.actubMinComponentBoundaryDistanceUm
+          row[m + "_component_ownership_pass"] = componentOwnershipPass ? 1 : 0
         } else { // cyto / membrane: measure the perinuclear ring, not nucleus + ring
           def ring = ringOnly(nuc, cellRoi)
           spatialRoi = (ring != null) ? ring : cellRoi
@@ -1521,8 +1686,14 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         double minLargestShare = (double)rule.minLargestShare
         boolean fractionPass = supportStats.fraction >= minFraction
         boolean connectedPass = supportStats.largestShare >= minLargestShare
-        boolean ownershipClear = !(rule.requireOwnership ?: false) ||
-                                 !supportHasOtherNucleus(ownershipSupport, ni, nuclei)
+        if (c.role == "apical_cilia") {
+          componentContextPass = componentOwnershipPass && fractionPass && connectedPass
+          row[m + "_component_context_pass"] = componentContextPass ? 1 : 0
+        }
+        boolean ownershipClear = c.role == "apical_cilia" ? true :
+                                 (!(rule.requireOwnership ?: false) ||
+                                  !supportHasOtherNucleus(ownershipSupport, ni, nuclei,
+                                                          nucleusCentroidGrid))
         boolean enrichmentPass = true
         if (c.role == "nuc_marker") {
           enrichmentPass = enrichmentRatio >= (double)(rule.minNuclearEnrichment ?: 1.0d)
@@ -1534,9 +1705,23 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         boolean compartmentAssigned = !regionTags.isEmpty() && !regionTags.contains("ambiguous")
         boolean compartmentPass = expectedCompartments.isEmpty() ||
                                   (compartmentAssigned && expectedCompartments.any { regionTags.contains(it) })
+        boolean contextualApicalPositive = c.role == "apical_cilia" &&
+                                           componentContextPass &&
+                                           !compartmentAssigned
         boolean evaluable = supportStats.total > 0 && projectionValid
         def indeterminateReasons = []
-        if (!expectedCompartments.isEmpty() && !compartmentPass) {
+        if (c.role == "apical_cilia") {
+          // Positive evidence is asymmetric: a uniquely nucleus-owned ciliary
+          // component can establish a local AcTub-associated cellular context
+          // in an unassigned/ambiguous field. Absence is not a valid negative
+          // unless the ROI was independently identified as airway. A known
+          // non-airway ROI is never overridden by the target marker.
+          evaluable = supportStats.total > 0 && projectionValid &&
+                      (compartmentPass || contextualApicalPositive)
+          if (!compartmentPass && !contextualApicalPositive) {
+            indeterminateReasons << (compartmentAssigned ? "wrong_compartment" : "compartment_unassigned")
+          }
+        } else if (!expectedCompartments.isEmpty() && !compartmentPass) {
           evaluable = false
           indeterminateReasons << (compartmentAssigned ? "wrong_compartment" : "compartment_unassigned")
         }
@@ -1574,7 +1759,9 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           row[m + "_ring_fraction_above_threshold"] = supportStats.fraction
           row[m + "_minimum_ring_fraction"] = minFraction
         }
-        row[m + "_pattern_pos"] = (fractionPass && connectedPass) ? 1 : 0
+        row[m + "_pattern_pos"] = c.role == "apical_cilia" ?
+                                   (componentContextPass ? 1 : 0) :
+                                   ((fractionPass && connectedPass) ? 1 : 0)
         row[m + "_compartment_consistent"] = expectedCompartments.isEmpty() ? 1 :
                                               (compartmentAssigned ? (compartmentPass ? 1 : 0) : "")
 
@@ -1582,12 +1769,20 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           posCount[m] = posCount[m] + 1
         }
 
-        boolean morphologyPass = fractionPass && connectedPass && enrichmentPass && compartmentPass
+        boolean morphologyPass = c.role == "apical_cilia" ?
+                                 (componentContextPass && (compartmentPass || contextualApicalPositive)) :
+                                 (fractionPass && connectedPass && enrichmentPass && compartmentPass)
         def finalCall = ""
         String callStatus
         def failureReasons = []
-        if (!fractionPass) failureReasons << "insufficient_spatial_coverage"
-        if (!connectedPass) failureReasons << "fragmented_spatial_pattern"
+        if (c.role == "apical_cilia") {
+          if (!componentOwnershipPass) failureReasons << "no_unique_apical_ciliary_component"
+          if (!fractionPass) failureReasons << "insufficient_spatial_coverage"
+          if (!connectedPass) failureReasons << "fragmented_spatial_pattern"
+        } else {
+          if (!fractionPass) failureReasons << "insufficient_spatial_coverage"
+          if (!connectedPass) failureReasons << "fragmented_spatial_pattern"
+        }
         if (!enrichmentPass) failureReasons << (c.role == "nuc_ratio" ? "nuc_cyto_ratio_below_minimum" : "nuclear_enrichment_below_minimum")
 
         if (!cfg.morphologyPrimary) {
@@ -1601,7 +1796,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           finalCall = morphologyPass ? 1 : 0
           boolean fixedThreshold = chThreshSource[m] == "fixed_predeclared"
           callStatus = morphologyPass ?
-                       (fixedThreshold ? "positive" : "exploratory_positive") :
+                       (contextualApicalPositive ? "exploratory_positive_cellular_context" :
+                        (fixedThreshold ? "positive" : "exploratory_positive")) :
                        (fixedThreshold ? "negative" : "exploratory_negative")
         }
         if (finalCall == 1) {
@@ -1619,7 +1815,11 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         row[m + "_final_call"] = finalCall
         row[m + "_true_pos"] = finalCall       // compatibility alias
         row[m + "_call_status"] = callStatus
-        row[m + "_call_reason"] = (indeterminateReasons + failureReasons).unique().join(";")
+        def callReasons = (indeterminateReasons + failureReasons).unique()
+        if (contextualApicalPositive && finalCall == 1) {
+          callReasons << "unique_apical_ciliary_component_context_without_airway_roi"
+        }
+        row[m + "_call_reason"] = callReasons.unique().join(";")
       }
       // classifications
       panelDef.classify.each { rule ->
@@ -1638,6 +1838,7 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       }
       cellRows << row
     }
+    logStage("per_cell_decisions")
 
     // ---- QC overlay for this region ----
     def qc = buildQcOverlay(markerImg, panelDef, region, allNucRois, qcMasks)
@@ -1721,6 +1922,21 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_true_pos_count"] = finalPosCount[c.marker] // compatibility alias
       def expectedForSummary = expectedCompartmentsFor(c)
       srow[c.marker + "_expected_compartment"] = expectedForSummary.isEmpty() ? "none" : expectedForSummary.join("|")
+      if (c.role == "apical_cilia") {
+        def assignment = apicalComponentAssignments[c.marker]
+        def ownedNucleusCount = assignment == null ? 0 :
+          assignment.by_nucleus.values().count { it != null && !it.isEmpty() }
+        srow[c.marker + "_nuclei_with_owned_ciliary_component"] = ownedNucleusCount
+        srow[c.marker + "_assigned_ciliary_component_count"] =
+          assignment == null ? 0 : assignment.assigned_component_count
+        srow[c.marker + "_unassigned_ciliary_component_count"] =
+          assignment == null ? 0 : assignment.unassigned_component_count
+        srow[c.marker + "_maximum_component_distance_um"] = cfg.actubMaxComponentDistanceUm
+        srow[c.marker + "_minimum_component_boundary_distance_um"] =
+          cfg.actubMinComponentBoundaryDistanceUm
+        srow[c.marker + "_cellular_context_model"] =
+          "unique_apical_component_plus_local_coverage_asymmetric_context"
+      }
     }
     areaStats.each { m, as ->
       srow[m + "_positive_area_um2"] = as.area_um2
@@ -1803,7 +2019,12 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     acetylated_tubulin_model: [ measurement: "apical_cilia_proximity_and_regional_patches",
                                 support_expand_um: cfg.actubSupportExpandUm,
                                 minimum_support_positive_fraction: cfg.actubMinSupportFraction,
-                                minimum_ciliary_patch_area_um2: cfg.actubMinPatchAreaUm2 ],
+                                minimum_ciliary_patch_area_um2: cfg.actubMinPatchAreaUm2,
+                                cellular_context_model: "unique_apical_component_plus_local_coverage",
+                                maximum_component_centroid_distance_um: cfg.actubMaxComponentDistanceUm,
+                                minimum_component_boundary_distance_um: cfg.actubMinComponentBoundaryDistanceUm,
+                                maximum_component_boundary_distance_um: cfg.actubSupportExpandUm,
+                                decision_asymmetry: "positive component context allowed without airway ROI; negative requires independently assigned airway ROI" ],
     pod_min_area_um2: cfg.podMinArea, pod_blur_sigma_px: cfg.podBlur, pod_thresh_method: cfg.podMethod,
     pos_sensitivity: cfg.sensitivity, black_background: cfg.blackBackground,
     fixed_pos_thresholds: cfg.fixedThresholds,
@@ -2145,6 +2366,8 @@ def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles:
            actubSupportExpandUm: ACTUB_SUPPORT_EXPAND_UM,
            actubMinSupportFraction: ACTUB_MIN_SUPPORT_FRACTION,
            actubMinPatchAreaUm2: ACTUB_MIN_PATCH_AREA_UM2,
+           actubMaxComponentDistanceUm: ACTUB_MAX_COMPONENT_DISTANCE_UM,
+           actubMinComponentBoundaryDistanceUm: ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM,
            tissueMode: TISSUE_MODE, tissueBlur: TISSUE_BLUR_SIGMA_PX,
            tissueMethod: TISSUE_THRESH_METHOD, tissueMinArea: TISSUE_MIN_AREA_UM2,
            allowNonemptyOutput: ALLOW_NONEMPTY_OUTPUT ]
@@ -2191,7 +2414,8 @@ def safeToken = { value ->
 def usedOutputKeys = [] as Set
 def failures = []
 
-files.each { f ->
+files.eachWithIndex { f, fileIndex ->
+  IJ.log("[IFQ_PROGRESS] " + (fileIndex + 1) + "/" + files.size() + " " + f.name)
   def relativePath = inDir.toPath().relativize(f.toPath()).toString()
   def panelKey = PANEL
   def outputKey = null
