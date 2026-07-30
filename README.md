@@ -8,6 +8,9 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
+- **[`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe)** — portable Windows
+  launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
+  without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
 - **`aggregate_to_mouse.py`** — rolls per-region results up to the **mouse**
   (biological replicate) level and produces a stats-ready group summary.
@@ -17,6 +20,30 @@ antibody combination.
 - **[`config/`](config/README.md)** — universal marker registry and custom-panel
   examples.
 - **[`legacy/`](legacy/README.md)** — non-authoritative historical archive.
+
+---
+
+## Windows launcher — recommended
+
+Run [`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe), then select:
+
+1. the folder containing the original confocal images;
+2. the Fiji executable or Fiji installation folder;
+3. an output parent folder;
+4. the acquisition panel and optional filename filter.
+
+The same `AnyCPU` executable supports Windows ARM64 and Windows x64. When a Fiji
+folder is selected, ARM64 Windows prefers `fiji-windows-arm64.exe`; x64 Windows
+prefers `fiji-windows-x64.exe` or `ImageJ-win64.exe`. Selecting an executable
+directly overrides automatic selection.
+
+Each click creates a new timestamped output folder and runs the embedded,
+version-matched Groovy pipeline and marker registry. The output includes QC
+images, per-cell tables, `run_summary.csv`, `run_manifest.json`, and
+`launcher_run.txt` with executable paths, settings, and SHA-256 provenance.
+
+See [`launcher/README.md`](launcher/README.md) for building, advanced thresholds,
+custom panels, cancellation behavior, and runtime requirements.
 
 ---
 
@@ -44,6 +71,25 @@ genotypes can be compared fairly.
 ---
 
 ## 2. Built-in panels and universal marker configuration
+
+### Priority real-project panels
+
+The universal marker registry and morphology-first cell-counting workflow remain
+active. These two presets only establish the most important project channel
+maps and do not disable other built-in or custom markers:
+
+| Preset | Acquisition channels | Primary tracked cell counts | Additional structural readouts |
+|---|---|---|---|
+| `LEFT` | C1 DAPI; C2 KRT5-488; C3 AGER-555; C4 T1alpha-647 | KRT5, AGER, T1A final-positive/negative/indeterminate cells | KRT5 pod area; AGER and T1A membrane-positive area |
+| `RIGHT` | C1 DAPI; C2 Pro-SPC-488; C3 AGER-555; C4 KRT8-647 | ProSPC, AGER, KRT8 final-positive/negative/indeterminate cells | AGER membrane-positive area |
+
+The marker identity and acquisition index are authoritative; displayed colors
+alone are not. `T1A` is the output label for T1alpha/podoplanin, and `ProSPC`
+is the output label for Pro-SPC/SFTPC. For every image and marker, use
+`<marker>_final_positive_cell_count` and
+`<marker>_final_positive_fraction_of_total_cells` as the primary exported
+tracking fields. Fixed control-derived thresholds are still required before a
+confirmatory cohort analysis.
 
 The table below preserves the original study panels. Choose a built-in panel
 through the samplesheet or `IFQ_PANEL`. The engine itself is not limited to a
@@ -86,6 +132,10 @@ used by declaring its role explicitly.
 See
 [`docs/UNIVERSAL_MARKER_CONFIGURATION.md`](docs/UNIVERSAL_MARKER_CONFIGURATION.md)
 for the IPF, acute-injury, lung-adenocarcinoma, ROI-tag, and control hierarchy.
+See
+[`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md)
+for every anatomical tag, analytical subcellular role, multi-tag precedence,
+ROI naming example, and the complete tag-to-call progression.
 
 See [`docs/MARKER_MORPHOLOGY_GUIDE.md`](docs/MARKER_MORPHOLOGY_GUIDE.md) for the complete
 marker-by-marker measurement, compartment-gating, optical-sectioning, control,
@@ -102,9 +152,13 @@ The final marker call has three states: positive, negative, or indeterminate.
 An intensity cutoff first defines candidate positive pixels. A final positive
 then requires the marker-specific minimum spatial coverage, connected pattern,
 localization/enrichment rule, unique ownership where applicable, and anatomical
-compartment. A final negative is assigned only when the marker is evaluable.
-Missing compartment, invalid YAP projection, empty support, or shared support is
-indeterminate rather than negative.
+context policy. For a compartment-dependent endpoint, strict marker evidence
+may be retained as an exploratory context-unresolved positive, but a final
+negative is assigned only inside a compatible, independently defined
+compartment. A known incompatible compartment, missing context with no positive
+evidence, invalid YAP projection, empty support, or shared support is
+indeterminate rather than negative. Context-unresolved positives do not
+authorize compound lineage/state classifications.
 
 `<marker>_pos` is the legacy mean-intensity audit result. Classifications and
 counts use `<marker>_final_call`; they do not use the raw mean-intensity result.
@@ -299,7 +353,7 @@ groups are compared; the example values above are not validated cutoffs.
 | `POD_THRESH_METHOD` | auto-threshold method for the pod mask (`Otsu`, `Li`, …) |
 | `POS_SENSITIVITY` | per-marker multiplier on the auto threshold (`>1` stricter, `<1` more permissive) |
 | `IFQ_MORPHOLOGY_PRIMARY` | Must remain `true`; `false` is rejected because intensity-only final calls are unsupported |
-| `IFQ_WHOLE_FIELD_COMPARTMENT` | explicit compartment for a visually reviewed homogeneous field: `airway`, `alveolar`, `ambiguous`, or `unassigned` |
+| `IFQ_WHOLE_FIELD_COMPARTMENT` | explicit context for a visually reviewed homogeneous field: `airway`, `alveolar`, `tumor`, `fibrotic`, `stromal`, `vascular`, `immune`, `ambiguous`, or `unassigned` |
 | `IFQ_<MARKER>_THRESHOLD` | fixed control-derived candidate-pixel cutoff for a marker |
 | `IFQ_<MARKER>_MIN_POSITIVE_FRACTION` | minimum fraction of the role-specific support above cutoff |
 | `IFQ_<MARKER>_MIN_LARGEST_COMPONENT_SHARE` | minimum connectedness of positive support |
@@ -321,6 +375,13 @@ injury.
 ## 8. Outputs
 
 Written under `OUTPUT_DIR`:
+
+`run_summary.xlsx` opens on **Image Positive Counts**, with one aligned row per
+image/region containing total cells plus every marker's final-positive cell
+count and fraction of that row's total cells. **Run Summary** preserves the
+complete audit table, including indeterminate states, while **Skipped Inputs**
+records deliberately excluded microscope map acquisitions. The CSV remains
+the machine-readable input to `aggregate_to_mouse.py`.
 
 ```
 OUTPUT_DIR/
@@ -362,6 +423,21 @@ biological marker name is used.
 - `<marker>_morphology_pos_count`, `<marker>_morphology_negative_count`,
   `<marker>_indeterminate_count`, `<marker>_morphology_evaluable_count` — the
   authoritative three-state decision summary.
+- `<marker>_final_positive_cell_count`,
+  `<marker>_final_negative_cell_count`,
+  `<marker>_final_indeterminate_cell_count`, and their
+  `_fraction_of_total_cells` companions provide explicit final
+  quantifications using `n_nuclei` as the denominator.
+- `<marker>_marker_evidence_pos_count`,
+  `<marker>_context_unresolved_positive_count`, and
+  `<marker>_context_excluded_evidence_positive_count` — strict evidence before
+  or alongside anatomical eligibility. These fields make context-related loss
+  visible instead of allowing it to resemble a biological negative.
+- `<marker>_context_resolved_positive_count`,
+  `<marker>_context_resolved_evaluable_count`, and
+  `<marker>_context_resolved_positive_fraction` — the context-resolved
+  denominator for confirmatory biological summaries; do not substitute the
+  unresolved-positive-only fraction.
 - `KRT5_pod_area_um2`, `KRT5_pod_area_frac`, `KRT5_n_pods`,
   `KRT5_mean_pod_area_um2`, `KRT5_pod_threshold` — **primary endpoint**.
 - `<marker>_positive_area_um2`, `<marker>_positive_area_frac`,
@@ -370,7 +446,9 @@ biological marker name is used.
   Components below the declared physical minimum are excluded from the saved
   mask and from the area endpoint.
 - `class_<rule>_count`, `class_<rule>_evaluable_count`, and
-  `class_<rule>_indeterminate_count` — classifications consume only final calls.
+  `class_<rule>_indeterminate_count` — every declared class is emitted even
+  when all cells are indeterminate; classifications consume only
+  context-resolved final calls.
 
 After `aggregate_to_mouse.py` you also get:
 

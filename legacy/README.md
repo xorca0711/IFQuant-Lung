@@ -12,6 +12,7 @@ Git branch:
 
 - `figures/`: earlier workflow and overlay diagrams. These predate the final
   morphology-authoritative three-state hierarchy.
+- `launchers/`: superseded versioned launcher executables and checksums.
 - `scripts/README.md`: routes historical script access to the snapshot branch
   and commit history; no legacy script is an active entry point.
 - `test_runs/`: local smoke, baseline, and intermediate Fiji outputs.

@@ -22,12 +22,47 @@ comparing experimental groups.
   morphology and literature notes.
 - [`docs/UNIVERSAL_MARKER_CONFIGURATION.md`](docs/UNIVERSAL_MARKER_CONFIGURATION.md):
   reusable marker, disease-context, panel, and ROI-tag hierarchy.
+- [`docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
+  cross-marker context/evaluability audit and representative Fiji regressions.
+- [`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md):
+  anatomical tag meanings, subcellular analytical roles, ROI naming, and
+  image-to-call progression.
 - [`config/lung_marker_registry.json`](config/lung_marker_registry.json): marker
   aliases, localization, lineage/state notes, and analytical-role defaults.
 - [`config/custom_panels.example.json`](config/custom_panels.example.json):
   opt-in study panel templates; built-in panels remain unchanged.
 - [`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](docs/PILOT_G002_MORPHOLOGY_RESULTS.md):
   validated one-image pilots.
+
+## Priority real-project antibody panels
+
+The pipeline remains universal: registry markers, legacy panels, study-owned
+custom panels, morphology-first decisions, and per-image cell counts all remain
+available. The following two channel maps are the priority presets for the real
+project:
+
+| Preset | C1 | C2 | C3 | C4 |
+|---|---|---|---|---|
+| `LEFT` | DAPI | KRT5-488 | AGER-555 | T1alpha-647 |
+| `RIGHT` | DAPI | Pro-SPC-488 | AGER-555 | KRT8-647 |
+
+Primary tracking is per image and per marker: total included DAPI cells,
+final-positive cells, final-negative cells, indeterminate cells, and
+final-positive fraction of total included cells. KRT5 also retains pod-area
+quantification; AGER and T1alpha retain membrane-positive-area quantification.
+Co-expression classes are secondary descriptive endpoints and do not replace
+the individual marker counts.
+
+Marker-specific support remains unchanged:
+
+- KRT5 and KRT8: connected perinuclear cytoplasmic keratin support;
+- Pro-SPC: connected granular perinuclear cytoplasmic support;
+- AGER and T1alpha: connected thin-membrane support in an alveolar context;
+- DAPI: nuclear segmentation and the denominator for included cells.
+
+The same three-state decision hierarchy applies to both presets. In particular,
+an alveolar-marker negative requires a compatible independently declared
+alveolar context; unresolved anatomy is not silently counted as negative.
 
 ## Universal marker-selection hierarchy
 
@@ -48,30 +83,51 @@ interpretation are separate. A marker registry entry may supply a geometry
 default, but it never assigns a disease diagnosis or a final cell identity.
 Unknown markers remain supported when the custom panel declares their role.
 
+For the newly expanded profiles: KRT8 uses connected cytoplasmic filament
+support; ITGA2/CD49b uses connected membrane support; SOX9 requires connected
+DAPI-nuclear enrichment; and PDGFRB is preferably a regional/perivascular area
+endpoint at 20x, with per-nucleus membrane calls reserved for validated
+high-resolution ownership. Red2-Kras uses connected cytoplasmic RFP reporter
+support with clone area primary at 20x; RFP-positive marks the verified
+oncogene-coupled clone, whereas RFP-negative alone is not a wild-type call.
+Pan-KRAS uses connected cytoplasmic/inner-membrane protein support but does not
+imply a KRAS mutation. Ki-67/MKI67 uses connected nuclear enrichment and is
+summarized as a labeling index inside a predeclared population or ROI. `IGTA2`
+is accepted as an alias of canonical `ITGA2`. Except for the construct-linked
+Red2-Kras RFP interpretation, none of these markers assigns a lineage,
+mutation, malignancy, or disease state by itself.
+
 ## End-to-end workflow
 
 ```mermaid
 flowchart TD
-    A[Original Bio-Formats image] --> B[Confirm image identity, channel map, calibration, and Z handling]
-    B --> C[Define blinded tissue and anatomical ROIs]
-    C --> D[Segment and QC DAPI nuclei]
-    D --> E{Is this marker evaluable for this nucleus?}
-    E -- No: invalid projection, missing compartment, empty or shared support --> F[Indeterminate]
-    E -- Yes --> G[Apply fixed or exploratory intensity cutoff to pixels]
-    G --> H{Enough positive spatial coverage?}
-    H -- No --> I[Negative]
-    H -- Yes --> J{Connected spatial pattern passes?}
-    J -- No --> I
-    J -- Yes --> K{Localization or enrichment passes?}
-    K -- No --> I
-    K -- Yes --> L{Required anatomical compartment passes?}
-    L -- No --> I
-    L -- Yes --> M[Positive]
-    F --> N[Export cell CSV, masks, call QC, and provenance]
-    I --> N
-    M --> N
-    N --> O[Review QC and exclude failed fields]
-    O --> P[Aggregate accepted regions to mouse level]
+    A[Original Bio-Formats image] --> B[Verify file identity, channel map, calibration, bit depth, and Z policy]
+    B --> C[Define blinded tissue and anatomical/context ROIs]
+    C --> D[Split channels and project each channel using the declared Z policy]
+    D --> E[Segment DAPI nuclei and reject undersized or edge-touching candidates]
+    E --> F{Nucleus and marker support technically evaluable?}
+    F -- No: invalid projection, empty support, or shared ownership --> U[Indeterminate]
+    F -- Yes --> G[Resolve fixed control-derived or exploratory pixel cutoff]
+    G --> H[Measure role-specific support: nucleus, ring, membrane, ciliary component, or regional area]
+    H --> I{Coverage, connectedness, localization, enrichment, and ownership pass?}
+    I -- Yes --> J[Strict marker evidence positive]
+    I -- No --> K[Strict marker evidence absent]
+    J --> L{Expected anatomical context}
+    K --> L
+    L -- Compatible or not required --> M{Marker evidence positive?}
+    M -- Yes --> P[Positive]
+    M -- No --> N[Evaluable negative]
+    L -- Unresolved + marker evidence positive --> Q[Exploratory context-unresolved positive]
+    L -- Unresolved + evidence absent --> U
+    L -- Known incompatible --> U
+    P --> V[Evaluate compound phenotype rules]
+    N --> V
+    Q --> W[Do not authorize compound lineage/state class]
+    U --> W
+    V --> X[Export cell CSV, summaries, masks, call-QC overlays, and provenance]
+    W --> X
+    X --> Y[Review QC; exclude failed fields without relabeling them negative]
+    Y --> Z[Aggregate accepted regions to section or mouse level]
 ```
 
 ## Decision authority and three-state semantics
@@ -93,6 +149,25 @@ This hierarchy has three important consequences:
 3. Missing spatial information is indeterminate, not negative. Segmentation
    failure, ambiguous ownership, invalid projection, or an unassigned required
    compartment must not silently inflate the negative group.
+
+For every cell-call marker with `expectedCompartment` or
+`expectedCompartments`, context is asymmetric:
+
+- strict localization-correct marker evidence may be retained as an
+  `exploratory_positive_context_unresolved` call when anatomy is unassigned or
+  ambiguous;
+- absence becomes negative only inside a compatible, independently assigned
+  compartment;
+- evidence in a known incompatible compartment remains indeterminate for the
+  intended endpoint and is separately counted as
+  `<marker>_context_excluded_evidence_positive_count`;
+- context-unresolved positives cannot authorize compound lineage/state
+  classifications.
+
+This preserves observable marker expression without allowing the marker channel
+to declare its own negative population or anatomical identity. A custom channel
+can set `allowPositiveWithoutCompartment: false` when even marker positivity is
+not interpretable without geography.
 
 Adaptive Otsu thresholds are allowed for pilot exploration and produce
 `exploratory_positive` or `exploratory_negative` status. Confirmatory analysis
@@ -134,7 +209,7 @@ allowed only when the marker is evaluable.
 | Aqp5 | Perinuclear support | 0.20 | 0.40 | Unique ownership |
 | CC10/SCGB1A1 | Perinuclear secretory cytoplasm | 0.20 | 0.40 | Unique ownership |
 | tdTomato | Perinuclear reporter support | 0.20 | 0.40 | Unique ownership; independent reporter area also reported |
-| Acetylated tubulin | Nucleus-adjacent 6 um ciliary support | 0.10 | 0.30 | Airway ROI; unique ownership; regional ciliary patches are primary at 20x |
+| Acetylated tubulin | Unique nearest ciliary component in a 1-6 um apical shell | 0.10 | 0.30 | Contextual positive allowed if all gates pass; negative requires airway ROI; regional patches are primary at 20x |
 
 The AcTub regional patch filter is 2.0 um2. The former 0.5 um2 filter was only
 about five pixels at the tested 0.311 um/pixel calibration and was too permissive
@@ -179,10 +254,21 @@ different questions and must be reported separately.
 ### Acetylated alpha-tubulin
 
 AcTub is concentrated in apical cilia. At 20x, the primary endpoint is regional
-ciliary-patch area and component distribution, not an individual-cilium or exact
-cell-ownership count. A per-nucleus association is allowed only inside an airway
-ROI with unambiguous support ownership. Whole-field or unassigned-compartment
-per-cell calls are indeterminate.
+ciliary-patch area and component distribution, not an individual-cilium count.
+For a cellular association, accepted ciliary components (at least 2 um2) are
+assigned to exactly one nearest nucleus. The component centroid must lie at
+least 1 um outside the equivalent-radius nuclear boundary, no farther than the
+6 um apical support shell, and the local support must pass both 0.10 coverage
+and 0.30 connected-pattern gates.
+
+This is an asymmetric decision. A nucleus satisfying all component and spatial
+rules may be reported as
+`exploratory_positive_cellular_context` when the whole field is unassigned or
+ambiguous. Failure to find such a component is **not** an AcTub-negative call
+without an independently defined airway ROI; it remains indeterminate. A known
+non-airway ROI is never overridden by the target marker. Inside a validated
+airway ROI, both positive and negative calls are allowed. Regional ciliary area
+remains the primary 20x endpoint.
 
 ## Sectioning rules
 
@@ -200,19 +286,30 @@ no marker-specific Z projection is needed for those files.
 
 ### Anatomical sectioning
 
-Draw ROIs without consulting the target marker channel, then use recognizable
-names:
+Draw ROIs without consulting the target marker channel. The supported
+anatomical/context tags are:
 
-- `airway`, `airway_01`, or `bronchial_01`;
-- `alveoli` or `alveolar_01`;
-- `tumor_01` or `luad_01`;
-- `alveolar_fibrotic_01`, `honeycomb_01`, or `uip_01`;
-- `stromal_01`, `vascular_01`, or `immune_01`;
-- `ambiguous` or `ambiguous_01`.
+| Tag/state | Short description |
+|---|---|
+| `airway` | Conducting-airway or bronchiolar anatomy; names containing `airway` or `bronch` |
+| `alveolar` | Distal gas-exchange parenchyma; names containing `alveol` |
+| `tumor` | Histologically/experimentally defined tumor region; `tumor`, `tumour`, or `luad` |
+| `fibrotic` | Scarred/remodeled, honeycomb, or UIP-pattern region; `fibrot`, `honeycomb`, or `uip` |
+| `stromal` | Mesenchymal/connective-tissue region; `strom` or `mesench` |
+| `vascular` | Vessel/capillary-associated region; `vascul`, `vessel`, or `capillar` |
+| `immune` | Immune-rich/inflammatory/lymphoid region; `immune`, `inflamm`, or `lymph` |
+| `ambiguous` | Mixed or uncertain anatomy; it never authorizes a negative |
+| `unassigned` | No recognized tag and no override; missing context, not negative/background |
 
 The pipeline exports all recognized labels as `region_tags`, while
 `compartment` remains a single backward-compatible primary label. A panel can
 accept any of several tags through `expectedCompartments`.
+
+Multiple tags may coexist, such as `alveolar_fibrotic_01` or
+`tumor_stromal_02`. Decisions use the complete `region_tags` set. The display
+field `compartment` uses `ambiguous > alveolar > airway > unassigned > first
+other tag` precedence. If `ambig` occurs anywhere in the ROI name, all other
+tags are intentionally discarded.
 
 For study runs:
 
@@ -224,9 +321,14 @@ An unrecognized or ambiguous required compartment produces indeterminate calls
 for compartment-dependent markers.
 
 For a visually reviewed, anatomically homogeneous field only,
-`IFQ_WHOLE_FIELD_COMPARTMENT` can record an explicit `airway` or `alveolar`
-assignment in provenance. Never force a mixed field into one compartment; draw
-separate ROIs instead.
+`IFQ_WHOLE_FIELD_COMPARTMENT` can record any supported explicit context
+(`airway`, `alveolar`, `tumor`, `fibrotic`, `stromal`, `vascular`, `immune`, or
+`ambiguous`) in provenance. Never force a mixed field into one compartment;
+draw separate ROIs or use `ambiguous` instead.
+
+The complete tag definitions, analytical subcellular roles, ROI naming
+examples, and image-to-call progression are in
+[`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md).
 
 ### Analytical sectioning
 
@@ -264,6 +366,14 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 
 ## Minimal Fiji batch configuration
 
+The recommended Windows route is
+[`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe). It exposes the
+directories and settings below in a GUI, creates a fresh timestamped output
+folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
+ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.
+
+For command-line or development runs, configure the same values manually:
+
 ```powershell
 $env:IFQ_INPUT_DIR = 'G:\path\to\originals'
 $env:IFQ_OUTPUT_DIR = "$PWD\analysis_output\run_name"
@@ -284,7 +394,13 @@ also exits with code 1 after preserving the partial summary.
 
 Run `IF_Quant_Pipeline.groovy` headlessly or through Fiji's Groovy script editor.
 Every run must retain `run_manifest.json`, per-image `__params.json`, cell CSVs,
-region summaries, decision masks, and call-QC PNGs.
+region summaries, decision masks, and call-QC PNGs. `run_summary.xlsx` opens on
+**Image Positive Counts**, with one aligned row per image/region containing
+total cells and every marker's final-positive cell count and fraction of that
+row's total cells. The complete three-state audit remains on **Run Summary**,
+and deliberate exclusions remain on **Skipped Inputs**. Microscope
+`Map_A##.oir` navigation acquisitions are classified as deliberate skips
+before analysis and do not make an otherwise successful run fail.
 
 ## Exported decision fields
 

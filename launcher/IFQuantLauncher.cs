@@ -1,0 +1,1587 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Diagnostics;
+using System.Drawing;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Web.Script.Serialization;
+using System.Windows.Forms;
+
+[assembly: AssemblyTitle("IF Quant Launcher")]
+[assembly: AssemblyDescription("Windows launcher for the Fiji morphology-primary IF quantification pipeline")]
+[assembly: AssemblyCompany("IF Quant Pipeline")]
+[assembly: AssemblyProduct("IF Quant Launcher")]
+[assembly: AssemblyCopyright("Research software")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
+
+namespace IFQuantLauncher
+{
+    internal static class Program
+    {
+        [STAThread]
+        private static void Main(string[] args)
+        {
+            if (args != null && args.Length > 0 &&
+                string.Equals(args[0], "--self-test", StringComparison.OrdinalIgnoreCase))
+            {
+                Environment.ExitCode = RuntimeBundle.SelfTest();
+                return;
+            }
+
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+    }
+
+    internal sealed class MainForm : Form
+    {
+        private TextBox inputBox;
+        private TextBox fijiBox;
+        private TextBox outputBaseBox;
+        private TextBox runNameBox;
+        private TextBox includeRegexBox;
+        private TextBox panelConfigBox;
+        private TextBox advancedBox;
+        private ComboBox panelBox;
+        private ComboBox segmenterBox;
+        private ComboBox projectionBox;
+        private ComboBox tissueModeBox;
+        private ComboBox compartmentModeBox;
+        private ComboBox wholeCompartmentBox;
+        private CheckBox recursiveBox;
+        private NumericUpDown maxImagesBox;
+        private NumericUpDown singlePlaneBox;
+        private Button runButton;
+        private Button cancelButton;
+        private Button openOutputButton;
+        private Button openSummaryButton;
+        private TextBox logBox;
+        private Label statusLabel;
+        private Label progressDetailLabel;
+        private Label panelHelpLabel;
+        private ProgressBar progressBar;
+        private GroupBox advancedGroup;
+        private CheckBox showAdvancedBox;
+        private ToolTip toolTips;
+
+        private Process runningProcess;
+        private string lastRunDirectory;
+        private string lastSummaryPath;
+        private bool cancellationRequested;
+        private readonly object processLock = new object();
+
+        private static readonly Dictionary<string, string> PanelDescriptions =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "LEFT", "Priority project left panel: DAPI, KRT5-488, AGER-555, T1alpha-647 (channels 1-4). Per-marker final-positive counts remain primary; KRT5 pod area and AGER/T1alpha membrane areas are also exported." },
+                { "RIGHT", "Priority project right panel: DAPI, Pro-SPC-488, AGER-555, KRT8-647 (channels 1-4). Per-marker final-positive counts remain primary; co-expression classes are descriptive research endpoints." },
+                { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses uniquely nucleus-owned apical ciliary components. Strict positive evidence can be retained when context is unresolved; a negative still requires an airway ROI." },
+                { "R", "20x alveolar panel: DAPI, T1alpha/PDPN, tdTOM, mRAGE (channels 1-4). T1alpha and mRAGE negatives require an alveolar ROI; strict evidence in unresolved context is reported separately." },
+                { "M", "4x mapping panel: DAPI, CC10, tdTOM (channels 1-3)." },
+                { "A", "DAPI, KRT5, AGER (channels 1-3)." },
+                { "B", "DAPI, KRT5, ProSPC (channels 1-3)." },
+                { "C", "DAPI, KRT5, CD8 (channels 1-3)." },
+                { "D", "DAPI, KRT5, CD4 (channels 1-3)." },
+                { "P", "DAPI, KRT5, PDPN/T1alpha (channels 1-3)." },
+                { "S", "DAPI, KRT5, Sox2 (channels 1-3)." },
+                { "S2", "DAPI, KRT5, p63, YAP (channels 1-4); use a single z-plane for YAP." },
+                { "T", "Pilot plumbing test only; not valid for biological interpretation." }
+            };
+
+        private static readonly HashSet<string> ProtectedEnvironmentKeys =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "IFQ_INPUT_DIR", "IFQ_OUTPUT_DIR", "IFQ_PANEL",
+                "IFQ_MARKER_REGISTRY", "IFQ_PANEL_CONFIG",
+                "IFQ_RECURSIVE", "IFQ_INCLUDE_REGEX", "IFQ_MAX_IMAGES",
+                "IFQ_SEGMENTER", "IFQ_PROJECTION", "IFQ_SINGLE_PLANE",
+                "IFQ_TISSUE_MODE", "IFQ_COMPARTMENT_MODE",
+                "IFQ_WHOLE_FIELD_COMPARTMENT",
+                "IFQ_ALLOW_NONEMPTY_OUTPUT", "IFQ_MORPHOLOGY_PRIMARY"
+            };
+
+        public MainForm()
+        {
+            Text = "IF Quant Launcher";
+            StartPosition = FormStartPosition.CenterScreen;
+            MinimumSize = new Size(960, 720);
+            Size = new Size(1280, 1000);
+            WindowState = FormWindowState.Maximized;
+            AutoScroll = true;
+            AutoScaleMode = AutoScaleMode.Dpi;
+            Font = new Font("Segoe UI", 9F);
+            toolTips = new ToolTip();
+            toolTips.AutoPopDelay = 12000;
+            toolTips.InitialDelay = 400;
+            toolTips.ReshowDelay = 150;
+
+            BuildInterface();
+            LoadSavedSettings();
+            ApplyFirstRunDefaults();
+            UpdateAdvancedVisibility();
+            UpdatePanelHelp();
+
+            FormClosing += delegate(object sender, FormClosingEventArgs e)
+            {
+                lock (processLock)
+                {
+                    if (runningProcess != null && !runningProcess.HasExited)
+                    {
+                        DialogResult result = MessageBox.Show(
+                            this,
+                            "Fiji is still running. Cancel the analysis and close?",
+                            "Analysis in progress",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Warning);
+                        if (result != DialogResult.Yes)
+                        {
+                            e.Cancel = true;
+                            return;
+                        }
+                        CancelRunningProcess();
+                    }
+                }
+                SaveSettings();
+            };
+        }
+
+        private void BuildInterface()
+        {
+            TableLayoutPanel root = new TableLayoutPanel();
+            root.Dock = DockStyle.Fill;
+            root.AutoScroll = true;
+            root.Padding = new Padding(12);
+            root.ColumnCount = 1;
+            root.RowCount = 7;
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            Controls.Add(root);
+
+            Label intro = new Label();
+            intro.AutoSize = true;
+            intro.MaximumSize = new Size(980, 0);
+            intro.Padding = new Padding(0, 0, 0, 8);
+            intro.Text =
+                "Quick start: (1) choose the folder containing your original microscope files, " +
+                "(2) choose the Fiji installation and where results should be saved, " +
+                "(3) select the staining panel that matches the channel order, then click Run Fiji analysis. " +
+                "Recommended settings can normally be left unchanged. Research use only.";
+            root.Controls.Add(intro, 0, 0);
+
+            GroupBox pathsGroup = new GroupBox();
+            pathsGroup.Text = "Required locations";
+            pathsGroup.Dock = DockStyle.Top;
+            pathsGroup.AutoSize = true;
+            pathsGroup.Padding = new Padding(10);
+            root.Controls.Add(pathsGroup, 0, 1);
+
+            TableLayoutPanel paths = new TableLayoutPanel();
+            paths.Dock = DockStyle.Top;
+            paths.AutoSize = true;
+            paths.ColumnCount = 3;
+            paths.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175F));
+            paths.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            paths.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95F));
+            pathsGroup.Controls.Add(paths);
+
+            inputBox = AddPathRow(paths, 0, "Original image folder", true, false);
+            fijiBox = AddPathRow(paths, 1, "Fiji executable or folder", false, true);
+            outputBaseBox = AddPathRow(paths, 2, "Output parent folder", true, false);
+            toolTips.SetToolTip(inputBox, "Choose the folder containing the unedited CZI, LIF, ND2, OIR/OIB/OIF, ICS, TIF, or TIFF files.");
+            toolTips.SetToolTip(fijiBox, "Choose Fiji's installation folder or its executable. The launcher selects the correct Windows ARM64/x64 executable.");
+            toolTips.SetToolTip(outputBaseBox, "A new timestamped run folder will be created here. Existing analysis folders are not overwritten.");
+
+            paths.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            paths.Controls.Add(MakeLabel("Run name (optional)"), 0, 3);
+            runNameBox = new TextBox();
+            runNameBox.Dock = DockStyle.Fill;
+            paths.Controls.Add(runNameBox, 1, 3);
+            Label runHint = new Label();
+            runHint.AutoSize = true;
+            runHint.Text = "Fresh folder";
+            runHint.Anchor = AnchorStyles.Left;
+            paths.Controls.Add(runHint, 2, 3);
+            toolTips.SetToolTip(runNameBox, "Optional readable name such as Mouse12_CC10_AcTub. A timestamp is added automatically.");
+
+            GroupBox runGroup = new GroupBox();
+            runGroup.Text = "Analysis settings — recommended defaults are appropriate for most first runs";
+            runGroup.Dock = DockStyle.Top;
+            runGroup.AutoSize = true;
+            runGroup.Padding = new Padding(10);
+            root.Controls.Add(runGroup, 0, 2);
+
+            TableLayoutPanel settings = new TableLayoutPanel();
+            settings.Dock = DockStyle.Top;
+            settings.AutoSize = true;
+            settings.ColumnCount = 4;
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155F));
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155F));
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            runGroup.Controls.Add(settings);
+
+            panelBox = MakeCombo(
+                new string[] {
+                    "LEFT — priority: KRT5-488 + AGER-555 + T1alpha-647",
+                    "RIGHT — priority: Pro-SPC-488 + AGER-555 + KRT8-647",
+                    "E — 20x CC10 + tdTOM + acetylated tubulin",
+                    "R — 20x T1alpha + tdTOM + mRAGE",
+                    "M — 4x CC10 + tdTOM mapping",
+                    "A — KRT5 + AGER",
+                    "B — KRT5 + ProSPC",
+                    "C — KRT5 + CD8",
+                    "D — KRT5 + CD4",
+                    "P — KRT5 + PDPN",
+                    "S — KRT5 + Sox2",
+                    "S2 — KRT5 + p63 + YAP",
+                    "T — pilot test only"
+                },
+                "LEFT — priority: KRT5-488 + AGER-555 + T1alpha-647",
+                true);
+            segmenterBox = MakeCombo(
+                new string[] {
+                    "classic — Recommended; built into Fiji",
+                    "stardist — Requires the StarDist plugin"
+                },
+                "classic — Recommended; built into Fiji",
+                false);
+            projectionBox = MakeCombo(
+                new string[] {
+                    "max — Maximum intensity; usual z-stack choice",
+                    "single — One z-plane; required for YAP ratio",
+                    "avg — Average intensity",
+                    "sum — Sum intensity"
+                },
+                "max — Maximum intensity; usual z-stack choice",
+                false);
+            tissueModeBox = MakeCombo(
+                new string[] {
+                    "auto — Automatically identify tissue",
+                    "whole_field — Analyze the entire image"
+                },
+                "auto — Automatically identify tissue",
+                false);
+            compartmentModeBox = MakeCombo(
+                new string[] {
+                    "required — Strict compartment gating",
+                    "optional — Allow unassigned cells"
+                },
+                "required — Strict compartment gating",
+                false);
+            wholeCompartmentBox = MakeCombo(
+                new string[] { "unassigned", "airway", "alveolar", "tumor", "fibrotic", "stromal", "vascular", "immune", "ambiguous" },
+                "unassigned",
+                false);
+
+            AddSetting(settings, 0, 0, "Staining panel", panelBox);
+            AddSetting(settings, 0, 2, "Nucleus detection", segmenterBox);
+
+            panelHelpLabel = new Label();
+            panelHelpLabel.AutoSize = true;
+            panelHelpLabel.ForeColor = Color.FromArgb(75, 75, 75);
+            panelHelpLabel.Padding = new Padding(4, 2, 4, 7);
+            settings.Controls.Add(panelHelpLabel, 0, 1);
+            settings.SetColumnSpan(panelHelpLabel, 4);
+
+            AddSetting(settings, 2, 0, "Z-stack handling", projectionBox);
+            singlePlaneBox = new NumericUpDown();
+            singlePlaneBox.Minimum = -1;
+            singlePlaneBox.Maximum = 10000;
+            singlePlaneBox.Value = -1;
+            singlePlaneBox.Dock = DockStyle.Fill;
+            AddSetting(settings, 2, 2, "Z-plane (-1 = middle)", singlePlaneBox);
+            AddSetting(settings, 3, 0, "Tissue boundary", tissueModeBox);
+            AddSetting(settings, 3, 2, "Anatomical gate", compartmentModeBox);
+            AddSetting(settings, 4, 0, "Whole-image tissue type", wholeCompartmentBox);
+
+            recursiveBox = new CheckBox();
+            recursiveBox.Text = "Search subfolders";
+            recursiveBox.Checked = true;
+            recursiveBox.AutoSize = true;
+            recursiveBox.Anchor = AnchorStyles.Left;
+            AddSetting(settings, 4, 2, "Subfolders", recursiveBox);
+
+            includeRegexBox = new TextBox();
+            includeRegexBox.Text = ".*";
+            includeRegexBox.Dock = DockStyle.Fill;
+            AddSetting(settings, 5, 0, "Filename filter", includeRegexBox);
+
+            maxImagesBox = new NumericUpDown();
+            maxImagesBox.Minimum = 0;
+            maxImagesBox.Maximum = 1000000;
+            maxImagesBox.Value = 0;
+            maxImagesBox.Dock = DockStyle.Fill;
+            AddSetting(settings, 5, 2, "Image limit (0 = all)", maxImagesBox);
+
+            panelBox.SelectedIndexChanged += delegate { UpdatePanelHelp(); };
+            panelBox.TextChanged += delegate { UpdatePanelHelp(); };
+            toolTips.SetToolTip(panelBox, "This is the most important choice. It must match the marker identity and acquisition channel order in the original files.");
+            toolTips.SetToolTip(segmenterBox, "Classic is the safest first choice. Choose StarDist only when that Fiji installation has the plugin and model.");
+            toolTips.SetToolTip(projectionBox, "Maximum intensity is typical for z-stacks. YAP nuclear-to-cytoplasmic analysis should use a single plane.");
+            toolTips.SetToolTip(singlePlaneBox, "Used only when Z-stack handling is single. -1 asks the pipeline to use the middle plane.");
+            toolTips.SetToolTip(tissueModeBox, "Auto excludes empty background. Whole field is appropriate only when the entire image should be analyzed.");
+            toolTips.SetToolTip(compartmentModeBox, "Required protects the negative denominator. Strict marker evidence may be retained when anatomy is unresolved, but a negative requires a compatible compartment; a known incompatible compartment remains indeterminate.");
+            toolTips.SetToolTip(wholeCompartmentBox, "Use this only when the whole image contains one known tissue compartment.");
+            toolTips.SetToolTip(includeRegexBox, "Leave .* to include every supported microscope image. This is an expert regular-expression filter.");
+            toolTips.SetToolTip(maxImagesBox, "0 analyzes all matching images. Use 1 for a quick pilot run.");
+
+            TableLayoutPanel advancedContainer = new TableLayoutPanel();
+            advancedContainer.Dock = DockStyle.Top;
+            advancedContainer.AutoSize = true;
+            advancedContainer.ColumnCount = 1;
+            advancedContainer.RowCount = 2;
+            advancedContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            advancedContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.Controls.Add(advancedContainer, 0, 3);
+
+            showAdvancedBox = new CheckBox();
+            showAdvancedBox.Text = "Show advanced study options";
+            showAdvancedBox.AutoSize = true;
+            showAdvancedBox.Padding = new Padding(0, 5, 0, 2);
+            showAdvancedBox.CheckedChanged += delegate { UpdateAdvancedVisibility(); };
+            advancedContainer.Controls.Add(showAdvancedBox, 0, 0);
+            toolTips.SetToolTip(showAdvancedBox, "Most users should leave this closed. Open it only for a validated custom panel or predeclared IFQ settings.");
+
+            advancedGroup = new GroupBox();
+            advancedGroup.Text = "Advanced study configuration — leave blank unless your study protocol requires it";
+            advancedGroup.Dock = DockStyle.Top;
+            advancedGroup.AutoSize = true;
+            advancedGroup.Padding = new Padding(10);
+            advancedContainer.Controls.Add(advancedGroup, 0, 1);
+
+            TableLayoutPanel optional = new TableLayoutPanel();
+            optional.Dock = DockStyle.Top;
+            optional.AutoSize = true;
+            optional.ColumnCount = 3;
+            optional.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175F));
+            optional.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            optional.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95F));
+            advancedGroup.Controls.Add(optional);
+
+            optional.Controls.Add(MakeLabel("Validated custom panel file"), 0, 0);
+            panelConfigBox = new TextBox();
+            panelConfigBox.Dock = DockStyle.Fill;
+            optional.Controls.Add(panelConfigBox, 1, 0);
+            Button panelBrowse = new Button();
+            panelBrowse.Text = "Browse...";
+            panelBrowse.Dock = DockStyle.Fill;
+            panelBrowse.Click += delegate { BrowseJsonFile(panelConfigBox); };
+            optional.Controls.Add(panelBrowse, 2, 0);
+
+            optional.Controls.Add(MakeLabel("Predeclared IFQ settings"), 0, 1);
+            advancedBox = new TextBox();
+            advancedBox.Dock = DockStyle.Fill;
+            advancedBox.Multiline = true;
+            advancedBox.ScrollBars = ScrollBars.Vertical;
+            advancedBox.Height = 76;
+            advancedBox.AcceptsReturn = true;
+            optional.Controls.Add(advancedBox, 1, 1);
+            optional.SetColumnSpan(advancedBox, 2);
+            toolTips.SetToolTip(panelConfigBox, "Expert use: a study-owned JSON file that defines marker-to-channel mappings not included in the built-in panels.");
+            toolTips.SetToolTip(advancedBox, "Expert use: one validated IFQ_KEY=VALUE setting per line. Do not invent thresholds during an analysis run.");
+
+            FlowLayoutPanel actions = new FlowLayoutPanel();
+            actions.Dock = DockStyle.Top;
+            actions.AutoSize = true;
+            actions.FlowDirection = FlowDirection.LeftToRight;
+            actions.Padding = new Padding(0, 8, 0, 6);
+            root.Controls.Add(actions, 0, 4);
+
+            Button helpButton = new Button();
+            helpButton.Text = "First-time help";
+            helpButton.AutoSize = true;
+            helpButton.Padding = new Padding(8, 5, 8, 5);
+            helpButton.Click += delegate { ShowFirstTimeHelp(); };
+            actions.Controls.Add(helpButton);
+
+            Button defaultsButton = new Button();
+            defaultsButton.Text = "Restore recommended settings";
+            defaultsButton.AutoSize = true;
+            defaultsButton.Padding = new Padding(8, 5, 8, 5);
+            defaultsButton.Click += delegate { RestoreRecommendedSettings(); };
+            actions.Controls.Add(defaultsButton);
+
+            runButton = new Button();
+            runButton.Text = "Review and run analysis";
+            runButton.AutoSize = true;
+            runButton.Padding = new Padding(12, 5, 12, 5);
+            runButton.Click += delegate { StartAnalysis(); };
+            actions.Controls.Add(runButton);
+
+            cancelButton = new Button();
+            cancelButton.Text = "Cancel";
+            cancelButton.Enabled = false;
+            cancelButton.AutoSize = true;
+            cancelButton.Padding = new Padding(8, 5, 8, 5);
+            cancelButton.Click += delegate { CancelRunningProcess(); };
+            actions.Controls.Add(cancelButton);
+
+            openOutputButton = new Button();
+            openOutputButton.Text = "Open output folder";
+            openOutputButton.Enabled = false;
+            openOutputButton.AutoSize = true;
+            openOutputButton.Padding = new Padding(8, 5, 8, 5);
+            openOutputButton.Click += delegate { OpenPath(lastRunDirectory, true); };
+            actions.Controls.Add(openOutputButton);
+
+            openSummaryButton = new Button();
+            openSummaryButton.Text = "Open summary Excel";
+            openSummaryButton.Enabled = false;
+            openSummaryButton.AutoSize = true;
+            openSummaryButton.Padding = new Padding(8, 5, 8, 5);
+            openSummaryButton.Click += delegate { OpenPath(lastSummaryPath, false); };
+            actions.Controls.Add(openSummaryButton);
+
+            TableLayoutPanel progressPanel = new TableLayoutPanel();
+            progressPanel.Dock = DockStyle.Top;
+            progressPanel.AutoSize = true;
+            progressPanel.ColumnCount = 1;
+            progressPanel.RowCount = 3;
+            progressPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            progressPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            progressPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.Controls.Add(progressPanel, 0, 5);
+
+            statusLabel = new Label();
+            statusLabel.Text = "Ready — choose the three required locations and staining panel";
+            statusLabel.AutoSize = true;
+            statusLabel.Padding = new Padding(0, 4, 0, 3);
+            statusLabel.Font = new Font(Font, FontStyle.Bold);
+            progressPanel.Controls.Add(statusLabel, 0, 0);
+
+            progressBar = new ProgressBar();
+            progressBar.Dock = DockStyle.Top;
+            progressBar.Height = 24;
+            progressBar.Minimum = 0;
+            progressBar.Maximum = 100;
+            progressBar.Value = 0;
+            progressBar.Style = ProgressBarStyle.Continuous;
+            progressPanel.Controls.Add(progressBar, 0, 1);
+
+            progressDetailLabel = new Label();
+            progressDetailLabel.Text = "Not started";
+            progressDetailLabel.AutoSize = true;
+            progressDetailLabel.ForeColor = Color.FromArgb(80, 80, 80);
+            progressDetailLabel.Padding = new Padding(0, 3, 0, 7);
+            progressPanel.Controls.Add(progressDetailLabel, 0, 2);
+
+            logBox = new TextBox();
+            logBox.Dock = DockStyle.Fill;
+            logBox.Multiline = true;
+            logBox.ReadOnly = true;
+            logBox.ScrollBars = ScrollBars.Both;
+            logBox.WordWrap = false;
+            logBox.Font = new Font("Consolas", 9F);
+            logBox.MinimumSize = new Size(0, 140);
+            root.Controls.Add(logBox, 0, 6);
+        }
+
+        private TextBox AddPathRow(TableLayoutPanel table, int row, string label, bool folder, bool executable)
+        {
+            table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            table.Controls.Add(MakeLabel(label), 0, row);
+            TextBox box = new TextBox();
+            box.Dock = DockStyle.Fill;
+            table.Controls.Add(box, 1, row);
+            Button browse = new Button();
+            browse.Text = "Browse...";
+            browse.Dock = DockStyle.Fill;
+            browse.Click += delegate
+            {
+                if (executable)
+                    BrowseFiji(box);
+                else if (folder)
+                    BrowseFolder(box);
+            };
+            table.Controls.Add(browse, 2, row);
+            return box;
+        }
+
+        private static Label MakeLabel(string text)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.AutoSize = true;
+            label.Anchor = AnchorStyles.Left;
+            label.Padding = new Padding(0, 4, 0, 4);
+            return label;
+        }
+
+        private static ComboBox MakeCombo(string[] values, string selected, bool editable)
+        {
+            ComboBox combo = new ComboBox();
+            combo.Dock = DockStyle.Fill;
+            combo.DropDownStyle = editable ? ComboBoxStyle.DropDown : ComboBoxStyle.DropDownList;
+            combo.Items.AddRange(values);
+            combo.Text = selected;
+            return combo;
+        }
+
+        private static void AddSetting(TableLayoutPanel table, int row, int column, string label, Control control)
+        {
+            while (table.RowCount <= row)
+            {
+                table.RowCount++;
+                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            }
+            table.Controls.Add(MakeLabel(label), column, row);
+            control.Dock = DockStyle.Fill;
+            table.Controls.Add(control, column + 1, row);
+        }
+
+        private static string ChoiceKey(ComboBox combo)
+        {
+            string text = (combo.Text ?? "").Trim();
+            int separator = text.IndexOf(" — ", StringComparison.Ordinal);
+            return separator > 0 ? text.Substring(0, separator).Trim() : text;
+        }
+
+        private static void SelectChoice(ComboBox combo, string key)
+        {
+            string requested = (key ?? "").Trim();
+            for (int index = 0; index < combo.Items.Count; index++)
+            {
+                string item = Convert.ToString(combo.Items[index], CultureInfo.InvariantCulture);
+                if (string.Equals(item, requested, StringComparison.OrdinalIgnoreCase) ||
+                    item.StartsWith(requested + " — ", StringComparison.OrdinalIgnoreCase))
+                {
+                    combo.SelectedIndex = index;
+                    return;
+                }
+            }
+            if (combo.DropDownStyle != ComboBoxStyle.DropDownList)
+                combo.Text = requested;
+        }
+
+        private void UpdatePanelHelp()
+        {
+            if (panelHelpLabel == null || panelBox == null)
+                return;
+            string key = ChoiceKey(panelBox);
+            string description;
+            if (!PanelDescriptions.TryGetValue(key, out description))
+                description = "Custom panel key. Select a validated custom panel file under Advanced study options.";
+            panelHelpLabel.Text =
+                description + " Verify marker identity and acquisition channel order before running; colors in a displayed composite are not sufficient.";
+            panelHelpLabel.ForeColor = string.Equals(key, "T", StringComparison.OrdinalIgnoreCase)
+                ? Color.DarkRed
+                : Color.FromArgb(75, 75, 75);
+        }
+
+        private void UpdateAdvancedVisibility()
+        {
+            if (advancedGroup == null || showAdvancedBox == null)
+                return;
+            bool hasSavedAdvanced =
+                (panelConfigBox != null && !string.IsNullOrWhiteSpace(panelConfigBox.Text)) ||
+                (advancedBox != null && !string.IsNullOrWhiteSpace(advancedBox.Text));
+            if (hasSavedAdvanced && !showAdvancedBox.Checked)
+                showAdvancedBox.Checked = true;
+            advancedGroup.Visible = showAdvancedBox.Checked;
+        }
+
+        private void ShowFirstTimeHelp()
+        {
+            MessageBox.Show(
+                this,
+                "1. Original image folder: choose unedited microscope files.\r\n\r\n" +
+                "2. Fiji: choose the Fiji folder or executable. The launcher automatically selects ARM64 or x64.\r\n\r\n" +
+                "3. Output parent folder: choose where a new timestamped result folder should be created.\r\n\r\n" +
+                "4. Staining panel: match both the marker names and their acquisition channel order. This is the most important setting.\r\n\r\n" +
+                "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
+                "6. Click Review and run analysis. Watch the progress bar and status text. A successful run enables Open summary Excel.\r\n\r\n" +
+                "Always inspect the QC overlays. The software quantifies fluorescence patterns for research and does not make a diagnosis.",
+                "First-time guide",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void RestoreRecommendedSettings()
+        {
+            SelectChoice(segmenterBox, "classic");
+            SelectChoice(projectionBox, "max");
+            singlePlaneBox.Value = -1;
+            SelectChoice(tissueModeBox, "auto");
+            SelectChoice(compartmentModeBox, "required");
+            SelectChoice(wholeCompartmentBox, "unassigned");
+            recursiveBox.Checked = true;
+            includeRegexBox.Text = ".*";
+            maxImagesBox.Value = 0;
+            MessageBox.Show(
+                this,
+                "Recommended processing settings were restored. The staining panel and folder locations were left unchanged because they must match your experiment.",
+                "Recommended settings restored",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void BrowseFolder(TextBox target)
+        {
+            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            {
+                dialog.ShowNewFolderButton = true;
+                if (Directory.Exists(target.Text))
+                    dialog.SelectedPath = target.Text;
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    target.Text = dialog.SelectedPath;
+            }
+        }
+
+        private void BrowseFiji(TextBox target)
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Title = "Select the Fiji or ImageJ executable";
+                dialog.Filter = "Fiji/ImageJ executable (*.exe)|*.exe|All files (*.*)|*.*";
+                dialog.CheckFileExists = true;
+                string current = target.Text.Trim();
+                if (File.Exists(current))
+                    dialog.FileName = current;
+                else if (Directory.Exists(current))
+                    dialog.InitialDirectory = current;
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    target.Text = dialog.FileName;
+            }
+        }
+
+        private void BrowseJsonFile(TextBox target)
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Title = "Select a study panel JSON file";
+                dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+                dialog.CheckFileExists = true;
+                if (File.Exists(target.Text))
+                    dialog.FileName = target.Text;
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    target.Text = dialog.FileName;
+            }
+        }
+
+        private void ApplyFirstRunDefaults()
+        {
+            if (string.IsNullOrWhiteSpace(fijiBox.Text))
+            {
+                string defaultFiji = @"X:\Fiji";
+                if (Directory.Exists(defaultFiji))
+                    fijiBox.Text = defaultFiji;
+            }
+            if (string.IsNullOrWhiteSpace(outputBaseBox.Text))
+            {
+                outputBaseBox.Text = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "IFQuantResults");
+            }
+        }
+
+        private void StartAnalysis()
+        {
+            RunConfiguration config;
+            try
+            {
+                config = ReadAndValidateConfiguration();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Cannot start analysis", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!ConfirmRun(config))
+                return;
+
+            Directory.CreateDirectory(config.OutputDirectory);
+            SaveSettings();
+            logBox.Clear();
+            lastRunDirectory = config.OutputDirectory;
+            lastSummaryPath = null;
+            cancellationRequested = false;
+            openOutputButton.Enabled = true;
+            openSummaryButton.Enabled = false;
+            SetProgressPreparing();
+
+            AppendLog("IF Quant Launcher " + Assembly.GetExecutingAssembly().GetName().Version);
+            AppendLog("Windows architecture: " + GetWindowsArchitecture());
+            AppendLog("Input:  " + config.InputDirectory);
+            AppendLog("Output: " + config.OutputDirectory);
+            AppendLog("Fiji:   " + config.FijiExecutable);
+            AppendLog("Panel:  " + config.Environment["IFQ_PANEL"]);
+            AppendLog("Starting Fiji...");
+
+            ProcessStartInfo psi = new ProcessStartInfo();
+            psi.FileName = config.FijiExecutable;
+            psi.Arguments = "--headless --console --run " + QuoteArgument(config.ScriptPath);
+            psi.WorkingDirectory = config.RuntimeDirectory;
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+
+            ClearIfqEnvironment(psi.EnvironmentVariables);
+            foreach (KeyValuePair<string, string> item in config.Environment)
+                psi.EnvironmentVariables[item.Key] = item.Value;
+
+            Process process = new Process();
+            process.StartInfo = psi;
+            process.EnableRaisingEvents = true;
+            process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+            {
+                if (!string.IsNullOrEmpty(e.Data))
+                    HandleFijiLine(e.Data, false);
+            };
+            process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+            {
+                if (!string.IsNullOrEmpty(e.Data))
+                    HandleFijiLine(e.Data, true);
+            };
+
+            try
+            {
+                lock (processLock)
+                {
+                    runningProcess = process;
+                    process.Start();
+                }
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+            }
+            catch (Exception ex)
+            {
+                lock (processLock) { runningProcess = null; }
+                WriteLauncherRecord(config, -1, "failed_to_start: " + ex.Message);
+                MessageBox.Show(this, ex.Message, "Fiji could not start", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetRunningState(false);
+                SetProgressTerminal("Fiji could not start", false, false);
+                return;
+            }
+
+            SetRunningState(true);
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                int exitCode = -1;
+                string waitError = null;
+                try
+                {
+                    process.WaitForExit();
+                    exitCode = process.ExitCode;
+                }
+                catch (Exception ex)
+                {
+                    waitError = ex.Message;
+                }
+                finally
+                {
+                    lock (processLock)
+                    {
+                        if (ReferenceEquals(runningProcess, process))
+                            runningProcess = null;
+                    }
+                }
+
+                BeginInvoke(new Action(delegate
+                {
+                    FinishAnalysis(config, exitCode, waitError);
+                }));
+            });
+        }
+
+        private bool ConfirmRun(RunConfiguration config)
+        {
+            string panelKey = config.Environment["IFQ_PANEL"];
+            string panelDescription;
+            if (!PanelDescriptions.TryGetValue(panelKey, out panelDescription))
+                panelDescription = "Custom validated panel: " + panelKey;
+            string limit = config.Environment["IFQ_MAX_IMAGES"] == "0"
+                ? "all matching images"
+                : "up to " + config.Environment["IFQ_MAX_IMAGES"] + " image(s)";
+            string warning = string.Equals(panelKey, "T", StringComparison.OrdinalIgnoreCase)
+                ? "\r\n\r\nWARNING: Panel T is a plumbing test and its positivity results are not biologically meaningful."
+                : "";
+            if (string.Equals(panelKey, "E", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(config.Environment["IFQ_WHOLE_FIELD_COMPARTMENT"], "airway", StringComparison.OrdinalIgnoreCase))
+            {
+                warning +=
+                    "\r\n\r\nAcTub context note: without an independently assigned airway ROI, " +
+                    "only nuclei meeting the strict apical ciliary-component rule can be exploratory positive. " +
+                    "All other AcTub calls remain indeterminate, not negative.";
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "Please confirm this analysis:\r\n\r\n" +
+                "Input:\r\n" + config.InputDirectory + "\r\n\r\n" +
+                "Staining panel:\r\n" + panelDescription + "\r\n\r\n" +
+                "Nucleus detection: " + config.Environment["IFQ_SEGMENTER"] + "\r\n" +
+                "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
+                "Files: " + limit + "\r\n\r\n" +
+                "New result folder:\r\n" + config.OutputDirectory + warning +
+                "\r\n\r\nStart Fiji analysis now?",
+                "Review analysis settings",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Question);
+            return result == DialogResult.OK;
+        }
+
+        private RunConfiguration ReadAndValidateConfiguration()
+        {
+            string input = inputBox.Text.Trim();
+            if (!Directory.Exists(input))
+                throw new InvalidOperationException("The original image folder does not exist:\r\n" + input);
+
+            string fiji = ResolveFijiExecutable(fijiBox.Text.Trim());
+            if (fiji == null)
+                throw new InvalidOperationException(
+                    "Could not find a Fiji/ImageJ executable. Select the executable itself or its installation folder.");
+
+            string outputBase = outputBaseBox.Text.Trim();
+            if (outputBase.Length == 0)
+                throw new InvalidOperationException("Choose an output parent folder.");
+            Directory.CreateDirectory(outputBase);
+
+            string includeRegex = includeRegexBox.Text.Trim();
+            if (includeRegex.Length == 0)
+                includeRegex = ".*";
+            try { new Regex(includeRegex); }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("The filename include regex is invalid:\r\n" + ex.Message);
+            }
+
+            string panelConfig = panelConfigBox.Text.Trim();
+            if (panelConfig.Length > 0 && !File.Exists(panelConfig))
+                throw new InvalidOperationException("The custom panel JSON does not exist:\r\n" + panelConfig);
+            string panelKey = ChoiceKey(panelBox);
+            if (panelKey.Length == 0)
+                throw new InvalidOperationException("Choose the staining panel that matches the marker names and acquisition channel order.");
+            string builtInPanelKey = PanelDescriptions.Keys.FirstOrDefault(
+                delegate(string key) { return string.Equals(key, panelKey, StringComparison.OrdinalIgnoreCase); });
+            if (builtInPanelKey != null)
+                panelKey = builtInPanelKey;
+            if (!PanelDescriptions.ContainsKey(panelKey) && panelConfig.Length == 0)
+                throw new InvalidOperationException(
+                    "Panel '" + panelKey + "' is not built in. Select its validated custom panel JSON under Advanced study options.");
+            if (string.Equals(panelKey, "S2", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(ChoiceKey(projectionBox), "single", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Panel S2 contains YAP nuclear-to-cytoplasmic analysis and requires Z-stack handling = single. " +
+                    "Choose single and confirm the intended z-plane.");
+
+            Dictionary<string, string> advanced = ParseAdvancedEnvironment(advancedBox.Text);
+            RuntimePaths runtime = RuntimeBundle.EnsureExtracted();
+
+            string runStem = SanitizeFileName(runNameBox.Text.Trim());
+            if (runStem.Length == 0)
+                runStem = "IFQ_run";
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            string outputDirectory = MakeUniqueDirectory(Path.Combine(outputBase, runStem + "_" + timestamp));
+
+            Dictionary<string, string> env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            env["IFQ_INPUT_DIR"] = Path.GetFullPath(input);
+            env["IFQ_OUTPUT_DIR"] = outputDirectory;
+            env["IFQ_PANEL"] = panelKey;
+            env["IFQ_MARKER_REGISTRY"] = runtime.RegistryPath;
+            if (panelConfig.Length > 0)
+                env["IFQ_PANEL_CONFIG"] = Path.GetFullPath(panelConfig);
+            env["IFQ_RECURSIVE"] = recursiveBox.Checked ? "true" : "false";
+            env["IFQ_INCLUDE_REGEX"] = includeRegex;
+            env["IFQ_MAX_IMAGES"] = Decimal.ToInt32(maxImagesBox.Value).ToString(CultureInfo.InvariantCulture);
+            env["IFQ_SEGMENTER"] = ChoiceKey(segmenterBox);
+            env["IFQ_PROJECTION"] = ChoiceKey(projectionBox);
+            env["IFQ_SINGLE_PLANE"] = Decimal.ToInt32(singlePlaneBox.Value).ToString(CultureInfo.InvariantCulture);
+            env["IFQ_TISSUE_MODE"] = ChoiceKey(tissueModeBox);
+            env["IFQ_COMPARTMENT_MODE"] = ChoiceKey(compartmentModeBox);
+            env["IFQ_WHOLE_FIELD_COMPARTMENT"] = ChoiceKey(wholeCompartmentBox);
+            env["IFQ_ALLOW_NONEMPTY_OUTPUT"] = "false";
+            env["IFQ_MORPHOLOGY_PRIMARY"] = "true";
+
+            foreach (KeyValuePair<string, string> item in advanced)
+                env[item.Key] = item.Value;
+
+            RunConfiguration config = new RunConfiguration();
+            config.InputDirectory = Path.GetFullPath(input);
+            config.OutputDirectory = outputDirectory;
+            config.FijiExecutable = fiji;
+            config.RuntimeDirectory = runtime.RuntimeDirectory;
+            config.ScriptPath = runtime.ScriptPath;
+            config.RegistryPath = runtime.RegistryPath;
+            config.Environment = env;
+            return config;
+        }
+
+        private static Dictionary<string, string> ParseAdvancedEnvironment(string text)
+        {
+            Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string[] lines = (text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            for (int index = 0; index < lines.Length; index++)
+            {
+                string line = lines[index].Trim();
+                if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
+                    continue;
+                int equals = line.IndexOf('=');
+                if (equals <= 0)
+                    throw new InvalidOperationException(
+                        "Advanced setting line " + (index + 1) + " must use KEY=VALUE.");
+                string key = line.Substring(0, equals).Trim().ToUpperInvariant();
+                string value = line.Substring(equals + 1).Trim();
+                if (!Regex.IsMatch(key, @"^IFQ_[A-Z0-9_]+$"))
+                    throw new InvalidOperationException(
+                        "Advanced setting line " + (index + 1) + " has an invalid IFQ key: " + key);
+                if (ProtectedEnvironmentKeys.Contains(key))
+                    throw new InvalidOperationException(
+                        key + " is controlled by the launcher interface and cannot be overridden in Advanced settings.");
+                if (value.Length == 0)
+                    throw new InvalidOperationException(key + " cannot have an empty value.");
+                values[key] = value;
+            }
+            return values;
+        }
+
+        private static void ClearIfqEnvironment(StringDictionary environment)
+        {
+            List<string> stale = new List<string>();
+            foreach (string key in environment.Keys)
+            {
+                if (key != null && key.StartsWith("IFQ_", StringComparison.OrdinalIgnoreCase))
+                    stale.Add(key);
+            }
+            foreach (string key in stale)
+                environment.Remove(key);
+        }
+
+        private void HandleFijiLine(string line, bool isError)
+        {
+            AppendLog(isError ? "ERROR: " + line : line);
+
+            Match progress = Regex.Match(
+                line,
+                @"\[IFQ_PROGRESS\]\s+(\d+)\s*/\s*(\d+)\s*(.*)",
+                RegexOptions.IgnoreCase);
+            if (progress.Success)
+            {
+                int current;
+                int total;
+                if (Int32.TryParse(progress.Groups[1].Value, out current) &&
+                    Int32.TryParse(progress.Groups[2].Value, out total))
+                {
+                    UpdateImageProgress(current, total, progress.Groups[3].Value.Trim());
+                }
+            }
+            else if (line.IndexOf("DONE. Wrote run_summary.csv", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                UpdateFinalizingProgress();
+            }
+        }
+
+        private void SetProgressPreparing()
+        {
+            progressBar.Style = ProgressBarStyle.Marquee;
+            progressBar.MarqueeAnimationSpeed = 28;
+            progressDetailLabel.Text = "Preparing the embedded pipeline and starting Fiji...";
+            statusLabel.Text = "Starting — Fiji is being prepared";
+            statusLabel.ForeColor = Color.DarkBlue;
+        }
+
+        private void UpdateImageProgress(int current, int total, string fileName)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action<int, int, string>(UpdateImageProgress), current, total, fileName);
+                return;
+            }
+            total = Math.Max(1, total);
+            current = Math.Max(1, Math.Min(total, current));
+            progressBar.MarqueeAnimationSpeed = 0;
+            progressBar.Style = ProgressBarStyle.Continuous;
+            progressBar.Minimum = 0;
+            progressBar.Maximum = total;
+            progressBar.Value = Math.Max(0, current - 1);
+            statusLabel.Text = "Running — processing image " + current + " of " + total;
+            statusLabel.ForeColor = Color.DarkBlue;
+            progressDetailLabel.Text = fileName.Length > 0
+                ? "Currently analyzing: " + fileName
+                : "Fiji analysis is ongoing.";
+        }
+
+        private void UpdateFinalizingProgress()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(UpdateFinalizingProgress));
+                return;
+            }
+            progressBar.MarqueeAnimationSpeed = 25;
+            progressBar.Style = ProgressBarStyle.Marquee;
+            statusLabel.Text = "Finalizing — writing summary and run record";
+            statusLabel.ForeColor = Color.DarkBlue;
+            progressDetailLabel.Text = "Image processing finished; checking required output files.";
+        }
+
+        private void SetProgressTerminal(string detail, bool succeeded, bool cancelled)
+        {
+            progressBar.MarqueeAnimationSpeed = 0;
+            progressBar.Style = ProgressBarStyle.Continuous;
+            progressBar.Minimum = 0;
+            progressBar.Maximum = 100;
+            progressBar.Value = succeeded ? 100 : 0;
+            if (cancelled)
+            {
+                statusLabel.Text = "Cancelled — Fiji was terminated";
+                statusLabel.ForeColor = Color.DarkOrange;
+            }
+            else if (succeeded)
+            {
+                statusLabel.Text = "Complete — summary and QC outputs are ready";
+                statusLabel.ForeColor = Color.DarkGreen;
+            }
+            else
+            {
+                statusLabel.Text = "Stopped with a problem — review the log and manifest";
+                statusLabel.ForeColor = Color.DarkRed;
+            }
+            progressDetailLabel.Text = detail;
+        }
+
+        private void FinishAnalysis(RunConfiguration config, int exitCode, string waitError)
+        {
+            SetRunningState(false);
+            string manifestPath = Path.Combine(config.OutputDirectory, "run_manifest.json");
+            string summaryCsvPath = Path.Combine(config.OutputDirectory, "run_summary.csv");
+            string summaryWorkbookPath = Path.Combine(config.OutputDirectory, "run_summary.xlsx");
+            string manifestStatus = "missing";
+            string successCount = "?";
+            string skippedCount = "?";
+            string failureCount = "?";
+            string outputFailureCount = "?";
+
+            if (File.Exists(manifestPath))
+            {
+                try
+                {
+                    JavaScriptSerializer json = new JavaScriptSerializer();
+                    Dictionary<string, object> manifest =
+                        json.Deserialize<Dictionary<string, object>>(File.ReadAllText(manifestPath, Encoding.UTF8));
+                    manifestStatus = GetDictionaryValue(manifest, "status", "unknown");
+                    successCount = GetDictionaryValue(manifest, "success_count", "?");
+                    skippedCount = GetDictionaryValue(manifest, "skipped_count", "0");
+                    failureCount = GetDictionaryValue(manifest, "failure_count", "?");
+                    outputFailureCount = GetDictionaryValue(manifest, "output_failure_count", "0");
+                }
+                catch (Exception ex)
+                {
+                    AppendLog("Could not read run manifest: " + ex.Message);
+                    manifestStatus = "unreadable";
+                }
+            }
+
+            WriteLauncherRecord(config, exitCode, manifestStatus);
+            AppendLog("");
+            AppendLog("Fiji exit code: " + exitCode);
+            AppendLog("Manifest status: " + manifestStatus);
+            AppendLog("Analytical images: " + successCount + " successful; " + failureCount + " failed.");
+            AppendLog("Non-analysis acquisitions deliberately skipped: " + skippedCount + ".");
+            if (!string.Equals(outputFailureCount, "0", StringComparison.OrdinalIgnoreCase))
+                AppendLog("Output-generation failures: " + outputFailureCount + ".");
+
+            if (waitError != null)
+                AppendLog("Process wait error: " + waitError);
+
+            lastSummaryPath = File.Exists(summaryWorkbookPath)
+                ? summaryWorkbookPath
+                : (File.Exists(summaryCsvPath) ? summaryCsvPath : null);
+            openSummaryButton.Enabled = lastSummaryPath != null;
+            openOutputButton.Enabled = Directory.Exists(config.OutputDirectory);
+
+            bool complete = exitCode == 0 &&
+                string.Equals(manifestStatus, "complete", StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(summaryCsvPath) &&
+                File.Exists(summaryWorkbookPath);
+            if (cancellationRequested)
+            {
+                SetProgressTerminal(
+                    "Analysis was cancelled. Partial outputs are retained only for troubleshooting and must not be aggregated.",
+                    false,
+                    true);
+            }
+            else if (complete)
+            {
+                SetProgressTerminal(
+                    "Finished successfully: " + successCount + " analytical image(s) processed, " +
+                    skippedCount + " non-analysis acquisition(s) skipped, " + failureCount + " failed.",
+                    true,
+                    false);
+                AppendLog("Excel summary: " + summaryWorkbookPath);
+                AppendLog("Region-level CSV: " + summaryCsvPath);
+            }
+            else
+            {
+                SetProgressTerminal(
+                    "Analysis terminated or was incomplete: " + successCount + " image(s) succeeded, " + failureCount +
+                    " failed; " + skippedCount + " non-analysis acquisition(s) were skipped. " +
+                    "Check the log below and run_manifest.json.",
+                    false,
+                    false);
+            }
+        }
+
+        private static string GetDictionaryValue(Dictionary<string, object> values, string key, string fallback)
+        {
+            object value;
+            if (values != null && values.TryGetValue(key, out value) && value != null)
+                return Convert.ToString(value, CultureInfo.InvariantCulture);
+            return fallback;
+        }
+
+        private void SetRunningState(bool running)
+        {
+            runButton.Enabled = !running;
+            cancelButton.Enabled = running;
+            if (running)
+            {
+                statusLabel.Text = "Running Fiji analysis...";
+                statusLabel.ForeColor = Color.DarkBlue;
+            }
+        }
+
+        private void CancelRunningProcess()
+        {
+            Process process = null;
+            lock (processLock)
+            {
+                process = runningProcess;
+            }
+            if (process == null)
+                return;
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "Cancel the running Fiji analysis? Partial outputs will be retained for diagnosis and must not be aggregated.",
+                "Cancel analysis",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (result != DialogResult.Yes)
+                return;
+
+            cancellationRequested = true;
+            progressBar.MarqueeAnimationSpeed = 22;
+            progressBar.Style = ProgressBarStyle.Marquee;
+            statusLabel.Text = "Cancelling — terminating Fiji";
+            statusLabel.ForeColor = Color.DarkOrange;
+            progressDetailLabel.Text = "Please wait while the Fiji process and its child processes close.";
+
+            try
+            {
+                if (!process.HasExited)
+                {
+                    ProcessStartInfo taskKill = new ProcessStartInfo();
+                    taskKill.FileName = "taskkill.exe";
+                    taskKill.Arguments = "/PID " + process.Id + " /T /F";
+                    taskKill.UseShellExecute = false;
+                    taskKill.CreateNoWindow = true;
+                    using (Process killer = Process.Start(taskKill))
+                    {
+                        killer.WaitForExit(10000);
+                    }
+                }
+                AppendLog("Cancellation requested.");
+            }
+            catch (Exception ex)
+            {
+                AppendLog("Cancellation error: " + ex.Message);
+                try { if (!process.HasExited) process.Kill(); } catch { }
+            }
+        }
+
+        private void AppendLog(string message)
+        {
+            if (logBox.InvokeRequired)
+            {
+                logBox.BeginInvoke(new Action<string>(AppendLog), message);
+                return;
+            }
+            logBox.AppendText((message ?? "") + Environment.NewLine);
+        }
+
+        private static void WriteLauncherRecord(RunConfiguration config, int exitCode, string status)
+        {
+            try
+            {
+                StringBuilder record = new StringBuilder();
+                record.AppendLine("IF Quant Launcher run record");
+                record.AppendLine("launcher_version=" + Assembly.GetExecutingAssembly().GetName().Version);
+                record.AppendLine("recorded_at=" + DateTimeOffset.Now.ToString("o", CultureInfo.InvariantCulture));
+                record.AppendLine("windows_architecture=" + GetWindowsArchitecture());
+                record.AppendLine("fiji_executable=" + config.FijiExecutable);
+                record.AppendLine("fiji_exit_code=" + exitCode);
+                record.AppendLine("manifest_status=" + status);
+                record.AppendLine("pipeline_sha256=" + ComputeSha256(config.ScriptPath));
+                record.AppendLine("registry_sha256=" + ComputeSha256(config.RegistryPath));
+                record.AppendLine();
+                record.AppendLine("[environment]");
+                foreach (KeyValuePair<string, string> item in config.Environment.OrderBy(delegate(KeyValuePair<string, string> pair) { return pair.Key; }))
+                    record.AppendLine(item.Key + "=" + item.Value);
+                File.WriteAllText(
+                    Path.Combine(config.OutputDirectory, "launcher_run.txt"),
+                    record.ToString(),
+                    new UTF8Encoding(false));
+            }
+            catch
+            {
+                // The Fiji outputs remain authoritative if this convenience record cannot be written.
+            }
+        }
+
+        private static string ComputeSha256(string path)
+        {
+            using (SHA256 algorithm = SHA256.Create())
+            using (FileStream stream = File.OpenRead(path))
+            {
+                byte[] hash = algorithm.ComputeHash(stream);
+                StringBuilder text = new StringBuilder(hash.Length * 2);
+                foreach (byte value in hash)
+                    text.Append(value.ToString("x2", CultureInfo.InvariantCulture));
+                return text.ToString();
+            }
+        }
+
+        internal static string ResolveFijiExecutable(string path)
+        {
+            if (File.Exists(path) && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                return Path.GetFullPath(path);
+            if (!Directory.Exists(path))
+                return null;
+
+            string architecture = GetWindowsArchitecture();
+            string[] preferred;
+            if (architecture == "ARM64")
+            {
+                preferred = new string[]
+                {
+                    "fiji-windows-arm64.exe",
+                    "fiji-windows-x64.exe",
+                    "ImageJ-win64.exe",
+                    "fiji-windows.exe",
+                    "ImageJ.exe"
+                };
+            }
+            else
+            {
+                preferred = new string[]
+                {
+                    "fiji-windows-x64.exe",
+                    "ImageJ-win64.exe",
+                    "fiji-windows.exe",
+                    "ImageJ.exe",
+                    "fiji-windows-arm64.exe"
+                };
+            }
+            foreach (string name in preferred)
+            {
+                string candidate = Path.Combine(path, name);
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            string[] executables = Directory.GetFiles(path, "*.exe", SearchOption.TopDirectoryOnly);
+            foreach (string candidate in executables.OrderBy(delegate(string value) { return value; }))
+            {
+                string name = Path.GetFileName(candidate);
+                if (name.IndexOf("fiji", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("imagej", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return candidate;
+            }
+            return null;
+        }
+
+        internal static string GetWindowsArchitecture()
+        {
+            string architecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432");
+            if (string.IsNullOrWhiteSpace(architecture))
+                architecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE");
+            architecture = (architecture ?? "unknown").Trim().ToUpperInvariant();
+            if (architecture.Contains("ARM64"))
+                return "ARM64";
+            if (architecture.Contains("AMD64") || architecture.Contains("X86_64"))
+                return "X64";
+            if (architecture.Contains("86"))
+                return "X86";
+            return architecture;
+        }
+
+        private static string QuoteArgument(string value)
+        {
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "";
+            string sanitized = value.Trim();
+            foreach (char invalid in Path.GetInvalidFileNameChars())
+                sanitized = sanitized.Replace(invalid, '_');
+            sanitized = Regex.Replace(sanitized, @"\s+", "_");
+            return sanitized.Trim('_', '.', ' ');
+        }
+
+        private static string MakeUniqueDirectory(string candidate)
+        {
+            string path = candidate;
+            int suffix = 2;
+            while (Directory.Exists(path) || File.Exists(path))
+            {
+                path = candidate + "_" + suffix.ToString(CultureInfo.InvariantCulture);
+                suffix++;
+            }
+            return path;
+        }
+
+        private static void OpenPath(string path, bool directory)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+            try
+            {
+                if (directory)
+                {
+                    if (Directory.Exists(path))
+                        Process.Start("explorer.exe", QuoteArgument(path));
+                }
+                else if (File.Exists(path))
+                {
+                    ProcessStartInfo open = new ProcessStartInfo(path);
+                    open.UseShellExecute = true;
+                    Process.Start(open);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Could not open path", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private string SettingsPath
+        {
+            get
+            {
+                return Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "IFQuantLauncher",
+                    "settings.ini");
+            }
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                string directory = Path.GetDirectoryName(SettingsPath);
+                Directory.CreateDirectory(directory);
+                Dictionary<string, string> settings = new Dictionary<string, string>();
+                settings["input"] = inputBox.Text;
+                settings["fiji"] = fijiBox.Text;
+                settings["output"] = outputBaseBox.Text;
+                settings["run_name"] = runNameBox.Text;
+                settings["panel"] = ChoiceKey(panelBox);
+                settings["segmenter"] = ChoiceKey(segmenterBox);
+                settings["projection"] = ChoiceKey(projectionBox);
+                settings["single_plane"] = singlePlaneBox.Value.ToString(CultureInfo.InvariantCulture);
+                settings["tissue"] = ChoiceKey(tissueModeBox);
+                settings["compartment_mode"] = ChoiceKey(compartmentModeBox);
+                settings["whole_compartment"] = ChoiceKey(wholeCompartmentBox);
+                settings["recursive"] = recursiveBox.Checked ? "true" : "false";
+                settings["include_regex_b64"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(includeRegexBox.Text));
+                settings["max_images"] = maxImagesBox.Value.ToString(CultureInfo.InvariantCulture);
+                settings["panel_config"] = panelConfigBox.Text;
+                settings["advanced_b64"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(advancedBox.Text));
+
+                StringBuilder content = new StringBuilder();
+                foreach (KeyValuePair<string, string> item in settings)
+                    content.AppendLine(item.Key + "=" + (item.Value ?? ""));
+                File.WriteAllText(SettingsPath, content.ToString(), new UTF8Encoding(false));
+            }
+            catch
+            {
+                // Settings persistence is optional and must never block a run.
+            }
+        }
+
+        private void LoadSavedSettings()
+        {
+            try
+            {
+                if (!File.Exists(SettingsPath))
+                    return;
+                Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string line in File.ReadAllLines(SettingsPath, Encoding.UTF8))
+                {
+                    int equals = line.IndexOf('=');
+                    if (equals > 0)
+                        values[line.Substring(0, equals)] = line.Substring(equals + 1);
+                }
+                inputBox.Text = GetValue(values, "input", inputBox.Text);
+                fijiBox.Text = GetValue(values, "fiji", fijiBox.Text);
+                outputBaseBox.Text = GetValue(values, "output", outputBaseBox.Text);
+                runNameBox.Text = GetValue(values, "run_name", runNameBox.Text);
+                SelectChoice(panelBox, GetValue(values, "panel", "LEFT"));
+                SelectChoice(segmenterBox, GetValue(values, "segmenter", "classic"));
+                SelectChoice(projectionBox, GetValue(values, "projection", "max"));
+                SetNumeric(singlePlaneBox, GetValue(values, "single_plane", "-1"));
+                SelectChoice(tissueModeBox, GetValue(values, "tissue", "auto"));
+                SelectChoice(compartmentModeBox, GetValue(values, "compartment_mode", "required"));
+                SelectChoice(wholeCompartmentBox, GetValue(values, "whole_compartment", "unassigned"));
+                recursiveBox.Checked = string.Equals(GetValue(values, "recursive", "true"), "true", StringComparison.OrdinalIgnoreCase);
+                includeRegexBox.Text = DecodeBase64(GetValue(values, "include_regex_b64", ""), ".*");
+                SetNumeric(maxImagesBox, GetValue(values, "max_images", "0"));
+                panelConfigBox.Text = GetValue(values, "panel_config", "");
+                advancedBox.Text = DecodeBase64(GetValue(values, "advanced_b64", ""), "");
+            }
+            catch
+            {
+                // Ignore malformed previous settings and retain safe defaults.
+            }
+        }
+
+        private static string GetValue(Dictionary<string, string> values, string key, string fallback)
+        {
+            string value;
+            return values.TryGetValue(key, out value) ? value : fallback;
+        }
+
+        private static string DecodeBase64(string value, string fallback)
+        {
+            if (string.IsNullOrEmpty(value))
+                return fallback;
+            try { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
+            catch { return fallback; }
+        }
+
+        private static void SetNumeric(NumericUpDown control, string text)
+        {
+            decimal value;
+            if (Decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value))
+            {
+                value = Math.Max(control.Minimum, Math.Min(control.Maximum, value));
+                control.Value = value;
+            }
+        }
+    }
+
+    internal sealed class RunConfiguration
+    {
+        public string InputDirectory;
+        public string OutputDirectory;
+        public string FijiExecutable;
+        public string RuntimeDirectory;
+        public string ScriptPath;
+        public string RegistryPath;
+        public Dictionary<string, string> Environment;
+    }
+
+    internal sealed class RuntimePaths
+    {
+        public string RuntimeDirectory;
+        public string ScriptPath;
+        public string RegistryPath;
+    }
+
+    internal static class RuntimeBundle
+    {
+        private const string ScriptResource = "IFQuant.IF_Quant_Pipeline.groovy";
+        private const string RegistryResource = "IFQuant.lung_marker_registry.json";
+
+        public static RuntimePaths EnsureExtracted()
+        {
+            Version version = Assembly.GetExecutingAssembly().GetName().Version;
+            string root = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "IFQuantLauncher",
+                "runtime",
+                version.ToString());
+            string config = Path.Combine(root, "config");
+            Directory.CreateDirectory(config);
+
+            string script = Path.Combine(root, "IF_Quant_Pipeline.groovy");
+            string registry = Path.Combine(config, "lung_marker_registry.json");
+            ExtractResource(ScriptResource, script);
+            ExtractResource(RegistryResource, registry);
+
+            RuntimePaths paths = new RuntimePaths();
+            paths.RuntimeDirectory = root;
+            paths.ScriptPath = script;
+            paths.RegistryPath = registry;
+            return paths;
+        }
+
+        private static void ExtractResource(string resourceName, string destination)
+        {
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            using (Stream input = assembly.GetManifestResourceStream(resourceName))
+            {
+                if (input == null)
+                    throw new InvalidOperationException("Embedded runtime resource is missing: " + resourceName);
+                using (FileStream output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None))
+                    input.CopyTo(output);
+            }
+        }
+
+        public static int SelfTest()
+        {
+            try
+            {
+                RuntimePaths paths = EnsureExtracted();
+                if (!File.Exists(paths.ScriptPath) || new FileInfo(paths.ScriptPath).Length < 1000)
+                    return 11;
+                string pipelineText = File.ReadAllText(paths.ScriptPath, Encoding.UTF8);
+                if (pipelineText.IndexOf("[IFQ_PROGRESS]", StringComparison.Ordinal) < 0)
+                    return 16;
+                if (pipelineText.IndexOf("non_analytical_map_acquisition", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("run_summary.xlsx", StringComparison.Ordinal) < 0)
+                    return 17;
+                if (pipelineText.IndexOf("LEFT_KRT5_AGER_T1A", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("RIGHT_ProSPC_AGER_KRT8", StringComparison.Ordinal) < 0)
+                    return 18;
+                if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
+                    return 12;
+                JavaScriptSerializer json = new JavaScriptSerializer();
+                Dictionary<string, object> registry =
+                    json.Deserialize<Dictionary<string, object>>(File.ReadAllText(paths.RegistryPath, Encoding.UTF8));
+                if (registry == null || !registry.ContainsKey("markers"))
+                    return 13;
+                string knownFiji = @"X:\Fiji";
+                if (Directory.Exists(knownFiji))
+                {
+                    string resolved = MainForm.ResolveFijiExecutable(knownFiji);
+                    if (resolved == null || !File.Exists(resolved))
+                        return 14;
+                    string architecture = MainForm.GetWindowsArchitecture();
+                    string expectedName = architecture == "ARM64"
+                        ? "fiji-windows-arm64.exe"
+                        : "fiji-windows-x64.exe";
+                    string expected = Path.Combine(knownFiji, expectedName);
+                    if (File.Exists(expected) &&
+                        !string.Equals(Path.GetFullPath(expected), Path.GetFullPath(resolved), StringComparison.OrdinalIgnoreCase))
+                        return 15;
+                }
+                return 0;
+            }
+            catch
+            {
+                return 10;
+            }
+        }
+    }
+}

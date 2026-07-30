@@ -11,6 +11,8 @@
  *  Built-in panels. PANEL keys are single tokens so they survive filename
  *  parsing; select per image via samplesheet. New panels are loaded through
  *  IFQ_PANEL_CONFIG and may map any available acquisition channels:
+ *  LEFT : DAPI | KRT5-488 | AGER-555 | T1alpha-647  [priority project panel]
+ *  RIGHT: DAPI | Pro-SPC-488 | AGER-555 | KRT8-647 [priority project panel]
  *     A : DAPI | KRT5 | AGER      -> pod + AT1 boundary   (KRT5+/AGER-)   [Scheme1 x3]
  *     B : DAPI | KRT5 | Pro-SPC   -> regeneration readout (AT2)          [Scheme1 x2]
  *     C : DAPI | KRT5 | CD8       -> cytotoxic T infiltrate              [Scheme1 x1]
@@ -97,7 +99,9 @@ import groovy.json.JsonSlurper
 import java.awt.Color
 import java.awt.Font
 import java.awt.Rectangle
+import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 // ============================================================================
 //  1. USER CONFIG
@@ -153,6 +157,11 @@ def PANEL       = envOr("IFQ_PANEL", "T")
 def MARKER_REGISTRY_PATH = envOr("IFQ_MARKER_REGISTRY", new File("config/lung_marker_registry.json").getAbsolutePath())
 def PANEL_CONFIG_PATH = envOr("IFQ_PANEL_CONFIG", "")
 def FILE_GLOB   = ~/(?i).*\.(czi|lif|nd2|oir|oib|oif|ics|tif|tiff)$/
+// Microscope navigation maps such as Map_A01.oir are acquisition metadata/
+// overview files, not analytical fields. They are retained in the manifest as
+// deliberate skips and never allowed to turn an otherwise complete batch into
+// a failed run.
+def NON_ANALYTICAL_MAP_FILE = ~/(?i)^Map_A\d+\.(oir|oib|oif)$/
 def RECURSIVE   = envBool("IFQ_RECURSIVE", false)
 def INCLUDE_REGEX = envOr("IFQ_INCLUDE_REGEX", ".*")
 def MAX_IMAGES  = envInt("IFQ_MAX_IMAGES", 0) // 0 = all
@@ -173,7 +182,8 @@ def FIXED_POS_THRESHOLDS = [:]
 // exploratory. Examples: IFQ_CC10_THRESHOLD, IFQ_TDTOM_THRESHOLD.
 def thresholdMarkers = ["KRT5", "AGER", "PDPN", "ProSPC", "CD8", "CD4",
                         "Sox2", "Aqp5", "p63", "YAP", "CC10", "tdTOM",
-                        "AcTub", "T1A", "mRAGE"]
+                        "AcTub", "T1A", "mRAGE", "KRT8", "ITGA2",
+                        "PDGFRB", "SOX9", "KRAS", "RED2_KRAS_G12D_RFP", "MKI67"]
 thresholdMarkers.each { marker ->
   String token = marker.toUpperCase().replaceAll(/[^A-Z0-9]+/, "")
   def rawValue = System.getenv("IFQ_" + token + "_THRESHOLD")
@@ -193,6 +203,15 @@ def MIN_RING_POS_FRACTION = [
 def ACTUB_SUPPORT_EXPAND_UM = envDouble("IFQ_ACTUB_SUPPORT_EXPAND_UM", 6.0d)
 def ACTUB_MIN_SUPPORT_FRACTION = envDouble("IFQ_ACTUB_MIN_SUPPORT_FRACTION", 0.10d)
 def ACTUB_MIN_PATCH_AREA_UM2 = envDouble("IFQ_ACTUB_MIN_PATCH_AREA_UM2", 2.0d)
+// A regional ciliary component is assigned to exactly one nearest nucleus.
+// This preserves cell context in dense airway epithelium without rejecting
+// every 6-um support zone merely because another nucleus overlaps it.
+def ACTUB_MAX_COMPONENT_DISTANCE_UM = envDouble("IFQ_ACTUB_MAX_COMPONENT_DISTANCE_UM", 12.0d)
+// Require the component centroid to sit outside an equivalent-radius nuclear
+// boundary. This rejects intranuclear/central puncta while retaining a
+// conservative apical shell for one-plane 20x sections.
+def ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM =
+  envDouble("IFQ_ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM", 1.0d)
 
 // Morphology is the authoritative marker call. Intensity thresholds define
 // candidate pixels; a final positive additionally requires role-appropriate
@@ -213,12 +232,19 @@ def ROLE_MORPHOLOGY_DEFAULTS = [
 ]
 def MORPHOLOGY_RULES = [
   "KRT5" : [minFraction:0.20d, minLargestShare:0.50d, requireOwnership:true],
+  "KRT8" : [minFraction:0.20d, minLargestShare:0.40d, requireOwnership:true],
+  "ITGA2":[minFraction:0.25d, minLargestShare:0.40d, requireOwnership:true],
+  "PDGFRB":[minFraction:0.25d, minLargestShare:0.40d, requireOwnership:true],
+  "KRAS" : [minFraction:0.20d, minLargestShare:0.40d, requireOwnership:true],
+  "RED2_KRAS_G12D_RFP":[minFraction:0.20d, minLargestShare:0.40d, requireOwnership:true],
   "AGER" : [minFraction:0.25d, minLargestShare:0.40d, requireOwnership:true],
   "PDPN" : [minFraction:0.25d, minLargestShare:0.40d, requireOwnership:true],
   "ProSPC":[minFraction:0.15d, minLargestShare:0.40d, requireOwnership:true],
   "CD8"  : [minFraction:0.20d, minLargestShare:0.40d, requireOwnership:true],
   "CD4"  : [minFraction:0.20d, minLargestShare:0.40d, requireOwnership:true],
   "Sox2" : [minFraction:0.40d, minLargestShare:0.60d, requireOwnership:false, minNuclearEnrichment:1.25d],
+  "SOX9" : [minFraction:0.40d, minLargestShare:0.60d, requireOwnership:false, minNuclearEnrichment:1.25d],
+  "MKI67": [minFraction:0.10d, minLargestShare:0.30d, requireOwnership:false, minNuclearEnrichment:1.25d],
   "Aqp5" : [minFraction:0.20d, minLargestShare:0.40d, requireOwnership:true],
   "p63"  : [minFraction:0.40d, minLargestShare:0.60d, requireOwnership:false, minNuclearEnrichment:1.25d],
   "YAP"  : [minFraction:0.30d, minLargestShare:0.60d, requireOwnership:false, minNucCytoRatio:1.50d],
@@ -276,7 +302,9 @@ def POD_THRESH_METHOD   = "Otsu" // Otsu|Triangle|Li|Huang|MaxEntropy...
 def POS_SENSITIVITY = [ "KRT5":1.00, "AGER":1.00, "PDPN":1.00, "ProSPC":1.00,
                         "CD8":1.00, "CD4":1.00, "Sox2":1.00, "Aqp5":1.00,
                         "p63":1.00, "YAP":1.00, "CC10":1.00, "tdTOM":1.00,
-                        "AcTub":1.00, "T1A":1.00, "mRAGE":1.00 ]
+                        "AcTub":1.00, "T1A":1.00, "mRAGE":1.00,
+                        "KRT8":1.00, "ITGA2":1.00, "PDGFRB":1.00, "SOX9":1.00,
+                        "KRAS":1.00, "RED2_KRAS_G12D_RFP":1.00, "MKI67":1.00 ]
 
 // --- Tissue auto-detection (used only if no manual ROI is supplied) ---
 def TISSUE_BLUR_SIGMA_PX = 4.0
@@ -317,6 +345,9 @@ requireFiniteNonnegative("IFQ_RING_EXPAND_UM", RING_EXPAND_UM, false)
 requireFiniteNonnegative("IFQ_MIN_NUCLEUS_AREA_UM2", MIN_NUCLEUS_AREA_UM2, false)
 requireFiniteNonnegative("IFQ_ACTUB_SUPPORT_EXPAND_UM", ACTUB_SUPPORT_EXPAND_UM, false)
 requireFiniteNonnegative("IFQ_ACTUB_MIN_PATCH_AREA_UM2", ACTUB_MIN_PATCH_AREA_UM2, false)
+requireFiniteNonnegative("IFQ_ACTUB_MAX_COMPONENT_DISTANCE_UM", ACTUB_MAX_COMPONENT_DISTANCE_UM, false)
+requireFiniteNonnegative("IFQ_ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM",
+                         ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM, true)
 requireFiniteNonnegative("IFQ_DAPI_BACKGROUND_RADIUS_UM", DAPI_BACKGROUND_RADIUS_UM, false)
 requireFiniteNonnegative("IFQ_DAPI_LOCAL_RADIUS_UM", DAPI_LOCAL_RADIUS_UM, false)
 requireFiniteNonnegative("IFQ_DAPI_BLUR_SIGMA_PX", DAPI_BLUR_SIGMA_PX, true)
@@ -336,6 +367,37 @@ if (!Double.isFinite(DAPI_CONTRAST_SATURATION) ||
 // ============================================================================
 
 def PANELS = [
+  // Priority real-project panels. These are additional presets inside the
+  // universal engine; all registry markers, custom panels, and legacy panels
+  // remain available. Channel idx values are acquisition order.
+  "LEFT": [ label:"LEFT_KRT5_AGER_T1A",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI"],
+               [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
+                qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
+               [idx:3, marker:"AGER", role:"membrane", measurement:"thin_membrane_support",
+                expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
+                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d],
+               [idx:4, marker:"T1A", role:"membrane", measurement:"thin_membrane_support",
+                expectedCompartment:"alveolar", qcColor:"white", fileLabel:"T1alpha-647",
+                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d] ],
+    classify:[ ["AGER":true,"T1A":true],
+               ["KRT5":true,"AGER":false],
+               ["KRT5":true,"T1A":false],
+               ["KRT5":true,"AGER":false,"T1A":false] ] ],
+
+  "RIGHT": [ label:"RIGHT_ProSPC_AGER_KRT8",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI"],
+               [idx:2, marker:"ProSPC", role:"cyto", measurement:"perinuclear_granular_cytoplasm",
+                expectedCompartment:"alveolar", qcColor:"green", fileLabel:"Pro-SPC-488"],
+               [idx:3, marker:"AGER", role:"membrane", measurement:"thin_membrane_support",
+                expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
+                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d],
+               [idx:4, marker:"KRT8", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
+                expectedCompartment:"alveolar", qcColor:"white", fileLabel:"KRT8-647"] ],
+    classify:[ ["KRT8":true,"ProSPC":true],
+               ["KRT8":true,"AGER":true],
+               ["KRT8":true,"ProSPC":false,"AGER":false] ] ],
+
   "A": [ label:"A_KRT5_AGER",
     channels:[ [idx:1, marker:"DAPI",  role:"nuclear"],
                [idx:2, marker:"KRT5",  role:"cyto",     areaMarker:true],
@@ -556,6 +618,11 @@ PANELS.each { panelKey, panelDef ->
         failRun(field + " must be between 0 and 1 for marker '" + c.marker + "'")
       }
     }
+    if (c.allowPositiveWithoutCompartment != null &&
+        !(c.allowPositiveWithoutCompartment instanceof Boolean)) {
+      failRun("allowPositiveWithoutCompartment must be true/false for marker '" +
+              c.marker + "'")
+    }
   }
   def indexes = panelDef.channels.collect { it.idx as int }
   if (indexes.unique().size() != indexes.size()) {
@@ -599,10 +666,20 @@ allAnalysisChannels.each { c ->
   def rawThreshold = System.getenv("IFQ_" + token + "_THRESHOLD")
   if (rawThreshold != null && !rawThreshold.trim().isEmpty()) {
     FIXED_POS_THRESHOLDS[marker] = parseDoubleSetting("IFQ_" + token + "_THRESHOLD", rawThreshold.trim())
+  } else if (c.registryKey != null && FIXED_POS_THRESHOLDS.containsKey(c.registryKey.toString())) {
+    // A canonical threshold (for example IFQ_MKI67_THRESHOLD) also applies
+    // when the panel uses a registry alias such as Ki-67. An alias-specific
+    // environment value above remains the highest-precedence override.
+    FIXED_POS_THRESHOLDS[marker] = FIXED_POS_THRESHOLDS[c.registryKey.toString()]
   }
   if (!POS_SENSITIVITY.containsKey(marker)) POS_SENSITIVITY[marker] = 1.0d
   if (c.cellCall != false && !MORPHOLOGY_RULES.containsKey(marker)) {
-    def roleRule = ROLE_MORPHOLOGY_DEFAULTS[c.role]
+    // Registry aliases inherit the canonical marker's validated geometry rule
+    // before falling back to the broader role template. This keeps Ki-67,
+    // Kras, IGTA2, PDGFR-beta, and other aliases behaviorally equivalent to
+    // their canonical registry keys rather than merely descriptively matched.
+    def canonicalRule = c.registryKey != null ? MORPHOLOGY_RULES[c.registryKey.toString()] : null
+    def roleRule = canonicalRule ?: ROLE_MORPHOLOGY_DEFAULTS[c.role]
     if (roleRule == null) {
       failRun("No cell-call morphology defaults for role '" + c.role + "'")
     }
@@ -891,6 +968,73 @@ def measureRoi(ImagePlus imp, Roi roi) {
   return [mean: st.mean, area: st.area, cx: st.xCentroid, cy: st.yCentroid]
 }
 
+// Assign every accepted ciliary component to at most one nearby nucleus. A
+// spatial grid avoids an O(components x nuclei) scan in dense 2k fields.
+// Distances and centroids are calibrated because measureRoi uses image
+// calibration. This is a nucleus-associated ciliary-component endpoint, not
+// reconstruction of a complete cell boundary or an individual axoneme count.
+def assignCiliaryComponentsToNuclei(componentStats, nucleusStats,
+                                    double maxCentroidDistanceUm,
+                                    double minBoundaryDistanceUm,
+                                    double maxBoundaryDistanceUm) {
+  def byNucleus = [:].withDefault { [] }
+  if (componentStats == null || componentStats.isEmpty() ||
+      nucleusStats == null || nucleusStats.isEmpty()) {
+    return [by_nucleus:byNucleus, assigned_component_count:0,
+            unassigned_component_count:(componentStats == null ? 0 : componentStats.size())]
+  }
+
+  double cellSize = Math.max(maxCentroidDistanceUm, 0.001d)
+  def grid = [:].withDefault { [] }
+  nucleusStats.eachWithIndex { ns, ni ->
+    int gx = (int)Math.floor(ns.cx / cellSize)
+    int gy = (int)Math.floor(ns.cy / cellSize)
+    double equivalentRadius = Math.sqrt(Math.max(0.0d, ns.area as double) / Math.PI)
+    grid[gx + ":" + gy] << [index:ni, cx:ns.cx as double, cy:ns.cy as double,
+                             equivalent_radius_um:equivalentRadius]
+  }
+
+  int assigned = 0
+  componentStats.eachWithIndex { cs, ci ->
+    int gx = (int)Math.floor(cs.cx / cellSize)
+    int gy = (int)Math.floor(cs.cy / cellSize)
+    def nearest = null
+    double nearestDistance = Double.POSITIVE_INFINITY
+    for (int dx = -1; dx <= 1; dx++) {
+      for (int dy = -1; dy <= 1; dy++) {
+        grid[(gx + dx) + ":" + (gy + dy)].each { candidate ->
+          double xdiff = cs.cx - (double)candidate.cx
+          double ydiff = cs.cy - (double)candidate.cy
+          double distance = Math.sqrt(xdiff * xdiff + ydiff * ydiff)
+          if (distance < nearestDistance ||
+              (distance == nearestDistance && nearest != null &&
+               (int)candidate.index < (int)nearest.index)) {
+            nearest = candidate
+            nearestDistance = distance
+          }
+        }
+      }
+    }
+    double boundaryDistance = nearest == null ? Double.POSITIVE_INFINITY :
+      nearestDistance - (double)nearest.equivalent_radius_um
+    if (nearest != null && nearestDistance <= maxCentroidDistanceUm &&
+        boundaryDistance >= minBoundaryDistanceUm &&
+        boundaryDistance <= maxBoundaryDistanceUm) {
+      byNucleus[(int)nearest.index] << [
+        component_index:ci + 1,
+        area_um2:cs.area as double,
+        centroid_x_um:cs.cx as double,
+        centroid_y_um:cs.cy as double,
+        nucleus_centroid_distance_um:nearestDistance,
+        nucleus_boundary_distance_um:boundaryDistance
+      ]
+      assigned++
+    }
+  }
+  return [by_nucleus:byNucleus, assigned_component_count:assigned,
+          unassigned_component_count:componentStats.size() - assigned]
+}
+
 // Count positive (>0) pixels of a mask inside an ROI -> calibrated area.
 def positiveAreaInRoi(ImagePlus maskImp, Roi roi) {
   ImageProcessor mp = maskImp.getProcessor()
@@ -989,12 +1133,47 @@ def spatialSupportStats(ImagePlus imp, Roi roi, double threshold) {
           largestShare:(positive > 0 ? largest / (double)positive : 0.0d)]
 }
 
+// Spatial index for the strict ownership screen below. Every nucleus centroid
+// belongs to one fixed-size pixel cell, so a local support ROI checks only
+// neighboring grid cells rather than scanning every nucleus in the image.
+def buildNucleusCentroidGrid(nuclei, int cellSizePx = 32) {
+  int size = Math.max(4, cellSizePx)
+  def cells = [:].withDefault { [] }
+  nuclei.eachWithIndex { nucleus, ni ->
+    Rectangle nb = nucleus.getBounds()
+    int cx = (int)Math.round(nb.getCenterX())
+    int cy = (int)Math.round(nb.getCenterY())
+    cells[((int)Math.floor(cx / (double)size)) + ":" +
+          ((int)Math.floor(cy / (double)size))] << [index:ni, x:cx, y:cy]
+  }
+  return [cell_size_px:size, cells:cells]
+}
+
 // Strict ownership screen for nucleus-associated measurements. If a support
 // territory encloses another nucleus centroid, pixels cannot be assigned to one
 // cell unambiguously without a full membrane/cell segmentation; leave the final
 // call indeterminate instead of double-counting shared signal.
-def supportHasOtherNucleus(Roi support, int currentIndex, nuclei) {
+def supportHasOtherNucleus(Roi support, int currentIndex, nuclei, spatialGrid = null) {
   if (support == null) return true
+  if (spatialGrid != null) {
+    Rectangle sb = support.getBounds()
+    int size = spatialGrid.cell_size_px as int
+    int minGX = (int)Math.floor(sb.x / (double)size)
+    int maxGX = (int)Math.floor((sb.x + Math.max(0, sb.width - 1)) / (double)size)
+    int minGY = (int)Math.floor(sb.y / (double)size)
+    int maxGY = (int)Math.floor((sb.y + Math.max(0, sb.height - 1)) / (double)size)
+    for (int gx = minGX; gx <= maxGX; gx++) {
+      for (int gy = minGY; gy <= maxGY; gy++) {
+        def candidates = spatialGrid.cells[gx + ":" + gy]
+        for (int k = 0; k < candidates.size(); k++) {
+          def candidate = candidates[k]
+          if ((int)candidate.index != currentIndex &&
+              support.contains((int)candidate.x, (int)candidate.y)) return true
+        }
+      }
+    }
+    return false
+  }
   for (int j = 0; j < nuclei.size(); j++) {
     if (j == currentIndex) continue
     Rectangle nb = nuclei[j].getBounds()
@@ -1323,6 +1502,14 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
   def qcRegionOverlays = [:]
 
   tissue.regions.eachWithIndex { reg, ri ->
+    long stageStartedNs = System.nanoTime()
+    def logStage = { String stage ->
+      long nowNs = System.nanoTime()
+      IJ.log("[IFQ_STAGE] " + stage + " " +
+             String.format(java.util.Locale.US, "%.3f",
+                           (nowNs - stageStartedNs) / 1.0e9d) + "s")
+      stageStartedNs = nowNs
+    }
     def region = reg.roi
     def regName = reg.name
     def regFileToken = fileSafe(regName)
@@ -1384,7 +1571,12 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       def maskReg = mask.duplicate(); maskReg.setCalibration(cal); maskReg.setRoi(region)
       transientImages << maskReg
       def componentRois = particlesToRois(maskReg, minComponentArea, false)
-      def componentAreas = componentRois.collect { measureRoi(mask, it).area }
+      def componentStats = componentRois.collect { component ->
+        def measured = measureRoi(mask, component)
+        [roi:component, area:measured.area as double,
+         cx:measured.cx as double, cy:measured.cy as double]
+      }
+      def componentAreas = componentStats.collect { it.area as double }
       def areaThr = mask.getProperty("thresholdValue")
       areaStats[c.marker] = [ mode: areaMode, area_um2: positiveArea,
                               frac_of_region: (regionAreaUm2 > 0 ? positiveArea/regionAreaUm2 : 0),
@@ -1392,14 +1584,19 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                               mean_component_area_um2: (componentAreas.isEmpty()? 0 : componentAreas.sum()/componentAreas.size()),
                               min_component_area_um2: minComponentArea,
                               threshold: (areaThr != null ? areaThr : -1),
-                              threshold_source: areaThresholdSources[c.marker] ]
+                              threshold_source: areaThresholdSources[c.marker],
+                              component_stats: componentStats ]
       maskReg.close()
     }
+    logStage("area_components")
 
     // ---- Nuclei -> cells ----
     def segmentation = segmentNuclei(dapi, region, cfg)
     if (segmentation.candidateMask != null) transientImages << segmentation.candidateMask
     def nuclei = segmentation.included
+    def nucleusStats = nuclei.collect { measureRoi(dapi, it) }
+    def nucleusCentroidGrid = buildNucleusCentroidGrid(nuclei)
+    logStage("nucleus_segmentation_and_stats")
     def rejectedNuclei = segmentation.rejected ?: []
     def posCount = [:].withDefault { 0 }
     def finalPosCount = [:].withDefault { 0 }
@@ -1410,11 +1607,28 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     // false-positive or false-negative labels.
     def rawPosFinalNegCount = [:].withDefault { 0 }
     def rawNegFinalPosCount = [:].withDefault { 0 }
+    // Strict marker evidence is counted separately from endpoint context. This
+    // prevents localization-correct signal from disappearing when anatomy is
+    // unresolved, while still preventing unsupported negatives and compound
+    // cell identities.
+    def markerEvidencePosCount = [:].withDefault { 0 }
+    def contextUnresolvedPosCount = [:].withDefault { 0 }
+    def contextExcludedEvidencePosCount = [:].withDefault { 0 }
     def classCount = [:].withDefault { 0 }
     def classEvaluableCount = [:].withDefault { 0 }
     def allNucRois = []
     def finalPositiveRois = [:].withDefault { [] }
     def indeterminateRois = [:].withDefault { [] }
+    def apicalComponentAssignments = [:]
+    cellChannels.findAll { it.role == "apical_cilia" }.each { c ->
+      def stats = areaStats[c.marker]
+      apicalComponentAssignments[c.marker] = assignCiliaryComponentsToNuclei(
+        stats != null ? stats.component_stats : [], nucleusStats,
+        cfg.actubMaxComponentDistanceUm,
+        cfg.actubMinComponentBoundaryDistanceUm,
+        cfg.actubSupportExpandUm)
+    }
+    logStage("apical_component_ownership")
 
     nuclei.eachWithIndex { nuc, ni ->
       allNucRois << nuc
@@ -1423,11 +1637,12 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                   compartment: compartment, region_tags: regionTags.join("|"), cell_id: (ni + 1) ]
       row.mouse_id = meta.mouse_id; row.section_id = meta.section_id
       row.genotype = meta.genotype; row.condition = meta.condition
-      def cs = measureRoi(dapi, nuc)
+      def cs = nucleusStats[ni]
       row.centroid_x_um = cs.cx; row.centroid_y_um = cs.cy; row.nucleus_area_um2 = cs.area
 
       def calls = [:]       // morphology-authoritative three-state calls: 1, 0, or ""
       def rawCalls = [:]    // legacy mean-intensity calls retained for audit only
+      def callContextResolved = [:] // compound classes require resolved context
       cellChannels.each { c ->
         def m = c.marker
         def img = markerImg[m]
@@ -1443,6 +1658,9 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         if (c.minNucCytoRatio != null) rule.minNucCytoRatio = c.minNucCytoRatio as double
         def spatialRoi = nuc
         def ownershipSupport = null
+        boolean componentContextPass = false
+        boolean componentOwnershipPass = false
+        def ownedCiliaryComponents = []
         double val, nucVal = 0.0d, cytoVal = 0.0d, enrichmentRatio = 0.0d
         boolean projectionValid = true
         if (c.role == "nuc_marker") {
@@ -1479,8 +1697,28 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           spatialRoi = support ?: cellRoi
           ownershipSupport = spatialRoi
           val = measureRoi(img, spatialRoi).mean
+          def assignment = apicalComponentAssignments[m]
+          ownedCiliaryComponents = assignment != null ? (assignment.by_nucleus[ni] ?: []) : []
+          componentOwnershipPass = !ownedCiliaryComponents.isEmpty()
+          double ownedArea = ownedCiliaryComponents.isEmpty() ? 0.0d :
+                             ownedCiliaryComponents.collect { it.area_um2 as double }.sum() as double
+          double nearestCentroidDistance = ownedCiliaryComponents.isEmpty() ? Double.NaN :
+            ownedCiliaryComponents.collect { it.nucleus_centroid_distance_um as double }.min() as double
+          double nearestBoundaryDistance = ownedCiliaryComponents.isEmpty() ? Double.NaN :
+            ownedCiliaryComponents.collect { it.nucleus_boundary_distance_um as double }.min() as double
           row[m + "_support_expand_um"] = supportExpandUm
           row[m + "_measurement_model"] = c.measurement ?: "apical_cilia_proximity"
+          row[m + "_cellular_context_model"] = "unique_nearest_nucleus_ciliary_component"
+          row[m + "_owned_ciliary_component_count"] = ownedCiliaryComponents.size()
+          row[m + "_owned_ciliary_component_area_um2"] = ownedArea
+          row[m + "_nearest_ciliary_component_centroid_distance_um"] =
+            Double.isFinite(nearestCentroidDistance) ? nearestCentroidDistance : ""
+          row[m + "_nearest_ciliary_component_boundary_distance_um"] =
+            Double.isFinite(nearestBoundaryDistance) ? nearestBoundaryDistance : ""
+          row[m + "_maximum_component_distance_um"] = cfg.actubMaxComponentDistanceUm
+          row[m + "_minimum_component_boundary_distance_um"] =
+            cfg.actubMinComponentBoundaryDistanceUm
+          row[m + "_component_ownership_pass"] = componentOwnershipPass ? 1 : 0
         } else { // cyto / membrane: measure the perinuclear ring, not nucleus + ring
           def ring = ringOnly(nuc, cellRoi)
           spatialRoi = (ring != null) ? ring : cellRoi
@@ -1501,8 +1739,14 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         double minLargestShare = (double)rule.minLargestShare
         boolean fractionPass = supportStats.fraction >= minFraction
         boolean connectedPass = supportStats.largestShare >= minLargestShare
-        boolean ownershipClear = !(rule.requireOwnership ?: false) ||
-                                 !supportHasOtherNucleus(ownershipSupport, ni, nuclei)
+        if (c.role == "apical_cilia") {
+          componentContextPass = componentOwnershipPass && fractionPass && connectedPass
+          row[m + "_component_context_pass"] = componentContextPass ? 1 : 0
+        }
+        boolean ownershipClear = c.role == "apical_cilia" ? true :
+                                 (!(rule.requireOwnership ?: false) ||
+                                  !supportHasOtherNucleus(ownershipSupport, ni, nuclei,
+                                                          nucleusCentroidGrid))
         boolean enrichmentPass = true
         if (c.role == "nuc_marker") {
           enrichmentPass = enrichmentRatio >= (double)(rule.minNuclearEnrichment ?: 1.0d)
@@ -1511,12 +1755,41 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         }
 
         def expectedCompartments = expectedCompartmentsFor(c)
+        boolean hasCompartmentRequirement = !expectedCompartments.isEmpty()
         boolean compartmentAssigned = !regionTags.isEmpty() && !regionTags.contains("ambiguous")
         boolean compartmentPass = expectedCompartments.isEmpty() ||
                                   (compartmentAssigned && expectedCompartments.any { regionTags.contains(it) })
+        boolean knownWrongCompartment = hasCompartmentRequirement &&
+                                        compartmentAssigned && !compartmentPass
+        boolean allowPositiveWithoutCompartment =
+          c.allowPositiveWithoutCompartment != null ?
+            (c.allowPositiveWithoutCompartment as boolean) : true
+        boolean localizationPatternPass = c.role == "apical_cilia" ?
+                                          componentContextPass :
+                                          (fractionPass && connectedPass && enrichmentPass)
+        boolean markerEvidencePass = localizationPatternPass &&
+                                     ownershipClear && projectionValid &&
+                                     supportStats.total > 0
+
+        row[m + "_mean"] = val
+        boolean intensityPos = val >= chThresh[m]
+        rawCalls[m] = intensityPos ? 1 : 0
+        row[m + "_pos"] = intensityPos ? 1 : 0  // legacy/raw audit field
+
+        // Compartment-dependent endpoints use an asymmetric context policy.
+        // Strong marker evidence can establish an exploratory marker-positive
+        // call when anatomy is unresolved, but absence cannot establish a
+        // negative. A known incompatible compartment is never overridden.
+        boolean authorityPositiveEvidence = cfg.morphologyPrimary ?
+                                            markerEvidencePass : intensityPos
+        boolean contextUnresolvedPositive = hasCompartmentRequirement &&
+                                            !compartmentAssigned &&
+                                            allowPositiveWithoutCompartment &&
+                                            authorityPositiveEvidence
         boolean evaluable = supportStats.total > 0 && projectionValid
         def indeterminateReasons = []
-        if (!expectedCompartments.isEmpty() && !compartmentPass) {
+        if (hasCompartmentRequirement && !compartmentPass &&
+            !contextUnresolvedPositive) {
           evaluable = false
           indeterminateReasons << (compartmentAssigned ? "wrong_compartment" : "compartment_unassigned")
         }
@@ -1533,10 +1806,6 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           indeterminateReasons << "empty_spatial_support"
         }
 
-        row[m + "_mean"] = val
-        boolean intensityPos = val >= chThresh[m]
-        rawCalls[m] = intensityPos ? 1 : 0
-        row[m + "_pos"] = intensityPos ? 1 : 0  // legacy/raw audit field
         row[m + "_threshold_source"] = chThreshSource[m]
         row[m + "_support_fraction_above_threshold"] = supportStats.fraction
         row[m + "_minimum_support_fraction"] = minFraction
@@ -1549,12 +1818,25 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         row[m + "_projection_valid"] = projectionValid ? 1 : 0
         row[m + "_expected_compartment"] = expectedCompartments.isEmpty() ? "none" : expectedCompartments.join("|")
         row[m + "_compartment_pass"] = compartmentPass ? 1 : 0
+        row[m + "_context_resolved"] =
+          (!hasCompartmentRequirement || compartmentPass) ? 1 : 0
+        row[m + "_context_policy"] = hasCompartmentRequirement ?
+          "asymmetric_positive_evidence_negative_requires_compartment" : "not_required"
+        row[m + "_context_state"] = !hasCompartmentRequirement ? "not_required" :
+          (compartmentPass ? "compatible" :
+           (knownWrongCompartment ? "known_incompatible" :
+            (contextUnresolvedPositive ? "unresolved_positive_evidence" : "unresolved")))
+        row[m + "_allow_positive_without_compartment"] =
+          allowPositiveWithoutCompartment ? 1 : 0
+        row[m + "_marker_evidence_pass"] = markerEvidencePass ? 1 : 0
         row[m + "_enrichment_pass"] = enrichmentPass ? 1 : 0
         if (c.role == "membrane" || c.role == "cyto") {
           row[m + "_ring_fraction_above_threshold"] = supportStats.fraction
           row[m + "_minimum_ring_fraction"] = minFraction
         }
-        row[m + "_pattern_pos"] = (fractionPass && connectedPass) ? 1 : 0
+        row[m + "_pattern_pos"] = c.role == "apical_cilia" ?
+                                   (componentContextPass ? 1 : 0) :
+                                   ((fractionPass && connectedPass) ? 1 : 0)
         row[m + "_compartment_consistent"] = expectedCompartments.isEmpty() ? 1 :
                                               (compartmentAssigned ? (compartmentPass ? 1 : 0) : "")
 
@@ -1562,27 +1844,55 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           posCount[m] = posCount[m] + 1
         }
 
-        boolean morphologyPass = fractionPass && connectedPass && enrichmentPass && compartmentPass
+        boolean morphologyPass = markerEvidencePass &&
+                                 (compartmentPass || contextUnresolvedPositive)
         def finalCall = ""
         String callStatus
         def failureReasons = []
-        if (!fractionPass) failureReasons << "insufficient_spatial_coverage"
-        if (!connectedPass) failureReasons << "fragmented_spatial_pattern"
+        if (c.role == "apical_cilia") {
+          if (!componentOwnershipPass) failureReasons << "no_unique_apical_ciliary_component"
+          if (!fractionPass) failureReasons << "insufficient_spatial_coverage"
+          if (!connectedPass) failureReasons << "fragmented_spatial_pattern"
+        } else {
+          if (!fractionPass) failureReasons << "insufficient_spatial_coverage"
+          if (!connectedPass) failureReasons << "fragmented_spatial_pattern"
+        }
         if (!enrichmentPass) failureReasons << (c.role == "nuc_ratio" ? "nuc_cyto_ratio_below_minimum" : "nuclear_enrichment_below_minimum")
 
-        if (!cfg.morphologyPrimary) {
-          finalCall = intensityPos ? 1 : 0
-          callStatus = intensityPos ? "legacy_intensity_positive" : "legacy_intensity_negative"
-        } else if (!evaluable) {
+        // Evaluability always precedes the selected decision authority. The
+        // former ordering allowed legacy mean intensity to turn unresolved
+        // anatomy, invalid projection, or shared support into false negatives.
+        if (!evaluable) {
           finalCall = ""
           callStatus = "indeterminate"
           indeterminateCount[m] = indeterminateCount[m] + 1
+        } else if (!cfg.morphologyPrimary) {
+          finalCall = intensityPos ? 1 : 0
+          callStatus = intensityPos ?
+            (contextUnresolvedPositive ?
+              "legacy_intensity_positive_context_unresolved" :
+              "legacy_intensity_positive") :
+            "legacy_intensity_negative"
         } else {
           finalCall = morphologyPass ? 1 : 0
           boolean fixedThreshold = chThreshSource[m] == "fixed_predeclared"
           callStatus = morphologyPass ?
-                       (fixedThreshold ? "positive" : "exploratory_positive") :
+                       (contextUnresolvedPositive ?
+                        (c.role == "apical_cilia" ?
+                         "exploratory_positive_cellular_context" :
+                         "exploratory_positive_context_unresolved") :
+                        (fixedThreshold ? "positive" : "exploratory_positive")) :
                        (fixedThreshold ? "negative" : "exploratory_negative")
+        }
+        if (markerEvidencePass) {
+          markerEvidencePosCount[m] = markerEvidencePosCount[m] + 1
+          if (knownWrongCompartment) {
+            contextExcludedEvidencePosCount[m] =
+              contextExcludedEvidencePosCount[m] + 1
+          }
+        }
+        if (contextUnresolvedPositive && finalCall == 1) {
+          contextUnresolvedPosCount[m] = contextUnresolvedPosCount[m] + 1
         }
         if (finalCall == 1) {
           finalPosCount[m] = finalPosCount[m] + 1
@@ -1595,16 +1905,30 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           indeterminateRois[m] << nuc
         }
         calls[m] = finalCall
+        callContextResolved[m] = !hasCompartmentRequirement || compartmentPass
         row[m + "_morphology_pass"] = (evaluable && morphologyPass) ? 1 : 0
+        row[m + "_negative_eligible"] =
+          (evaluable && !authorityPositiveEvidence &&
+           (!hasCompartmentRequirement || compartmentPass)) ? 1 : 0
         row[m + "_final_call"] = finalCall
         row[m + "_true_pos"] = finalCall       // compatibility alias
         row[m + "_call_status"] = callStatus
-        row[m + "_call_reason"] = (indeterminateReasons + failureReasons).unique().join(";")
+        def callReasons = (indeterminateReasons + failureReasons).unique()
+        if (contextUnresolvedPositive && finalCall == 1) {
+          callReasons << (c.role == "apical_cilia" ?
+            "unique_apical_ciliary_component_context_without_airway_roi" :
+            "strict_marker_evidence_with_anatomical_context_unresolved")
+        }
+        row[m + "_call_reason"] = callReasons.unique().join(";")
       }
       // classifications
       panelDef.classify.each { rule ->
         def key = rule.collect { mk, want -> mk + (want ? "+" : "-") }.join("_")
-        boolean classEvaluable = rule.every { mk, want -> calls[mk] == 0 || calls[mk] == 1 }
+        // A marker-positive call may be retained when its anatomical context is
+        // unresolved, but it cannot authorize a compound lineage/state class.
+        boolean classEvaluable = rule.every { mk, want ->
+          (calls[mk] == 0 || calls[mk] == 1) && callContextResolved[mk] != false
+        }
         if (!classEvaluable) {
           row["class_" + key] = ""
           row["class_" + key + "_status"] = "indeterminate"
@@ -1618,6 +1942,7 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       }
       cellRows << row
     }
+    logStage("per_cell_decisions")
 
     // ---- QC overlay for this region ----
     def qc = buildQcOverlay(markerImg, panelDef, region, allNucRois, qcMasks)
@@ -1678,7 +2003,30 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_morphology_pos_count"] = finalPosCount[c.marker]
       srow[c.marker + "_morphology_negative_count"] = finalNegCount[c.marker]
       srow[c.marker + "_indeterminate_count"] = indeterminateCount[c.marker]
+      // Explicit, human-readable final quantification columns. These repeat
+      // the authoritative three-state counts with an unambiguous denominator
+      // so the CSV and Excel workbook can be read without reconstructing the
+      // endpoint from audit fields.
+      srow[c.marker + "_final_positive_cell_count"] = finalPosCount[c.marker]
+      srow[c.marker + "_final_positive_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ? finalPosCount[c.marker] / (double)nuclei.size() : 0)
+      srow[c.marker + "_final_negative_cell_count"] = finalNegCount[c.marker]
+      srow[c.marker + "_final_negative_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ? finalNegCount[c.marker] / (double)nuclei.size() : 0)
+      srow[c.marker + "_final_indeterminate_cell_count"] = indeterminateCount[c.marker]
+      srow[c.marker + "_final_indeterminate_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ? indeterminateCount[c.marker] / (double)nuclei.size() : 0)
+      srow[c.marker + "_marker_evidence_pos_count"] =
+        markerEvidencePosCount[c.marker]
+      srow[c.marker + "_context_unresolved_positive_count"] =
+        contextUnresolvedPosCount[c.marker]
+      srow[c.marker + "_context_excluded_evidence_positive_count"] =
+        contextExcludedEvidencePosCount[c.marker]
       def evaluableCount = finalPosCount[c.marker] + finalNegCount[c.marker]
+      def contextResolvedPosCount =
+        finalPosCount[c.marker] - contextUnresolvedPosCount[c.marker]
+      def contextResolvedEvaluableCount =
+        contextResolvedPosCount + finalNegCount[c.marker]
       def discordantCount = rawPosFinalNegCount[c.marker] + rawNegFinalPosCount[c.marker]
       def reviewBurdenCount = indeterminateCount[c.marker] + discordantCount
       srow[c.marker + "_morphology_evaluable_count"] = evaluableCount
@@ -1686,6 +2034,19 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         (evaluableCount > 0 ? finalPosCount[c.marker] / (double)evaluableCount : 0)
       srow[c.marker + "_morphology_negative_fraction_of_evaluable"] =
         (evaluableCount > 0 ? finalNegCount[c.marker] / (double)evaluableCount : 0)
+      srow[c.marker + "_context_resolved_positive_count"] =
+        contextResolvedPosCount
+      srow[c.marker + "_context_resolved_evaluable_count"] =
+        contextResolvedEvaluableCount
+      srow[c.marker + "_context_resolved_positive_fraction"] =
+        (contextResolvedEvaluableCount > 0 ?
+          contextResolvedPosCount / (double)contextResolvedEvaluableCount : 0)
+      srow[c.marker + "_context_resolved_positive_fraction_of_total_cells"] =
+        (!nuclei.isEmpty() ?
+          contextResolvedPosCount / (double)nuclei.size() : 0)
+      srow[c.marker + "_context_unresolved_positive_fraction_of_included"] =
+        (!nuclei.isEmpty() ?
+          contextUnresolvedPosCount[c.marker] / (double)nuclei.size() : 0)
       srow[c.marker + "_indeterminate_fraction_of_included"] =
         (!nuclei.isEmpty() ? indeterminateCount[c.marker] / (double)nuclei.size() : 0)
       srow[c.marker + "_raw_positive_final_negative_count"] = rawPosFinalNegCount[c.marker]
@@ -1701,6 +2062,24 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_true_pos_count"] = finalPosCount[c.marker] // compatibility alias
       def expectedForSummary = expectedCompartmentsFor(c)
       srow[c.marker + "_expected_compartment"] = expectedForSummary.isEmpty() ? "none" : expectedForSummary.join("|")
+      srow[c.marker + "_context_policy"] = expectedForSummary.isEmpty() ?
+        "not_required" :
+        "asymmetric_positive_evidence_negative_requires_compartment"
+      if (c.role == "apical_cilia") {
+        def assignment = apicalComponentAssignments[c.marker]
+        def ownedNucleusCount = assignment == null ? 0 :
+          assignment.by_nucleus.values().count { it != null && !it.isEmpty() }
+        srow[c.marker + "_nuclei_with_owned_ciliary_component"] = ownedNucleusCount
+        srow[c.marker + "_assigned_ciliary_component_count"] =
+          assignment == null ? 0 : assignment.assigned_component_count
+        srow[c.marker + "_unassigned_ciliary_component_count"] =
+          assignment == null ? 0 : assignment.unassigned_component_count
+        srow[c.marker + "_maximum_component_distance_um"] = cfg.actubMaxComponentDistanceUm
+        srow[c.marker + "_minimum_component_boundary_distance_um"] =
+          cfg.actubMinComponentBoundaryDistanceUm
+        srow[c.marker + "_cellular_context_model"] =
+          "unique_apical_component_plus_local_coverage_asymmetric_context"
+      }
     }
     areaStats.each { m, as ->
       srow[m + "_positive_area_um2"] = as.area_um2
@@ -1715,12 +2094,14 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       def areaExpectedCompartments = areaChannel == null ? [] : expectedCompartmentsFor(areaChannel)
       if (!areaExpectedCompartments.isEmpty() &&
           (compartment == "unassigned" || compartment == "ambiguous")) {
-        srow[m + "_area_call_status"] = as.threshold_source == "fixed_predeclared" ?
-                                         "indeterminate_compartment_unassigned" :
-                                         "exploratory_compartment_unassigned"
+        srow[m + "_area_call_status"] = as.area_um2 > 0 ?
+          "positive_area_evidence_context_unresolved" :
+          "indeterminate_context_unresolved"
       } else if (!areaExpectedCompartments.isEmpty() &&
                  !areaExpectedCompartments.any { regionTags.contains(it) }) {
-        srow[m + "_area_call_status"] = "wrong_compartment_not_interpretable"
+        srow[m + "_area_call_status"] = as.area_um2 > 0 ?
+          "context_excluded_positive_area_evidence" :
+          "wrong_compartment_not_interpretable"
       } else {
         srow[m + "_area_call_status"] = as.threshold_source == "fixed_predeclared" ?
                                          "fixed_threshold_area" :
@@ -1735,10 +2116,15 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         srow[m + "_pod_threshold"] = as.threshold
       }
     }
-    (classCount.keySet() + classEvaluableCount.keySet()).unique().each { k ->
+    // Emit every declared class even when no cell is context-resolved enough
+    // to evaluate it. Omitting an all-indeterminate class can be misread as
+    // "not tracked" or zero positive.
+    panelDef.classify.each { rule ->
+      def k = rule.collect { mk, want -> mk + (want ? "+" : "-") }.join("_")
       srow["class_" + k + "_count"] = classCount[k]
       srow["class_" + k + "_evaluable_count"] = classEvaluableCount[k]
-      srow["class_" + k + "_indeterminate_count"] = nuclei.size() - classEvaluableCount[k]
+      srow["class_" + k + "_indeterminate_count"] =
+        nuclei.size() - classEvaluableCount[k]
     }
     summaryRows << srow
     qcMasks.each { k, v -> v.close() }
@@ -1783,14 +2169,22 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     acetylated_tubulin_model: [ measurement: "apical_cilia_proximity_and_regional_patches",
                                 support_expand_um: cfg.actubSupportExpandUm,
                                 minimum_support_positive_fraction: cfg.actubMinSupportFraction,
-                                minimum_ciliary_patch_area_um2: cfg.actubMinPatchAreaUm2 ],
+                                minimum_ciliary_patch_area_um2: cfg.actubMinPatchAreaUm2,
+                                cellular_context_model: "unique_apical_component_plus_local_coverage",
+                                maximum_component_centroid_distance_um: cfg.actubMaxComponentDistanceUm,
+                                minimum_component_boundary_distance_um: cfg.actubMinComponentBoundaryDistanceUm,
+                                maximum_component_boundary_distance_um: cfg.actubSupportExpandUm,
+                                decision_asymmetry: "positive component context allowed without airway ROI; negative requires independently assigned airway ROI" ],
     pod_min_area_um2: cfg.podMinArea, pod_blur_sigma_px: cfg.podBlur, pod_thresh_method: cfg.podMethod,
     pos_sensitivity: cfg.sensitivity, black_background: cfg.blackBackground,
     fixed_pos_thresholds: cfg.fixedThresholds,
     decision_hierarchy: [ authority: cfg.morphologyPrimary ? "morphology_primary" : "legacy_mean_intensity",
                           call_states: ["positive", "negative", "indeterminate"],
                           intensity_role: "candidate-pixel threshold and audit field; not final-call authority",
-                          fixed_threshold_requirement: "confirmatory calls require predeclared control-derived thresholds" ],
+                          fixed_threshold_requirement: "confirmatory calls require predeclared control-derived thresholds",
+                          evaluability_precedes_authority: true,
+                          compartment_policy: "strict marker evidence may be retained as context-unresolved positive; negative requires compatible compartment; known incompatible compartment remains indeterminate",
+                          compound_class_policy: "context-unresolved marker positives cannot authorize compound lineage/state classes" ],
     morphology_rules: cfg.morphologyRules,
     role_morphology_defaults: cfg.roleMorphologyDefaults,
     marker_registry: [path:cfg.markerRegistryPath, schema_version:cfg.markerRegistrySchema],
@@ -1982,6 +2376,203 @@ def writeCsv(rows, String path) {
   new File(path).setText(sb.toString(), "UTF-8")
 }
 
+def xlsxXmlEscape = { value ->
+  def s = value == null ? "" : value.toString()
+  return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+          .replace("\"", "&quot;").replace("'", "&apos;")
+}
+
+def xlsxColumnName = { int zeroBased ->
+  int value = zeroBased + 1
+  def out = new StringBuilder()
+  while (value > 0) {
+    int remainder = (value - 1) % 26
+    out.insert(0, (char)(('A' as char) + remainder))
+    value = (int)((value - 1) / 26)
+  }
+  return out.toString()
+}
+
+def xlsxSheetXml = { sheet ->
+  def rows = sheet.rows
+  def safeRows = rows == null ? [] : rows
+  def columns = [] as LinkedHashSet
+  safeRows.each { row -> columns.addAll(row.keySet()) }
+  def cols = columns as List
+  if (cols.isEmpty()) cols = ["message"]
+
+  int lastRow = Math.max(1, safeRows.size() + 1)
+  String lastColumn = xlsxColumnName(cols.size() - 1)
+  def xml = new StringBuilder()
+  xml.append('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
+  xml.append('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
+  String tabColor = sheet.name == "Image Positive Counts" ? "FF2F75B5" :
+                    (sheet.name == "Skipped Inputs" ? "FFF4B183" : "FF70AD47")
+  xml.append('<sheetPr><tabColor rgb="').append(tabColor).append('"/></sheetPr>')
+  xml.append('<dimension ref="A1:').append(lastColumn).append(lastRow).append('"/>')
+  xml.append('<sheetViews><sheetView workbookViewId="0" showGridLines="0">')
+  xml.append('<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>')
+  xml.append('</sheetView></sheetViews>')
+  xml.append('<cols>')
+  cols.eachWithIndex { col, i ->
+    int contentLength = safeRows.collect { row ->
+      def value = row.containsKey(col) ? row[col] : ""
+      value == null ? 0 : value.toString().length()
+    }.max() ?: 0
+    double maximumWidth = col.toString() == "Image" ? 70.0d : 42.0d
+    double width = Math.max(12.0d,
+      Math.min(maximumWidth, Math.max(col.toString().length(), contentLength) + 2.0d))
+    xml.append('<col min="').append(i + 1).append('" max="').append(i + 1)
+       .append('" width="').append(width).append('" customWidth="1"/>')
+  }
+  xml.append('</cols><sheetData>')
+  xml.append('<row r="1" ht="32" customHeight="1">')
+  cols.eachWithIndex { col, i ->
+    String ref = xlsxColumnName(i) + "1"
+    xml.append('<c r="').append(ref).append('" s="1" t="inlineStr"><is><t>')
+       .append(xlsxXmlEscape(col)).append('</t></is></c>')
+  }
+  xml.append('</row>')
+  safeRows.eachWithIndex { row, rowIndex ->
+    int excelRow = rowIndex + 2
+    xml.append('<row r="').append(excelRow).append('">')
+    cols.eachWithIndex { col, colIndex ->
+      def value = row.containsKey(col) ? row[col] : ""
+      String ref = xlsxColumnName(colIndex) + excelRow
+      boolean percentage = col.toString().toLowerCase().contains("fraction")
+      boolean alternate = rowIndex % 2 == 1
+      int style = percentage ? (alternate ? 4 : 2) : (alternate ? 3 : 0)
+      if (value instanceof Number) {
+        xml.append('<c r="').append(ref).append('"')
+        if (style > 0) xml.append(' s="').append(style).append('"')
+        xml.append('><v>').append(value.toString()).append('</v></c>')
+      } else if (value instanceof Boolean) {
+        xml.append('<c r="').append(ref).append('"')
+        if (style > 0) xml.append(' s="').append(style).append('"')
+        xml.append(' t="b"><v>')
+           .append(value ? "1" : "0").append('</v></c>')
+      } else {
+        xml.append('<c r="').append(ref).append('"')
+        if (style > 0) xml.append(' s="').append(style).append('"')
+        xml.append(' t="inlineStr"><is><t>')
+           .append(xlsxXmlEscape(value)).append('</t></is></c>')
+      }
+    }
+    xml.append('</row>')
+  }
+  xml.append('</sheetData>')
+  if (!safeRows.isEmpty()) {
+    xml.append('<autoFilter ref="A1:').append(lastColumn).append(lastRow).append('"/>')
+  }
+  xml.append('</worksheet>')
+  return xml.toString()
+}
+
+def writeXlsxWorkbook = { List sheets, String path ->
+  def zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(path)))
+  def putText = { String entryName, String text ->
+    zip.putNextEntry(new ZipEntry(entryName))
+    zip.write(text.getBytes("UTF-8"))
+    zip.closeEntry()
+  }
+  try {
+    def contentTypes = new StringBuilder(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>')
+    sheets.eachWithIndex { sheet, i ->
+      contentTypes.append('<Override PartName="/xl/worksheets/sheet').append(i + 1)
+        .append('.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>')
+    }
+    contentTypes.append('</Types>')
+    putText("[Content_Types].xml", contentTypes.toString())
+    putText("_rels/.rels",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>')
+
+    def workbook = new StringBuilder(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>')
+    sheets.eachWithIndex { sheet, i ->
+      workbook.append('<sheet name="').append(xlsxXmlEscape(sheet.name))
+        .append('" sheetId="').append(i + 1).append('" r:id="rId').append(i + 1).append('"/>')
+    }
+    workbook.append('</sheets></workbook>')
+    putText("xl/workbook.xml", workbook.toString())
+
+    def workbookRels = new StringBuilder(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">')
+    sheets.eachWithIndex { sheet, i ->
+      workbookRels.append('<Relationship Id="rId').append(i + 1)
+        .append('" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet')
+        .append(i + 1).append('.xml"/>')
+    }
+    workbookRels.append('<Relationship Id="rId').append(sheets.size() + 1)
+      .append('" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>')
+    workbookRels.append('</Relationships>')
+    putText("xl/_rels/workbook.xml.rels", workbookRels.toString())
+
+    putText("xl/styles.xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+      '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF2F75B5"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      '<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+      '<xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="10" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1" applyNumberFormat="1"/></cellXfs>' +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+      '</styleSheet>')
+    sheets.eachWithIndex { sheet, i ->
+      putText("xl/worksheets/sheet" + (i + 1) + ".xml", xlsxSheetXml(sheet))
+    }
+  } finally {
+    zip.close()
+  }
+}
+
+def buildPerImagePositiveQuantification = { summaryRows ->
+  def output = []
+  summaryRows.each { row ->
+    def markerNames = [] as LinkedHashSet
+    row.keySet().findAll { it.toString().endsWith("_final_positive_cell_count") }.each { name ->
+      markerNames << name.toString().replaceFirst(/_final_positive_cell_count$/, "")
+    }
+    long total = ((row.n_nuclei ?: 0) as Number).longValue()
+    def record = [
+      "Image": row.image ?: "NA",
+      "Region": row.region ?: "NA",
+      "Mouse": row.mouse_id ?: "NA",
+      "Section": row.section_id ?: "NA",
+      "Genotype": row.genotype ?: "NA",
+      "Condition": row.condition ?: "NA",
+      "Panel": row.panel ?: "NA",
+      "Total cells": total
+    ]
+    markerNames.each { marker ->
+      long positive =
+        ((row[marker + "_final_positive_cell_count"] ?: 0) as Number).longValue()
+      record[marker + " positive cells"] = positive
+      record[marker + " positive fraction of total cells"] =
+        total > 0 ? positive / (double)total : 0
+    }
+    output << record
+  }
+  return output
+}
+
 // ============================================================================
 //  7. SAMPLESHEET / METADATA
 // ============================================================================
@@ -2125,6 +2716,8 @@ def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles:
            actubSupportExpandUm: ACTUB_SUPPORT_EXPAND_UM,
            actubMinSupportFraction: ACTUB_MIN_SUPPORT_FRACTION,
            actubMinPatchAreaUm2: ACTUB_MIN_PATCH_AREA_UM2,
+           actubMaxComponentDistanceUm: ACTUB_MAX_COMPONENT_DISTANCE_UM,
+           actubMinComponentBoundaryDistanceUm: ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM,
            tissueMode: TISSUE_MODE, tissueBlur: TISSUE_BLUR_SIGMA_PX,
            tissueMethod: TISSUE_THRESH_METHOD, tissueMinArea: TISSUE_MIN_AREA_UM2,
            allowNonemptyOutput: ALLOW_NONEMPTY_OUTPUT ]
@@ -2148,20 +2741,39 @@ else listed = (inDir.listFiles() ?: [] as File[]).toList()
 def includePattern
 try { includePattern = ~/(?i)${INCLUDE_REGEX}/ }
 catch (Throwable t) { failRun("Invalid IFQ_INCLUDE_REGEX='" + INCLUDE_REGEX + "': " + t.message, t) }
-def files = listed.findAll { it.isFile() && (it.name ==~ FILE_GLOB) && (it.getAbsolutePath() ==~ includePattern) }
-                  .sort { it.getAbsolutePath() }
+def matchedFiles = listed.findAll {
+  it.isFile() && (it.name ==~ FILE_GLOB) && (it.getAbsolutePath() ==~ includePattern)
+}.sort { it.getAbsolutePath() }
+def deliberatelySkippedFiles = matchedFiles.findAll { it.name ==~ NON_ANALYTICAL_MAP_FILE }
+def files = matchedFiles.findAll { !(it.name ==~ NON_ANALYTICAL_MAP_FILE) }
 if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)
-IJ.log("Found " + files.size() + " image(s).")
+IJ.log("Found " + files.size() + " analytical image(s); deliberately skipped " +
+       deliberatelySkippedFiles.size() + " non-analysis acquisition(s).")
+deliberatelySkippedFiles.each { f ->
+  IJ.log("[IFQ_SKIP] " + f.name + " | non_analytical_map_acquisition")
+}
 if (files.isEmpty()) {
-  failRun("No images matched INPUT_DIR='" + INPUT_DIR +
-    "', IFQ_INCLUDE_REGEX='" + INCLUDE_REGEX + "', and the supported image extensions")
+  failRun("No analytical images matched INPUT_DIR='" + INPUT_DIR +
+    "', IFQ_INCLUDE_REGEX='" + INCLUDE_REGEX + "', and the supported image extensions. " +
+    deliberatelySkippedFiles.size() + " non-analysis map acquisition(s) were deliberately skipped.")
 }
 
 def masterSummary = []
 def manifest = [ run_timestamp: versions.timestamp, versions: versions, config: cfg,
                   input_dir: INPUT_DIR, output_dir: OUTPUT_DIR, recursive: RECURSIVE,
                   include_regex: INCLUDE_REGEX, max_images: MAX_IMAGES,
-                  status: "running", success_count: 0, failure_count: 0, images: [] ]
+                  matched_input_count: matchedFiles.size(),
+                  analytical_input_count: files.size(),
+                  status: "running", success_count: 0, skipped_count: deliberatelySkippedFiles.size(),
+                  failure_count: 0, output_failure_count: 0, images: [] ]
+deliberatelySkippedFiles.each { f ->
+  def relativePath = inDir.toPath().relativize(f.toPath()).toString()
+  manifest.images << [
+    file: f.name, relative_path: relativePath, output_key: null, panel: null,
+    status: "skipped", skip_reason: "non_analytical_map_acquisition",
+    message: "Microscope map/overview acquisition excluded before image analysis"
+  ]
+}
 
 def safeToken = { value ->
   def s = (value == null || value.toString().trim().isEmpty()) ? "NA" : value.toString().trim()
@@ -2171,7 +2783,8 @@ def safeToken = { value ->
 def usedOutputKeys = [] as Set
 def failures = []
 
-files.each { f ->
+files.eachWithIndex { f, fileIndex ->
+  IJ.log("[IFQ_PROGRESS] " + (fileIndex + 1) + "/" + files.size() + " " + f.name)
   def relativePath = inDir.toPath().relativize(f.toPath()).toString()
   def panelKey = PANEL
   def outputKey = null
@@ -2215,17 +2828,52 @@ files.each { f ->
 }
 
 // master summary + manifest
-manifest.status = failures.isEmpty() ? "complete" : (manifest.success_count > 0 ? "partial_failure" : "failed")
 writeCsv(masterSummary, OUTPUT_DIR + "/run_summary.csv")
+def finalQuantification = buildPerImagePositiveQuantification(masterSummary)
+def skippedInputs = manifest.images.findAll { it.status == "skipped" }.collect { record ->
+  [
+    file: record.file,
+    relative_path: record.relative_path,
+    status: record.status,
+    skip_reason: record.skip_reason,
+    message: record.message
+  ]
+}
+def workbookFailure = null
+try {
+  writeXlsxWorkbook([
+    [name: "Image Positive Counts", rows: finalQuantification],
+    [name: "Run Summary", rows: masterSummary],
+    [name: "Skipped Inputs", rows: skippedInputs]
+  ], OUTPUT_DIR + "/run_summary.xlsx")
+  manifest.summary_workbook = "run_summary.xlsx"
+  manifest.summary_workbook_status = "complete"
+  manifest.final_quantification_level = "image_region"
+  manifest.final_quantification_sheet = "Image Positive Counts"
+} catch (Throwable t) {
+  workbookFailure = t
+  manifest.output_failure_count = 1
+  manifest.summary_workbook = "run_summary.xlsx"
+  manifest.summary_workbook_status = "failed"
+  manifest.summary_workbook_error = t.getMessage()
+  IJ.log("ERROR writing run_summary.xlsx: " + t)
+}
+manifest.status = failures.isEmpty() && workbookFailure == null ?
+  "complete" : (manifest.success_count > 0 ? "partial_failure" : "failed")
 new File(OUTPUT_DIR, "run_manifest.json").setText(
   JsonOutput.prettyPrint(JsonOutput.toJson(manifest)), "UTF-8")
 
-IJ.log("DONE. Wrote run_summary.csv and run_manifest.json to " + OUTPUT_DIR +
-       " | success=" + manifest.success_count + " failure=" + manifest.failure_count)
+IJ.log("DONE. Wrote run_summary.csv, run_summary.xlsx, and run_manifest.json to " + OUTPUT_DIR +
+       " | success=" + manifest.success_count + " skipped=" + manifest.skipped_count +
+       " failure=" + manifest.failure_count)
 IJ.log("Reminder: aggregate run_summary.csv to MOUSE level before stats (n = mice, not sections).")
 if (!failures.isEmpty()) {
   failRun("Batch completed with " + failures.size() +
     " failed image(s): " + failures.join(", ") + ". See run_manifest.json and the Fiji log.")
+}
+if (workbookFailure != null) {
+  failRun("Image analysis completed, but run_summary.xlsx could not be written: " +
+    workbookFailure.getMessage() + ". See run_manifest.json and the Fiji log.", workbookFailure)
 }
 
 // ImageJ starts non-daemon UI/event threads even with --headless. Exit after
