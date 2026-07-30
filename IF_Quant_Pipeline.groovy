@@ -11,6 +11,8 @@
  *  Built-in panels. PANEL keys are single tokens so they survive filename
  *  parsing; select per image via samplesheet. New panels are loaded through
  *  IFQ_PANEL_CONFIG and may map any available acquisition channels:
+ *  LEFT : DAPI | KRT5-488 | AGER-555 | T1alpha-647  [priority project panel]
+ *  RIGHT: DAPI | Pro-SPC-488 | AGER-555 | KRT8-647 [priority project panel]
  *     A : DAPI | KRT5 | AGER      -> pod + AT1 boundary   (KRT5+/AGER-)   [Scheme1 x3]
  *     B : DAPI | KRT5 | Pro-SPC   -> regeneration readout (AT2)          [Scheme1 x2]
  *     C : DAPI | KRT5 | CD8       -> cytotoxic T infiltrate              [Scheme1 x1]
@@ -365,6 +367,37 @@ if (!Double.isFinite(DAPI_CONTRAST_SATURATION) ||
 // ============================================================================
 
 def PANELS = [
+  // Priority real-project panels. These are additional presets inside the
+  // universal engine; all registry markers, custom panels, and legacy panels
+  // remain available. Channel idx values are acquisition order.
+  "LEFT": [ label:"LEFT_KRT5_AGER_T1A",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI"],
+               [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
+                qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
+               [idx:3, marker:"AGER", role:"membrane", measurement:"thin_membrane_support",
+                expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
+                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d],
+               [idx:4, marker:"T1A", role:"membrane", measurement:"thin_membrane_support",
+                expectedCompartment:"alveolar", qcColor:"white", fileLabel:"T1alpha-647",
+                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d] ],
+    classify:[ ["AGER":true,"T1A":true],
+               ["KRT5":true,"AGER":false],
+               ["KRT5":true,"T1A":false],
+               ["KRT5":true,"AGER":false,"T1A":false] ] ],
+
+  "RIGHT": [ label:"RIGHT_ProSPC_AGER_KRT8",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI"],
+               [idx:2, marker:"ProSPC", role:"cyto", measurement:"perinuclear_granular_cytoplasm",
+                expectedCompartment:"alveolar", qcColor:"green", fileLabel:"Pro-SPC-488"],
+               [idx:3, marker:"AGER", role:"membrane", measurement:"thin_membrane_support",
+                expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
+                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d],
+               [idx:4, marker:"KRT8", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
+                expectedCompartment:"alveolar", qcColor:"white", fileLabel:"KRT8-647"] ],
+    classify:[ ["KRT8":true,"ProSPC":true],
+               ["KRT8":true,"AGER":true],
+               ["KRT8":true,"ProSPC":false,"AGER":false] ] ],
+
   "A": [ label:"A_KRT5_AGER",
     channels:[ [idx:1, marker:"DAPI",  role:"nuclear"],
                [idx:2, marker:"KRT5",  role:"cyto",     areaMarker:true],

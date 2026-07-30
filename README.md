@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`IFQuantLauncher-v1.4.1.exe`](IFQuantLauncher-v1.4.1.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,7 +25,7 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher-v1.4.1.exe`](IFQuantLauncher-v1.4.1.exe), then select:
+Run [`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
@@ -71,6 +71,25 @@ genotypes can be compared fairly.
 ---
 
 ## 2. Built-in panels and universal marker configuration
+
+### Priority real-project panels
+
+The universal marker registry and morphology-first cell-counting workflow remain
+active. These two presets only establish the most important project channel
+maps and do not disable other built-in or custom markers:
+
+| Preset | Acquisition channels | Primary tracked cell counts | Additional structural readouts |
+|---|---|---|---|
+| `LEFT` | C1 DAPI; C2 KRT5-488; C3 AGER-555; C4 T1alpha-647 | KRT5, AGER, T1A final-positive/negative/indeterminate cells | KRT5 pod area; AGER and T1A membrane-positive area |
+| `RIGHT` | C1 DAPI; C2 Pro-SPC-488; C3 AGER-555; C4 KRT8-647 | ProSPC, AGER, KRT8 final-positive/negative/indeterminate cells | AGER membrane-positive area |
+
+The marker identity and acquisition index are authoritative; displayed colors
+alone are not. `T1A` is the output label for T1alpha/podoplanin, and `ProSPC`
+is the output label for Pro-SPC/SFTPC. For every image and marker, use
+`<marker>_final_positive_cell_count` and
+`<marker>_final_positive_fraction_of_total_cells` as the primary exported
+tracking fields. Fixed control-derived thresholds are still required before a
+confirmatory cohort analysis.
 
 The table below preserves the original study panels. Choose a built-in panel
 through the samplesheet or `IFQ_PANEL`. The engine itself is not limited to a

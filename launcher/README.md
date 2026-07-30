@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.4.1.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.5.0.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 The build reads the assembly version and writes versioned artifacts directly
 to the repository root:
 
-- `IFQuantLauncher-v1.4.1.exe`
-- `IFQuantLauncher-v1.4.1.sha256.txt`
+- `IFQuantLauncher-v1.5.0.exe`
+- `IFQuantLauncher-v1.5.0.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -35,6 +35,8 @@ and Windows x64; no .NET SDK installation is required on the analysis system.
 3. Select an output parent folder.
 4. Select the staining panel that matches both the marker names and acquisition
    channel order. The description below the selector shows the expected order.
+   `LEFT` and `RIGHT` are the priority project presets; all universal, legacy,
+   and validated custom marker panels remain available.
 5. For a first pilot, set **Image limit** to `1`; otherwise `0` means all
    matching images. The recommended settings can normally remain unchanged.
 6. Click **Review and run analysis**, verify the plain-language run summary,

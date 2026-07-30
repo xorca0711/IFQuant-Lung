@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.4.1.0")]
-[assembly: AssemblyFileVersion("1.4.1.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 
 namespace IFQuantLauncher
 {
@@ -82,6 +82,8 @@ namespace IFQuantLauncher
         private static readonly Dictionary<string, string> PanelDescriptions =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
+                { "LEFT", "Priority project left panel: DAPI, KRT5-488, AGER-555, T1alpha-647 (channels 1-4). Per-marker final-positive counts remain primary; KRT5 pod area and AGER/T1alpha membrane areas are also exported." },
+                { "RIGHT", "Priority project right panel: DAPI, Pro-SPC-488, AGER-555, KRT8-647 (channels 1-4). Per-marker final-positive counts remain primary; co-expression classes are descriptive research endpoints." },
                 { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses uniquely nucleus-owned apical ciliary components. Strict positive evidence can be retained when context is unresolved; a negative still requires an airway ROI." },
                 { "R", "20x alveolar panel: DAPI, T1alpha/PDPN, tdTOM, mRAGE (channels 1-4). T1alpha and mRAGE negatives require an alveolar ROI; strict evidence in unresolved context is reported separately." },
                 { "M", "4x mapping panel: DAPI, CC10, tdTOM (channels 1-3)." },
@@ -234,6 +236,8 @@ namespace IFQuantLauncher
 
             panelBox = MakeCombo(
                 new string[] {
+                    "LEFT — priority: KRT5-488 + AGER-555 + T1alpha-647",
+                    "RIGHT — priority: Pro-SPC-488 + AGER-555 + KRT8-647",
                     "E — 20x CC10 + tdTOM + acetylated tubulin",
                     "R — 20x T1alpha + tdTOM + mRAGE",
                     "M — 4x CC10 + tdTOM mapping",
@@ -246,7 +250,7 @@ namespace IFQuantLauncher
                     "S2 — KRT5 + p63 + YAP",
                     "T — pilot test only"
                 },
-                "E — 20x CC10 + tdTOM + acetylated tubulin",
+                "LEFT — priority: KRT5-488 + AGER-555 + T1alpha-647",
                 true);
             segmenterBox = MakeCombo(
                 new string[] {
@@ -1432,7 +1436,7 @@ namespace IFQuantLauncher
                 fijiBox.Text = GetValue(values, "fiji", fijiBox.Text);
                 outputBaseBox.Text = GetValue(values, "output", outputBaseBox.Text);
                 runNameBox.Text = GetValue(values, "run_name", runNameBox.Text);
-                SelectChoice(panelBox, GetValue(values, "panel", "E"));
+                SelectChoice(panelBox, GetValue(values, "panel", "LEFT"));
                 SelectChoice(segmenterBox, GetValue(values, "segmenter", "classic"));
                 SelectChoice(projectionBox, GetValue(values, "projection", "max"));
                 SetNumeric(singlePlaneBox, GetValue(values, "single_plane", "-1"));
@@ -1547,6 +1551,9 @@ namespace IFQuantLauncher
                 if (pipelineText.IndexOf("non_analytical_map_acquisition", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("run_summary.xlsx", StringComparison.Ordinal) < 0)
                     return 17;
+                if (pipelineText.IndexOf("LEFT_KRT5_AGER_T1A", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("RIGHT_ProSPC_AGER_KRT8", StringComparison.Ordinal) < 0)
+                    return 18;
                 if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
                     return 12;
                 JavaScriptSerializer json = new JavaScriptSerializer();

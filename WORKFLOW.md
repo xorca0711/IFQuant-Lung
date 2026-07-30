@@ -34,6 +34,36 @@ comparing experimental groups.
 - [`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](docs/PILOT_G002_MORPHOLOGY_RESULTS.md):
   validated one-image pilots.
 
+## Priority real-project antibody panels
+
+The pipeline remains universal: registry markers, legacy panels, study-owned
+custom panels, morphology-first decisions, and per-image cell counts all remain
+available. The following two channel maps are the priority presets for the real
+project:
+
+| Preset | C1 | C2 | C3 | C4 |
+|---|---|---|---|---|
+| `LEFT` | DAPI | KRT5-488 | AGER-555 | T1alpha-647 |
+| `RIGHT` | DAPI | Pro-SPC-488 | AGER-555 | KRT8-647 |
+
+Primary tracking is per image and per marker: total included DAPI cells,
+final-positive cells, final-negative cells, indeterminate cells, and
+final-positive fraction of total included cells. KRT5 also retains pod-area
+quantification; AGER and T1alpha retain membrane-positive-area quantification.
+Co-expression classes are secondary descriptive endpoints and do not replace
+the individual marker counts.
+
+Marker-specific support remains unchanged:
+
+- KRT5 and KRT8: connected perinuclear cytoplasmic keratin support;
+- Pro-SPC: connected granular perinuclear cytoplasmic support;
+- AGER and T1alpha: connected thin-membrane support in an alveolar context;
+- DAPI: nuclear segmentation and the denominator for included cells.
+
+The same three-state decision hierarchy applies to both presets. In particular,
+an alveolar-marker negative requires a compatible independently declared
+alveolar context; unresolved anatomy is not silently counted as negative.
+
 ## Universal marker-selection hierarchy
 
 Before analyzing a new marker set, freeze these layers in order:
@@ -337,7 +367,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`IFQuantLauncher-v1.4.1.exe`](IFQuantLauncher-v1.4.1.exe). It exposes the
+[`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.
