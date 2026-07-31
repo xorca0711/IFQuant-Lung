@@ -157,6 +157,11 @@ def PANEL       = envOr("IFQ_PANEL", "T")
 // keeps biological identity, analytical geometry, and image layout independent.
 def MARKER_REGISTRY_PATH = envOr("IFQ_MARKER_REGISTRY", new File("config/lung_marker_registry.json").getAbsolutePath())
 def PANEL_CONFIG_PATH = envOr("IFQ_PANEL_CONFIG", "")
+// Optional launcher-generated two-column CSV: relative_path,panel. This allows
+// one batch to route each image to a different validated panel/channel map.
+// It changes panel allocation only; biological metadata still comes from the
+// study samplesheet or filename parser.
+def PANEL_MAP_PATH = envOr("IFQ_PANEL_MAP_PATH", "").trim()
 def FILE_GLOB   = ~/(?i).*\.(czi|lif|nd2|oir|oib|oif|ics|tif|tiff)$/
 // Microscope navigation maps such as Map_A01.oir are acquisition metadata/
 // overview files, not analytical fields. They are retained in the manifest as
@@ -478,6 +483,27 @@ def PANELS = [
                [idx:4, marker:"MUC5AC", role:"regional_area", measurement:"secreted_mucin_positive_area",
                 zPolicy:"apical_slab", expectedCompartment:"airway", qcColor:"white", fileLabel:"MUC5AC-647",
                 cellCall:false, areaMarker:true, areaMode:"generic", areaMinAreaUm2:8.0d, areaBlurSigmaPx:0.7d] ],
+    classify:[ ["tdTOM":true], ["KRT5":true,"tdTOM":true] ] ],
+
+  // Olympus 4x navigation/mapping fields contain only the first three
+  // acquisition channels even when the folder name retains the omitted 647
+  // marker. These explicit subsets prevent a missing C4 from being treated as
+  // an image failure and prevent the absent marker from receiving a false
+  // negative call.
+  "ALI1_MAP": [ label:"ALI1_MAP_SCGB3A2_tdTOM",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", zPolicy:"full_stack", qcColor:"blue"],
+               [idx:2, marker:"SCGB3A2", role:"cyto", measurement:"perinuclear_secretory_cytoplasm",
+                zPolicy:"cell_body_slab", expectedCompartment:"airway", qcColor:"green", fileLabel:"SCGB3A2-488"],
+               [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
+                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d] ],
+    classify:[ ["tdTOM":true], ["SCGB3A2":true,"tdTOM":true] ] ],
+
+  "ALI23_MAP": [ label:"ALI23_MAP_KRT5_tdTOM",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", zPolicy:"full_stack", qcColor:"blue"],
+               [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
+                zPolicy:"cell_body_slab", qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
+               [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
+                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d] ],
     classify:[ ["tdTOM":true], ["KRT5":true,"tdTOM":true] ] ],
 
   "A": [ label:"A_KRT5_AGER",
@@ -3187,6 +3213,46 @@ def loadSamplesheet(String dir) {
   return [byFilename:byFilename, byRelative:byRelative, ambiguousFilenames:ambiguousFilenames]
 }
 
+def loadPanelMap(String path) {
+  if (path == null || path.trim().isEmpty()) return null
+  def f = new File(path)
+  if (!f.isFile()) {
+    throw new IllegalArgumentException("IFQ_PANEL_MAP_PATH is not a file: " + path)
+  }
+  def lines = f.readLines("UTF-8")
+  if (lines.isEmpty()) {
+    throw new IllegalArgumentException("Panel map is empty: " + path)
+  }
+  def header = parseCsvLine(lines[0]).collect { it.trim() }
+  if (!header.isEmpty()) header[0] = header[0].replace("\uFEFF", "")
+  int relativeIdx = header.indexOf("relative_path")
+  int panelIdx = header.indexOf("panel")
+  if (relativeIdx < 0 || panelIdx < 0) {
+    throw new IllegalArgumentException(
+      "Panel map needs relative_path and panel columns: " + path)
+  }
+  def byRelative = [:]
+  lines.drop(1).eachWithIndex { ln, lineIndex ->
+    if (ln.trim().isEmpty() || ln.trim().startsWith("#")) return
+    def values = parseCsvLine(ln)
+    String relative = relativeIdx < values.size() ?
+      values[relativeIdx].trim().replace('\\', '/') : ""
+    String panel = panelIdx < values.size() ? values[panelIdx].trim() : ""
+    if (relative.isEmpty() || panel.isEmpty()) {
+      throw new IllegalArgumentException(
+        "Panel map line " + (lineIndex + 2) + " needs non-empty relative_path and panel")
+    }
+    if (byRelative.containsKey(relative)) {
+      throw new IllegalArgumentException("Panel map repeats relative_path '" + relative + "'")
+    }
+    byRelative[relative] = panel
+  }
+  if (byRelative.isEmpty()) {
+    throw new IllegalArgumentException("Panel map contains no image assignments: " + path)
+  }
+  return [source:f, byRelative:byRelative]
+}
+
 // ============================================================================
 //  8. MAIN
 // ============================================================================
@@ -3231,6 +3297,7 @@ def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles:
            markerRegistryPath: markerRegistryFile.isFile() ? markerRegistryFile.getAbsolutePath() : "unavailable",
            markerRegistrySchema: MARKER_REGISTRY.schema_version ?: "unavailable",
            panelConfigPath: PANEL_CONFIG_PATH ?: "built_in_only", customPanelKeys: CUSTOM_PANEL_KEYS,
+           panelMapMode: PANEL_MAP_PATH ? "per_image_relative_path" : "single_panel_or_samplesheet",
            minRingPosFraction: MIN_RING_POS_FRACTION, compartmentMode: COMPARTMENT_MODE,
            wholeFieldCompartment: WHOLE_FIELD_COMPARTMENT,
            actubSupportExpandUm: ACTUB_SUPPORT_EXPAND_UM,
@@ -3254,6 +3321,9 @@ if (!inDir.isDirectory()) {
 def sheet
 try { sheet = USE_SAMPLESHEET ? loadSamplesheet(INPUT_DIR) : null }
 catch (Throwable t) { failRun("Cannot load samplesheet.csv: " + t.message, t) }
+def panelMap
+try { panelMap = loadPanelMap(PANEL_MAP_PATH) }
+catch (Throwable t) { failRun("Cannot load per-image panel map: " + t.message, t) }
 
 def listed = []
 if (RECURSIVE) inDir.eachFileRecurse { f -> if (f.isFile()) listed << f }
@@ -3278,11 +3348,36 @@ if (files.isEmpty()) {
     "', IFQ_INCLUDE_REGEX='" + INCLUDE_REGEX + "', and the supported image extensions. " +
     deliberatelySkippedFiles.size() + " non-analysis map acquisition(s) were deliberately skipped.")
 }
+if (panelMap != null) {
+  def missingAssignments = files.findAll { f ->
+    String relative = inDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+    !panelMap.byRelative.containsKey(relative)
+  }
+  if (!missingAssignments.isEmpty()) {
+    failRun("Per-image AUTO panel map is missing " + missingAssignments.size() +
+      " processed image(s), including: " +
+      missingAssignments.take(3).collect { it.name }.join(", "))
+  }
+  def unknownPanelAssignments = panelMap.byRelative.findAll { relative, panel ->
+    !PANELS.containsKey(panel)
+  }
+  if (!unknownPanelAssignments.isEmpty()) {
+    failRun("Per-image AUTO panel map requests unknown panel(s): " +
+      unknownPanelAssignments.values().unique().sort() +
+      ". Available panels: " + PANELS.keySet().sort())
+  }
+  if (!DISPLAY_PREVIEW_ONLY) {
+    new File(OUTPUT_DIR, "auto_panel_assignments.csv").bytes = panelMap.source.bytes
+  }
+}
 
 def masterSummary = []
 def manifest = [ run_timestamp: versions.timestamp, versions: versions, config: cfg,
                   input_dir: INPUT_DIR, output_dir: OUTPUT_DIR, recursive: RECURSIVE,
                   include_regex: INCLUDE_REGEX, max_images: MAX_IMAGES,
+                  per_image_panel_routing: panelMap != null,
+                  panel_map_record: panelMap != null && !DISPLAY_PREVIEW_ONLY ?
+                    "auto_panel_assignments.csv" : null,
                   matched_input_count: matchedFiles.size(),
                   analytical_input_count: files.size(),
                   status: "running", success_count: 0, skipped_count: deliberatelySkippedFiles.size(),
@@ -3311,7 +3406,10 @@ files.eachWithIndex { f, fileIndex ->
   def outputKey = null
   try {
     def m = parseMeta(f.name, sheet, PANEL, f.parentFile.absolutePath, relativePath)
-    String requestedPanel = m.panel == null ? "" : m.panel.toString().trim()
+    String normalizedRelativePath = relativePath.replace('\\', '/')
+    String requestedPanel = panelMap != null ?
+      panelMap.byRelative[normalizedRelativePath].toString().trim() :
+      (m.panel == null ? "" : m.panel.toString().trim())
     panelKey = (requestedPanel.isEmpty() || requestedPanel == "NA") ? PANEL : requestedPanel
     if (!PANELS.containsKey(panelKey)) {
       throw new IllegalArgumentException("Image '" + f.name + "' requests unknown panel '" + panelKey +

@@ -6,7 +6,7 @@ filename,mouse_id,section_id,genotype,condition,panel,relative_path
 #   section_id : technical section id within a mouse (s1, s2, ...)
 #   genotype   : WT | Het | KO      (IFN-gamma allele status)
 #   condition  : PR8 | naive        (infection state; add timepoint if needed e.g. PR8_d21)
-#   panel      : LEFT | RIGHT are the priority project panels; all legacy/custom keys remain available
+#   panel      : per-image panel key; mixed built-in/custom panels may share one batch when every row uses a validated channel map
 #   relative_path: optional path below INPUT_DIR; required to distinguish duplicate filenames in recursive runs
 m01_PR8_A_s1.czi,m01,s1,KO,PR8,A,
 m01_PR8_A_s2.czi,m01,s2,KO,PR8,A

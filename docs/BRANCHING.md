@@ -4,7 +4,7 @@
 
 - `main`: current universal morphology-first pipeline, additive layer-aware
   Z-stack implementation, visualization-only intensity enhancement, ALI
-  presets, and released launcher v1.6.2.
+  presets, and released launcher v1.7.0.
 - `codex/z-stack-analysis`: retained integration branch for the v1.6
   Z-stack/display release. It has been promoted to `main`; new production work
   should start from `main`.
@@ -40,6 +40,8 @@ The following checks were completed before promoting
    detection for ALI1, ALI2, and ALI3 and rejected their mixed parent folder.
    Launcher v1.6.2 added the independently validated five-image,
    enhanced-PNG-only preview route without changing the full-analysis path.
+   Launcher v1.7.0 adds strict per-image routing for mixed built-in panels and
+   validated three-channel ALI mapping subsets.
 
 Automatic Z ranges remain pilot settings. A confirmatory study must still
 freeze explicit ranges, intensity thresholds, and morphology gates after

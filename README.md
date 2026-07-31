@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`IFQuantLauncher-v1.6.2.exe`](IFQuantLauncher-v1.6.2.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.7.0.exe`](IFQuantLauncher-v1.7.0.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,7 +25,7 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher-v1.6.2.exe`](IFQuantLauncher-v1.6.2.exe), then select:
+Run [`IFQuantLauncher-v1.7.0.exe`](IFQuantLauncher-v1.7.0.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
@@ -34,13 +34,20 @@ Run [`IFQuantLauncher-v1.6.2.exe`](IFQuantLauncher-v1.6.2.exe), then select:
    or a manual/custom panel when they are not.
 
 AUTO is fail-safe rather than permissive: it recognizes a marker-name
-combination from each matching file/folder path, requires every analytical
-image to resolve to the same built-in panel, and then applies that panel's
-fixed acquisition channel order. It does **not** infer stain identity from
-fluorescence color, intensity, or image content. Unknown or mixed-panel folders
-require a manual choice or a narrower filename filter; a nonstandard channel
-order requires a validated custom panel. The pre-run confirmation always shows
-the resolved marker/channel order.
+combination independently for every matching file/folder path and applies that
+built-in panel's fixed acquisition channel order. Multiple recognized panels
+and validated marker subsets can therefore share one run. An existing
+`samplesheet.csv` panel assignment has priority. AUTO does **not** infer stain
+identity from fluorescence color, intensity, or image content. Any unknown
+image stops the batch before Fiji starts; a nonstandard channel order requires
+a validated custom panel. The pre-run confirmation lists every allocated panel
+and image count.
+
+Full AUTO analyses retain `auto_panel_assignments.csv` inside the result folder
+as the per-image allocation audit. Each image is
+processed only with markers present in its allocated panel, so an omitted
+channel is not converted into a negative call. Preview mode uses the same
+routing but remains PNG-only.
 
 Use **Preview enhanced images (first 5)** beside **Review and run analysis** to
 check panel labels, Z routing, and display scaling before quantification. This
@@ -102,6 +109,8 @@ maps and do not disable other built-in or custom markers:
 | `ALI1` | C1 DAPI; C2 SCGB3A2-488; C3 tdTOM; C4 p63-647 | SCGB3A2, tdTOM and p63 calls using cell-body/nuclear Z policies | tdTOM reporter area; transitional SCGB3A2⁺/p63⁺ class |
 | `ALI2` | C1 DAPI; C2 KRT5-488; C3 tdTOM; C4 AcTub-647 | KRT5, tdTOM and secondary AcTub-associated cell calls | KRT5 area, tdTOM reporter area and primary apical ciliary area/components |
 | `ALI3` | C1 DAPI; C2 KRT5-488; C3 tdTOM; C4 MUC5AC-647 | KRT5 and tdTOM cell calls | KRT5 area, tdTOM reporter area and primary apical MUC5AC area/components |
+| `ALI1_MAP` | C1 DAPI; C2 SCGB3A2-488; C3 tdTOM | Three-channel 4× mapping subset; p63 is absent and receives no call | tdTOM reporter area |
+| `ALI23_MAP` | C1 DAPI; C2 KRT5-488; C3 tdTOM | Three-channel 4× mapping subset; AcTub/MUC5AC is absent and receives no call | KRT5 and tdTOM reporter area |
 
 The marker identity and acquisition index are authoritative; displayed colors
 alone are not. `T1A` is the output label for T1alpha/podoplanin, and `ProSPC`
@@ -366,6 +375,7 @@ groups are compared; the example values above are not validated cutoffs.
 
 | Parameter | Meaning |
 |---|---|
+| `IFQ_PANEL_MAP_PATH` | optional `relative_path,panel` CSV for strict per-image panel routing; generated automatically by launcher AUTO and copied into full results |
 | `IFQ_SEGMENTER` | `"stardist"` (preferred) or `"classic"` watershed |
 | `STARDIST_PROB` / `STARDIST_NMS` | detection probability / overlap thresholds |
 | `IFQ_PROJECTION` | `"max"` CLI default, `"layer_aware"` marker-specific slabs, `"sum"`, `"avg"`, or `"single"` |

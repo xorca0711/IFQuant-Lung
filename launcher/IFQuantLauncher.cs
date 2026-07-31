@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.6.2.0")]
-[assembly: AssemblyFileVersion("1.6.2.0")]
+[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyFileVersion("1.7.0.0")]
 
 namespace IFQuantLauncher
 {
@@ -89,6 +89,8 @@ namespace IFQuantLauncher
                 { "ALI1", "20x ALI Z-stack: DAPI, SCGB3A2-488, tdTOM, p63-647 (channels 1-4). SCGB3A2/tdTOM use the cell-body slab; p63 uses the nuclear range." },
                 { "ALI2", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, acetylated-tubulin-647 (channels 1-4). AcTub uses the independent apical slab and regional ciliary area remains primary." },
                 { "ALI3", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, MUC5AC-647 (channels 1-4). MUC5AC uses apical area/cluster analysis and is not forced into a per-cell call." },
+                { "ALI1_MAP", "4x ALI mapping subset: DAPI, SCGB3A2-488, tdTOM (channels 1-3). The named p63 channel is absent from the mapping acquisition and is not analyzed." },
+                { "ALI23_MAP", "4x ALI mapping subset: DAPI, KRT5-488, tdTOM (channels 1-3). The named AcTub/MUC5AC channel is absent from the mapping acquisition and is not analyzed." },
                 { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses uniquely nucleus-owned apical ciliary components. Strict positive evidence can be retained when context is unresolved; a negative still requires an airway ROI." },
                 { "R", "20x alveolar panel: DAPI, T1alpha/PDPN, tdTOM, mRAGE (channels 1-4). T1alpha and mRAGE negatives require an alveolar ROI; strict evidence in unresolved context is reported separately." },
                 { "M", "4x mapping panel: DAPI, CC10, tdTOM (channels 1-3)." },
@@ -106,7 +108,7 @@ namespace IFQuantLauncher
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "IFQ_INPUT_DIR", "IFQ_OUTPUT_DIR", "IFQ_PANEL",
-                "IFQ_MARKER_REGISTRY", "IFQ_PANEL_CONFIG",
+                "IFQ_MARKER_REGISTRY", "IFQ_PANEL_CONFIG", "IFQ_PANEL_MAP_PATH",
                 "IFQ_RECURSIVE", "IFQ_INCLUDE_REGEX", "IFQ_MAX_IMAGES",
                 "IFQ_SEGMENTER", "IFQ_PROJECTION", "IFQ_SINGLE_PLANE",
                 "IFQ_EXPORT_DISPLAY_CHANNELS", "IFQ_DISPLAY_PREVIEW_ONLY",
@@ -255,6 +257,8 @@ namespace IFQuantLauncher
                     "ALI1",
                     "ALI2",
                     "ALI3",
+                    "ALI1_MAP — 4x DAPI + SCGB3A2 + tdTOM subset",
+                    "ALI23_MAP — 4x DAPI + KRT5 + tdTOM subset",
                     "E — 20x CC10 + tdTOM + acetylated tubulin",
                     "R — 20x T1alpha + tdTOM + mRAGE",
                     "M — 4x CC10 + tdTOM mapping",
@@ -347,7 +351,7 @@ namespace IFQuantLauncher
 
             panelBox.SelectedIndexChanged += delegate { UpdatePanelHelp(); };
             panelBox.TextChanged += delegate { UpdatePanelHelp(); };
-            toolTips.SetToolTip(panelBox, "AUTO infers one built-in panel from marker names in matching file/folder paths, then applies that preset's fixed acquisition channel order. It does not identify stains from image colors or intensities. Mixed or ambiguous folders stop for manual review.");
+            toolTips.SetToolTip(panelBox, "AUTO assigns each matching image independently from marker names in its file/folder path, then applies that built-in panel's fixed acquisition channel order. Multiple recognized panels may share one run. Unknown images stop for manual review; stains are not inferred from colors or intensity.");
             toolTips.SetToolTip(segmenterBox, "Classic is the safest first choice. Choose StarDist only when that Fiji installation has the plugin and model.");
             toolTips.SetToolTip(projectionBox, "Layer-aware mode keeps DAPI across the stack, selects a DAPI-guided cell-body slab, and selects a marker-guided apical slab. Review the saved Z profile and freeze explicit ranges before confirmatory analysis.");
             toolTips.SetToolTip(singlePlaneBox, "Used only when Z-stack handling is single. -1 asks the pipeline to use the middle plane.");
@@ -605,7 +609,7 @@ namespace IFQuantLauncher
             if (string.Equals(key, "AUTO", StringComparison.OrdinalIgnoreCase))
                 description =
                     "Automatic mode scans matching analytical image paths for marker names. " +
-                    "It proceeds only when every image resolves to one built-in panel; ambiguous or mixed folders are rejected.";
+                    "Each recognized image receives its own built-in panel/channel map, so multiple panels and marker subsets may share one run. Unknown images are rejected.";
             else if (!PanelDescriptions.TryGetValue(key, out description))
                 description = "Custom panel key. Select a validated custom panel file under Advanced study options.";
             panelHelpLabel.Text =
@@ -630,9 +634,16 @@ namespace IFQuantLauncher
             bool muc5ac = text.Contains("MUC5AC") || text.Contains("MU5AC");
             bool cc10 = text.Contains("CC10") || text.Contains("SCGB1A1");
             bool p63 = text.Contains("P63") || text.Contains("TP63");
+            bool mapping4x = text.Contains("4X") && text.Contains("MAPPING");
 
             // Resolve the most specific four-channel panels before the shorter
             // universal marker combinations.
+            // Olympus 4x map acquisitions contain only DAPI, the 488 marker,
+            // and tdTOM even when their folder names retain the omitted 647
+            // marker. Route these validated three-channel subsets first.
+            if (mapping4x && cc10 && tdtom) return "M";
+            if (mapping4x && text.Contains("SCGB3A2") && tdtom) return "ALI1_MAP";
+            if (mapping4x && krt5 && tdtom) return "ALI23_MAP";
             if (krt5 && ager && t1a) return "LEFT";
             if (prospc && ager && krt8) return "RIGHT";
             if (text.Contains("SCGB3A2") && tdtom && p63) return "ALI1";
@@ -642,7 +653,6 @@ namespace IFQuantLauncher
             if (krt5 && tdtom && actub) return "ALI2";
             if (krt5 && tdtom && muc5ac) return "ALI3";
             if (t1a && tdtom && text.Contains("MRAGE")) return "R";
-            if (cc10 && tdtom && (text.Contains("4X") || text.Contains("MAPPING"))) return "M";
             if (krt5 && p63 && text.Contains("YAP")) return "S2";
             if (krt5 && text.Contains("SOX2")) return "S";
             if (krt5 && text.Contains("CD8")) return "C";
@@ -653,11 +663,40 @@ namespace IFQuantLauncher
             return null;
         }
 
-        private static string DetectBuiltInPanel(
+        private static string InferBuiltInPanelFromPath(
+            string inputDirectory,
+            string imagePath)
+        {
+            string context = Path.GetFileName(imagePath);
+            string panel = InferBuiltInPanelFromText(context);
+            if (panel != null)
+                return panel;
+
+            string root = Path.GetFullPath(inputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            DirectoryInfo directory = new FileInfo(imagePath).Directory;
+            while (directory != null &&
+                   directory.FullName.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            {
+                context = directory.Name + " " + context;
+                panel = InferBuiltInPanelFromText(context);
+                if (panel != null)
+                    return panel;
+                if (string.Equals(
+                        directory.FullName.TrimEnd(
+                            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                        root,
+                        StringComparison.OrdinalIgnoreCase))
+                    break;
+                directory = directory.Parent;
+            }
+            return null;
+        }
+
+        internal static PanelDetectionResult DetectBuiltInPanels(
             string inputDirectory,
             string includeRegex,
-            bool recursive,
-            out int analyticalImageCount)
+            bool recursive)
         {
             Regex includePattern = new Regex(
                 "^(?:" + includeRegex + ")$",
@@ -685,30 +724,54 @@ namespace IFQuantLauncher
                     "Automatic panel detection could not scan the input folder:\r\n" + ex.Message);
             }
 
-            analyticalImageCount = analyticalFiles.Count;
             if (analyticalFiles.Count == 0)
                 throw new InvalidOperationException(
                     "Automatic panel detection found no matching analytical image files. " +
                     "Check the filename filter and subfolder option, or select the panel manually.");
 
-            Dictionary<string, List<string>> detected =
-                new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            PanelDetectionResult result = new PanelDetectionResult();
+            result.AnalyticalImageCount = analyticalFiles.Count;
             List<string> unknown = new List<string>();
+            SamplesheetPanelAssignments samplesheet =
+                LoadSamplesheetPanels(inputDirectory);
+            string fullRoot = Path.GetFullPath(inputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
             foreach (string path in analyticalFiles)
             {
-                string panel = InferBuiltInPanelFromText(path);
+                string fullPath = Path.GetFullPath(path);
+                if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(
+                        "Automatic panel detection found a path outside the selected input folder: " + fullPath);
+                string relative = fullPath.Substring(fullRoot.Length).Replace('\\', '/');
+                string panel;
+                if (!samplesheet.ByRelativePath.TryGetValue(relative, out panel) &&
+                    !samplesheet.ByFilename.TryGetValue(Path.GetFileName(path), out panel))
+                {
+                    panel = InferBuiltInPanelFromPath(inputDirectory, path);
+                }
                 if (panel == null)
                 {
                     unknown.Add(path);
                     continue;
                 }
-                List<string> members;
-                if (!detected.TryGetValue(panel, out members))
+                string canonicalPanel = PanelDescriptions.Keys.FirstOrDefault(
+                    delegate(string key)
+                    {
+                        return string.Equals(key, panel, StringComparison.OrdinalIgnoreCase);
+                    });
+                if (canonicalPanel == null)
                 {
-                    members = new List<string>();
-                    detected[panel] = members;
+                    throw new InvalidOperationException(
+                        "AUTO found panel '" + panel + "' for " + relative +
+                        ", but that panel is not built in. Select a validated custom panel " +
+                        "or use its samplesheet outside AUTO mode.");
                 }
-                members.Add(path);
+                panel = canonicalPanel;
+                result.PanelByRelativePath[relative] = panel;
+                int count;
+                result.PanelCounts.TryGetValue(panel, out count);
+                result.PanelCounts[panel] = count + 1;
             }
 
             if (unknown.Count > 0)
@@ -722,20 +785,176 @@ namespace IFQuantLauncher
                     "\r\n\r\nChoose the panel manually or narrow the filename filter. " +
                     "No image was assigned by color alone.");
             }
-            if (detected.Count != 1)
+            result.FallbackPanel = result.PanelCounts
+                .OrderByDescending(delegate(KeyValuePair<string, int> pair) { return pair.Value; })
+                .ThenBy(delegate(KeyValuePair<string, int> pair) { return pair.Key; },
+                        StringComparer.OrdinalIgnoreCase)
+                .First().Key;
+            return result;
+        }
+
+        private static SamplesheetPanelAssignments LoadSamplesheetPanels(
+            string inputDirectory)
+        {
+            SamplesheetPanelAssignments assignments =
+                new SamplesheetPanelAssignments();
+            string path = Path.Combine(inputDirectory, "samplesheet.csv");
+            if (!File.Exists(path))
+                return assignments;
+
+            string[] lines = File.ReadAllLines(path, Encoding.UTF8);
+            if (lines.Length == 0)
+                return assignments;
+            List<string> header = ParseCsvLine(lines[0]);
+            if (header.Count > 0)
+                header[0] = header[0].TrimStart('\uFEFF');
+            int filenameIndex = header.FindIndex(
+                delegate(string value)
+                {
+                    return string.Equals(value.Trim(), "filename",
+                                         StringComparison.OrdinalIgnoreCase);
+                });
+            int relativeIndex = header.FindIndex(
+                delegate(string value)
+                {
+                    return string.Equals(value.Trim(), "relative_path",
+                                         StringComparison.OrdinalIgnoreCase);
+                });
+            int panelIndex = header.FindIndex(
+                delegate(string value)
+                {
+                    return string.Equals(value.Trim(), "panel",
+                                         StringComparison.OrdinalIgnoreCase);
+                });
+            if (panelIndex < 0 || (filenameIndex < 0 && relativeIndex < 0))
+                return assignments;
+
+            HashSet<string> duplicateFilenames =
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int lineIndex = 1; lineIndex < lines.Length; lineIndex++)
             {
-                string groups = string.Join(
-                    ", ",
-                    detected.OrderBy(delegate(KeyValuePair<string, List<string>> pair) { return pair.Key; })
-                            .Select(delegate(KeyValuePair<string, List<string>> pair)
-                            {
-                                return pair.Key + "=" + pair.Value.Count;
-                            }));
-                throw new InvalidOperationException(
-                    "Automatic panel detection found a mixed-panel input folder (" + groups + "). " +
-                    "Analyze one panel at a time or use a filename filter. No panel was selected.");
+                string line = lines[lineIndex].Trim();
+                if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
+                    continue;
+                List<string> values = ParseCsvLine(lines[lineIndex]);
+                string panel = panelIndex < values.Count ? values[panelIndex].Trim() : "";
+                if (panel.Length == 0 ||
+                    string.Equals(panel, "NA", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string relative = relativeIndex >= 0 && relativeIndex < values.Count
+                    ? values[relativeIndex].Trim().Replace('\\', '/')
+                    : "";
+                if (relative.Length > 0 &&
+                    !string.Equals(relative, "NA", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (assignments.ByRelativePath.ContainsKey(relative))
+                        throw new InvalidOperationException(
+                            "samplesheet.csv repeats relative_path '" + relative + "'.");
+                    assignments.ByRelativePath[relative] = panel;
+                }
+
+                string filename = filenameIndex >= 0 && filenameIndex < values.Count
+                    ? values[filenameIndex].Trim()
+                    : "";
+                if (filename.Length == 0 ||
+                    string.Equals(filename, "NA", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (assignments.ByFilename.ContainsKey(filename))
+                {
+                    assignments.ByFilename.Remove(filename);
+                    duplicateFilenames.Add(filename);
+                }
+                else if (!duplicateFilenames.Contains(filename))
+                {
+                    assignments.ByFilename[filename] = panel;
+                }
             }
-            return detected.Keys.First();
+            return assignments;
+        }
+
+        private static List<string> ParseCsvLine(string line)
+        {
+            List<string> values = new List<string>();
+            StringBuilder field = new StringBuilder();
+            bool quoted = false;
+            for (int index = 0; index < (line ?? "").Length; index++)
+            {
+                char value = line[index];
+                if (value == '"')
+                {
+                    if (quoted && index + 1 < line.Length && line[index + 1] == '"')
+                    {
+                        field.Append('"');
+                        index++;
+                    }
+                    else
+                    {
+                        quoted = !quoted;
+                    }
+                }
+                else if (value == ',' && !quoted)
+                {
+                    values.Add(field.ToString());
+                    field.Length = 0;
+                }
+                else
+                {
+                    field.Append(value);
+                }
+            }
+            if (quoted)
+                throw new InvalidOperationException("Unclosed quoted field in samplesheet.csv.");
+            values.Add(field.ToString());
+            return values;
+        }
+
+        internal static string WriteAutoPanelMap(
+            PanelDetectionResult detection,
+            string runtimeDirectory)
+        {
+            string directory = Path.Combine(runtimeDirectory, "auto_panel_maps");
+            Directory.CreateDirectory(directory);
+            string path = Path.Combine(
+                directory,
+                "panel_map_" + Guid.NewGuid().ToString("N") + ".csv");
+            StringBuilder csv = new StringBuilder();
+            csv.AppendLine("relative_path,panel");
+            foreach (KeyValuePair<string, string> assignment in
+                     detection.PanelByRelativePath.OrderBy(
+                         delegate(KeyValuePair<string, string> pair) { return pair.Key; },
+                         StringComparer.OrdinalIgnoreCase))
+            {
+                csv.Append(EscapeCsv(assignment.Key))
+                   .Append(',')
+                   .Append(EscapeCsv(assignment.Value))
+                   .AppendLine();
+            }
+            File.WriteAllText(path, csv.ToString(), new UTF8Encoding(false));
+            return path;
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            string text = value ?? "";
+            if (text.IndexOfAny(new char[] { ',', '"', '\r', '\n' }) >= 0)
+                return "\"" + text.Replace("\"", "\"\"") + "\"";
+            return text;
+        }
+
+        private static void DeleteTemporaryPanelMap(RunConfiguration config)
+        {
+            if (config == null || string.IsNullOrWhiteSpace(config.AutoPanelMapPath))
+                return;
+            try
+            {
+                if (File.Exists(config.AutoPanelMapPath))
+                    File.Delete(config.AutoPanelMapPath);
+            }
+            catch
+            {
+                // The generated map contains paths and panel keys only. A stale
+                // cache file must never change the completed analysis status.
+            }
         }
 
         private void UpdateAdvancedVisibility()
@@ -758,8 +977,8 @@ namespace IFQuantLauncher
                 "2. Fiji: choose the Fiji folder or executable. The launcher automatically selects ARM64 or x64.\r\n\r\n" +
                 "3. Output parent folder: choose where a new timestamped result folder should be created.\r\n\r\n" +
                 "4. Staining panel: leave AUTO selected when marker names are present in the image or folder names. " +
-                "AUTO stops rather than guessing when files are ambiguous or contain mixed panels. " +
-                "AUTO selects a preset and its fixed acquisition channel order; it does not discover marker identity from fluorescence colors. " +
+                "AUTO allocates every recognized image independently, so different built-in panels and marker subsets may share one batch. " +
+                "Unknown images stop rather than being guessed. Each allocation uses a preset's fixed acquisition channel order; AUTO does not discover marker identity from fluorescence colors. " +
                 "Use a manual/custom choice when naming is insufficient or channel order differs.\r\n\r\n" +
                 "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
                 "6. Click Preview enhanced images (first 5) to inspect display-only PNGs before analysis. " +
@@ -898,7 +1117,17 @@ namespace IFQuantLauncher
             AppendLog("Input:  " + config.InputDirectory);
             AppendLog("Output: " + config.OutputDirectory);
             AppendLog("Fiji:   " + config.FijiExecutable);
-            AppendLog("Panel:  " + config.Environment["IFQ_PANEL"]);
+            AppendLog(config.PanelWasAutoDetected
+                ? "Panels: " + string.Join(
+                    ", ",
+                    config.AutoPanelCounts.OrderBy(
+                        delegate(KeyValuePair<string, int> pair) { return pair.Key; },
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(delegate(KeyValuePair<string, int> pair)
+                    {
+                        return pair.Key + "=" + pair.Value;
+                    }))
+                : "Panel:  " + config.Environment["IFQ_PANEL"]);
             AppendLog(previewOnly
                 ? "Mode:   enhanced-image preview only; first five matching images; no quantification"
                 : "Mode:   full analysis");
@@ -946,6 +1175,7 @@ namespace IFQuantLauncher
                 lock (processLock) { runningProcess = null; }
                 if (!config.PreviewOnly)
                     WriteLauncherRecord(config, -1, "failed_to_start: " + ex.Message);
+                DeleteTemporaryPanelMap(config);
                 MessageBox.Show(this, ex.Message, "Fiji could not start", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetRunningState(false);
                 SetProgressTerminal("Fiji could not start", false, false);
@@ -985,17 +1215,42 @@ namespace IFQuantLauncher
             });
         }
 
-        private bool ConfirmDisplayPreview(RunConfiguration config)
+        private string DescribePanelAllocation(RunConfiguration config)
         {
+            if (config.PanelWasAutoDetected && config.AutoPanelCounts != null)
+            {
+                StringBuilder text = new StringBuilder();
+                text.Append("AUTO per-image allocation:\r\n");
+                foreach (KeyValuePair<string, int> pair in
+                         config.AutoPanelCounts.OrderBy(
+                             delegate(KeyValuePair<string, int> item) { return item.Key; },
+                             StringComparer.OrdinalIgnoreCase))
+                {
+                    string description;
+                    if (!PanelDescriptions.TryGetValue(pair.Key, out description))
+                        description = pair.Key;
+                    text.Append("  ").Append(pair.Key).Append(": ")
+                        .Append(pair.Value).Append(" image(s) — ")
+                        .Append(description).Append("\r\n");
+                }
+                return text.ToString().TrimEnd();
+            }
+
             string panelKey = config.Environment["IFQ_PANEL"];
             string panelDescription;
             if (!PanelDescriptions.TryGetValue(panelKey, out panelDescription))
                 panelDescription = "Custom validated panel: " + panelKey;
+            return panelDescription;
+        }
+
+        private bool ConfirmDisplayPreview(RunConfiguration config)
+        {
             DialogResult result = MessageBox.Show(
                 this,
                 "Create enhanced preview images only?\r\n\r\n" +
                 "Input:\r\n" + config.InputDirectory + "\r\n\r\n" +
-                "Detected/selected panel:\r\n" + panelDescription + "\r\n\r\n" +
+                "Detected/selected marker-channel allocation:\r\n" +
+                DescribePanelAllocation(config) + "\r\n\r\n" +
                 "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
                 "Images: first 5 matching analytical images at most\r\n\r\n" +
                 "Output folder:\r\n" + config.OutputDirectory + "\r\n\r\n" +
@@ -1012,16 +1267,17 @@ namespace IFQuantLauncher
         private bool ConfirmRun(RunConfiguration config)
         {
             string panelKey = config.Environment["IFQ_PANEL"];
-            string panelDescription;
-            if (!PanelDescriptions.TryGetValue(panelKey, out panelDescription))
-                panelDescription = "Custom validated panel: " + panelKey;
             string limit = config.Environment["IFQ_MAX_IMAGES"] == "0"
                 ? "all matching images"
                 : "up to " + config.Environment["IFQ_MAX_IMAGES"] + " image(s)";
-            string warning = string.Equals(panelKey, "T", StringComparison.OrdinalIgnoreCase)
+            bool includesPanelT = string.Equals(panelKey, "T", StringComparison.OrdinalIgnoreCase) ||
+                (config.AutoPanelCounts != null && config.AutoPanelCounts.ContainsKey("T"));
+            string warning = includesPanelT
                 ? "\r\n\r\nWARNING: Panel T is a plumbing test and its positivity results are not biologically meaningful."
                 : "";
-            if (string.Equals(panelKey, "E", StringComparison.OrdinalIgnoreCase) &&
+            bool includesPanelE = string.Equals(panelKey, "E", StringComparison.OrdinalIgnoreCase) ||
+                (config.AutoPanelCounts != null && config.AutoPanelCounts.ContainsKey("E"));
+            if (includesPanelE &&
                 !string.Equals(config.Environment["IFQ_WHOLE_FIELD_COMPARTMENT"], "airway", StringComparison.OrdinalIgnoreCase))
             {
                 warning +=
@@ -1034,11 +1290,13 @@ namespace IFQuantLauncher
                 this,
                 "Please confirm this analysis:\r\n\r\n" +
                 "Input:\r\n" + config.InputDirectory + "\r\n\r\n" +
-                "Staining panel:\r\n" + panelDescription + "\r\n\r\n" +
+                "Marker-channel allocation:\r\n" +
+                DescribePanelAllocation(config) + "\r\n\r\n" +
                 (config.PanelWasAutoDetected
                     ? "Panel selection: automatically detected from " +
                       config.PanelDetectionImageCount + " matching analytical image path(s).\r\n" +
-                      "Confirm that the stated acquisition channel order is correct.\r\n\r\n"
+                      "Each image will use its allocated panel independently. " +
+                      "Confirm that every stated acquisition channel order is correct.\r\n\r\n"
                     : "Panel selection: manual/custom. Confirm the acquisition channel order.\r\n\r\n") +
                 "Nucleus detection: " + config.Environment["IFQ_SEGMENTER"] + "\r\n" +
                 "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
@@ -1086,13 +1344,16 @@ namespace IFQuantLauncher
             bool panelWasAutoDetected =
                 string.Equals(panelKey, "AUTO", StringComparison.OrdinalIgnoreCase);
             int panelDetectionImageCount = 0;
+            PanelDetectionResult autoDetection = null;
             if (panelWasAutoDetected)
             {
                 if (panelConfig.Length > 0)
                     throw new InvalidOperationException(
                         "AUTO detects built-in panels only. Choose the custom panel key explicitly when a custom panel JSON is selected.");
-                panelKey = DetectBuiltInPanel(
-                    input, includeRegex, recursiveBox.Checked, out panelDetectionImageCount);
+                autoDetection = DetectBuiltInPanels(
+                    input, includeRegex, recursiveBox.Checked);
+                panelDetectionImageCount = autoDetection.AnalyticalImageCount;
+                panelKey = autoDetection.FallbackPanel;
             }
             string builtInPanelKey = PanelDescriptions.Keys.FirstOrDefault(
                 delegate(string key) { return string.Equals(key, panelKey, StringComparison.OrdinalIgnoreCase); });
@@ -1101,7 +1362,9 @@ namespace IFQuantLauncher
             if (!PanelDescriptions.ContainsKey(panelKey) && panelConfig.Length == 0)
                 throw new InvalidOperationException(
                     "Panel '" + panelKey + "' is not built in. Select its validated custom panel JSON under Advanced study options.");
-            if (string.Equals(panelKey, "S2", StringComparison.OrdinalIgnoreCase) &&
+            bool includesS2 = string.Equals(panelKey, "S2", StringComparison.OrdinalIgnoreCase) ||
+                (autoDetection != null && autoDetection.PanelCounts.ContainsKey("S2"));
+            if (includesS2 &&
                 !string.Equals(ChoiceKey(projectionBox), "single", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(ChoiceKey(projectionBox), "layer_aware", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
@@ -1110,6 +1373,8 @@ namespace IFQuantLauncher
 
             Dictionary<string, string> advanced = ParseAdvancedEnvironment(advancedBox.Text);
             RuntimePaths runtime = RuntimeBundle.EnsureExtracted();
+            string autoPanelMapPath = autoDetection == null ? null :
+                WriteAutoPanelMap(autoDetection, runtime.RuntimeDirectory);
 
             string runStem = SanitizeFileName(runNameBox.Text.Trim());
             if (runStem.Length == 0)
@@ -1124,6 +1389,8 @@ namespace IFQuantLauncher
             env["IFQ_OUTPUT_DIR"] = outputDirectory;
             env["IFQ_PANEL"] = panelKey;
             env["IFQ_MARKER_REGISTRY"] = runtime.RegistryPath;
+            if (!string.IsNullOrWhiteSpace(autoPanelMapPath))
+                env["IFQ_PANEL_MAP_PATH"] = autoPanelMapPath;
             if (panelConfig.Length > 0)
                 env["IFQ_PANEL_CONFIG"] = Path.GetFullPath(panelConfig);
             env["IFQ_RECURSIVE"] = recursiveBox.Checked ? "true" : "false";
@@ -1156,6 +1423,8 @@ namespace IFQuantLauncher
             config.Environment = env;
             config.PanelWasAutoDetected = panelWasAutoDetected;
             config.PanelDetectionImageCount = panelDetectionImageCount;
+            config.AutoPanelCounts = autoDetection == null ? null : autoDetection.PanelCounts;
+            config.AutoPanelMapPath = autoPanelMapPath;
             config.PreviewOnly = previewOnly;
             return config;
         }
@@ -1370,6 +1639,7 @@ namespace IFQuantLauncher
                     false);
                 statusLabel.Text = "Preview stopped with a problem — review the log";
             }
+            DeleteTemporaryPanelMap(config);
             runningPreview = false;
         }
 
@@ -1453,6 +1723,7 @@ namespace IFQuantLauncher
                     false,
                     false);
             }
+            DeleteTemporaryPanelMap(config);
         }
 
         private static string GetDictionaryValue(Dictionary<string, object> values, string key, string fallback)
@@ -1803,6 +2074,41 @@ namespace IFQuantLauncher
         }
     }
 
+    internal sealed class PanelDetectionResult
+    {
+        public int AnalyticalImageCount;
+        public string FallbackPanel;
+        public Dictionary<string, string> PanelByRelativePath =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, int> PanelCounts =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        public bool IsMixed
+        {
+            get { return PanelCounts.Count > 1; }
+        }
+
+        public string CountSummary()
+        {
+            return string.Join(
+                ", ",
+                PanelCounts.OrderBy(delegate(KeyValuePair<string, int> pair) { return pair.Key; },
+                                    StringComparer.OrdinalIgnoreCase)
+                           .Select(delegate(KeyValuePair<string, int> pair)
+                           {
+                               return pair.Key + "=" + pair.Value;
+                           }));
+        }
+    }
+
+    internal sealed class SamplesheetPanelAssignments
+    {
+        public Dictionary<string, string> ByRelativePath =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string> ByFilename =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
     internal sealed class RunConfiguration
     {
         public string InputDirectory;
@@ -1813,6 +2119,8 @@ namespace IFQuantLauncher
         public string RegistryPath;
         public bool PanelWasAutoDetected;
         public int PanelDetectionImageCount;
+        public Dictionary<string, int> AutoPanelCounts;
+        public string AutoPanelMapPath;
         public bool PreviewOnly;
         public Dictionary<string, string> Environment;
     }
@@ -1885,7 +2193,9 @@ namespace IFQuantLauncher
                     return 19;
                 if (pipelineText.IndexOf("ALI1_SCGB3A2_tdTOM_p63", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("ALI2_KRT5_tdTOM_AcTub", StringComparison.Ordinal) < 0 ||
-                    pipelineText.IndexOf("ALI3_KRT5_tdTOM_MUC5AC", StringComparison.Ordinal) < 0)
+                    pipelineText.IndexOf("ALI3_KRT5_tdTOM_MUC5AC", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("ALI1_MAP_SCGB3A2_tdTOM", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("ALI23_MAP_KRT5_tdTOM", StringComparison.Ordinal) < 0)
                     return 20;
                 if (pipelineText.IndexOf("DISPLAY ONLY - NOT QUANTIFIED", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("__DISPLAY_ONLY__merged_enhanced.png", StringComparison.Ordinal) < 0 ||
@@ -1906,12 +2216,55 @@ namespace IFQuantLauncher
                             @"C:\images\krt5-creERT2 tdTOM CC10_488 acetyl_647\field.oir"),
                         "E",
                         StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        MainForm.InferBuiltInPanelFromText(
+                            @"C:\images\krt5_488 tdTOM acetyl_647 4x mapping\field.oir"),
+                        "ALI23_MAP",
+                        StringComparison.OrdinalIgnoreCase) ||
                     MainForm.InferBuiltInPanelFromText(@"C:\images\unnamed\field.oir") != null)
                     return 22;
                 if (pipelineText.IndexOf("IFQ_DISPLAY_PREVIEW_ONLY", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("[IFQ_PREVIEW]", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("DISPLAY PREVIEW COMPLETE", StringComparison.Ordinal) < 0)
                     return 23;
+                if (pipelineText.IndexOf("IFQ_PANEL_MAP_PATH", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("auto_panel_assignments.csv", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("per_image_panel_routing", StringComparison.Ordinal) < 0)
+                    return 24;
+                string mixedRoot = Path.Combine(
+                    Path.GetTempPath(),
+                    "IFQuantLauncher-mixed-panel-" + Guid.NewGuid().ToString("N"));
+                bool mixedDetectionOk = false;
+                try
+                {
+                    string left = Path.Combine(
+                        mixedRoot, "DAPI KRT5_488 AGER_555 T1alpha_647");
+                    string right = Path.Combine(
+                        mixedRoot, "DAPI Pro-SPC_488 AGER_555 KRT8_647");
+                    Directory.CreateDirectory(left);
+                    Directory.CreateDirectory(right);
+                    File.WriteAllBytes(Path.Combine(left, "left_field.oir"), new byte[0]);
+                    File.WriteAllBytes(Path.Combine(right, "right_field.oir"), new byte[0]);
+                    PanelDetectionResult mixed =
+                        MainForm.DetectBuiltInPanels(mixedRoot, ".*", true);
+                    string generatedMap =
+                        MainForm.WriteAutoPanelMap(mixed, mixedRoot);
+                    mixedDetectionOk =
+                        mixed.AnalyticalImageCount == 2 &&
+                        mixed.PanelCounts.Count == 2 &&
+                        mixed.PanelCounts.ContainsKey("LEFT") &&
+                        mixed.PanelCounts.ContainsKey("RIGHT") &&
+                        mixed.PanelByRelativePath.Count == 2 &&
+                        File.Exists(generatedMap) &&
+                        File.ReadAllLines(generatedMap, Encoding.UTF8).Length == 3;
+                }
+                finally
+                {
+                    if (Directory.Exists(mixedRoot))
+                        Directory.Delete(mixedRoot, true);
+                }
+                if (!mixedDetectionOk)
+                    return 25;
                 if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
                     return 12;
                 JavaScriptSerializer json = new JavaScriptSerializer();

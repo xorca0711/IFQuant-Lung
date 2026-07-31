@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.6.2.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.7.0.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 The build reads the assembly version and writes versioned artifacts directly
 to the repository root:
 
-- `IFQuantLauncher-v1.6.2.exe`
-- `IFQuantLauncher-v1.6.2.sha256.txt`
+- `IFQuantLauncher-v1.7.0.exe`
+- `IFQuantLauncher-v1.7.0.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -34,13 +34,14 @@ and Windows x64; no .NET SDK installation is required on the analysis system.
 2. Select the Fiji executable or its installation folder.
 3. Select an output parent folder.
 4. Leave the staining panel on **AUTO** when the complete marker combination is
-   present in image or folder names. AUTO proceeds only when every matching
-   analytical image resolves to the same built-in panel, then applies that
-   preset's fixed acquisition channel order. It does not identify stains from
-   fluorescence colors, intensity, or image content. Unknown or mixed-panel
-   folders stop for manual review, and nonstandard channel order requires a
-   validated custom panel. The confirmation dialog still requires the resolved
-   channel order to be checked.
+   present in image or folder names. AUTO assigns every matching analytical
+   image independently, so multiple recognized panels and validated marker
+   subsets can share one batch. An explicit `samplesheet.csv` panel is used
+   first. Otherwise, the marker names select a built-in preset and its fixed
+   acquisition channel order. AUTO does not identify stains from fluorescence
+   colors, intensity, or image content. Any unknown image stops before Fiji
+   starts, and nonstandard channel order requires a validated custom panel.
+   The confirmation dialog lists each allocated panel and image count.
 5. For a first pilot, set **Image limit** to `1`; otherwise `0` means all
    matching images. The recommended settings can normally remain unchanged.
 6. Click **Preview enhanced images (first 5)** to check image visibility first,
@@ -121,6 +122,22 @@ and fraction of that image/region's total cells. **Run Summary** retains the
 complete audit fields, and **Skipped Inputs** records deliberate exclusions. A
 run is shown as complete only when Fiji exits successfully, the manifest
 status is `complete`, and both summary files exist.
+
+For a full AUTO run, `auto_panel_assignments.csv` records the exact
+`relative_path` to panel allocation used for every image. The manifest and
+summary retain the panel on every image/region row. Marker columns are aligned
+across panels; cells are blank for markers absent from that image's allocated
+panel rather than being interpreted as negative. Statistical aggregation must
+remain stratified by compatible panel and endpoint.
+
+The validated ALI mapping subsets are:
+
+- `ALI1_MAP`: C1 DAPI, C2 SCGB3A2-488, C3 tdTOM;
+- `ALI23_MAP`: C1 DAPI, C2 KRT5-488, C3 tdTOM.
+
+These presets are selected for known 4× mapping acquisitions whose folder name
+still mentions a non-acquired 647 marker. The absent p63, AcTub, or MUC5AC
+channel is not analyzed and cannot generate a negative call.
 
 When an installation folder is selected, the launcher detects the Windows
 architecture and chooses Fiji in this order:

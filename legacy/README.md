@@ -13,7 +13,7 @@ Git branch:
 - `figures/`: earlier workflow and overlay diagrams. These predate the final
   morphology-authoritative three-state hierarchy.
 - `launchers/`: superseded versioned launcher executables and checksums,
-  including v1.1, v1.4.1, v1.5.0, v1.6.0, and v1.6.1. The repository-root v1.6.2
+  including v1.1, v1.4.1, v1.5.0, v1.6.0, v1.6.1, and v1.6.2. The repository-root v1.7.0
   launcher is the current release.
 - `scripts/README.md`: routes historical script access to the snapshot branch
   and commit history; no legacy script is an active entry point.

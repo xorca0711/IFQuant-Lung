@@ -17,7 +17,7 @@ comparing experimental groups.
 | `main` | Universal morphology-first pipeline plus optional layer-aware Z routing and display enhancement | Current production branch |
 | `codex/z-stack-analysis` | Integration history for layer-aware 2.5D Z routing, ALI presets, marker refinements, Z QC, display enhancement, and zero-cell protection | Validated and promoted to `main` |
 | `codex/legacy-pre-reorganization` | Historical pre-reorganization snapshot | Retain as legacy history |
-| Launcher | `IFQuantLauncher-v1.6.2.exe` in the repository root | AUTO panel detection plus independent five-image enhanced-preview and full-analysis buttons; embedded-runtime self-test exit code 0 |
+| Launcher | `IFQuantLauncher-v1.7.0.exe` in the repository root | Per-image AUTO panel/subset routing plus independent five-image enhanced-preview and full-analysis buttons |
 
 The layer-aware implementation is additive. Legacy `max`, `sum`, `avg`, and
 `single` projection modes retain their established behavior. The Windows GUI
@@ -162,6 +162,32 @@ Red2-Kras RFP interpretation, none of these markers assigns a lineage,
 mutation, malignancy, or disease state by itself.
 
 ## End-to-end workflow
+
+### Per-image panel and channel routing
+
+```mermaid
+flowchart TD
+    A[Matching analytical image paths] --> B{Explicit samplesheet panel?}
+    B -->|Yes| C[Use samplesheet panel key]
+    B -->|No| D[Match marker names in file and folder path]
+    D --> E{Recognized built-in panel or subset?}
+    E -->|No| X[Stop before Fiji; require manual or custom mapping]
+    E -->|Yes| F[Assign validated channel index to marker map]
+    C --> F
+    F --> G[Write temporary relative-path panel map]
+    G --> H[Process each image with its own panel definition]
+    H --> I[Export panel on every image and region row]
+    I --> J[Full analysis retains auto_panel_assignments.csv]
+```
+
+AUTO no longer requires one panel for the entire directory. Every image is
+allocated independently, but allocation remains strict: a recognized
+samplesheet key or built-in marker combination must resolve before Fiji starts.
+The map selects a validated panel definition; it does not infer marker identity
+from pixel color or intensity. Images with absent channels use a declared subset
+panel, so absent markers produce no cell decision rather than a false negative.
+The known 4× ALI subsets are `ALI1_MAP` (DAPI, SCGB3A2, tdTOM) and
+`ALI23_MAP` (DAPI, KRT5, tdTOM).
 
 ```mermaid
 flowchart TD
@@ -534,7 +560,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`IFQuantLauncher-v1.6.2.exe`](IFQuantLauncher-v1.6.2.exe). It exposes the
+[`IFQuantLauncher-v1.7.0.exe`](IFQuantLauncher-v1.7.0.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.
