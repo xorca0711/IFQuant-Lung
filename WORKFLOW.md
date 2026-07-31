@@ -17,7 +17,7 @@ comparing experimental groups.
 | `main` | Universal morphology-first pipeline plus optional layer-aware Z routing and display enhancement | Current production branch |
 | `codex/z-stack-analysis` | Integration history for layer-aware 2.5D Z routing, ALI presets, marker refinements, Z QC, display enhancement, and zero-cell protection | Validated and promoted to `main` |
 | `codex/legacy-pre-reorganization` | Historical pre-reorganization snapshot | Retain as legacy history |
-| Launcher | `IFQuantLauncher-v1.6.1.exe` in the repository root | Rebuilt with AUTO panel detection and enhanced-view button; embedded-runtime self-test exit code 0 |
+| Launcher | `IFQuantLauncher-v1.6.2.exe` in the repository root | AUTO panel detection plus independent five-image enhanced-preview and full-analysis buttons; embedded-runtime self-test exit code 0 |
 
 The layer-aware implementation is additive. Legacy `max`, `sum`, `avg`, and
 `single` projection modes retain their established behavior. The Windows GUI
@@ -252,14 +252,16 @@ does not claim 3D cell-boundary reconstruction.
 
 ```mermaid
 flowchart TD
-    A[Marker-specific projected channel] --> B[Quantitative branch keeps original calibrated pixels]
-    A --> C[Duplicate display copy]
+    A[Marker-specific projected channel] --> P{Launcher operation}
+    P -->|Review and run analysis| B[Keep original calibrated pixels]
+    P -->|Preview enhanced images; first 5| C[Duplicate display copy]
     C --> D[Resolve per-channel low and high percentiles]
     D --> E[Map display range to 8-bit]
     E --> F[Apply optional display gamma]
     F --> G[Write labeled individual marker PNG]
     F --> H[Color-merge enhanced marker copies]
-    H --> I[Write labeled enhanced composite and QC background]
+    H --> I[Write labeled enhanced composite]
+    I --> Q[Stop: PNG files only]
     B --> J[Thresholds, masks, morphology, and final calls]
 ```
 
@@ -267,10 +269,22 @@ Intensity adjustment is deliberately isolated from measurement. The default
 display range is the 1.0th to 99.8th percentile with gamma 1.0. A panel channel
 may override `displayLowPercentile`, `displayHighPercentile`, or
 `displayGamma`. All enhanced files contain the banner
-`DISPLAY ONLY - NOT QUANTIFIED`; the resolved limits are saved in
-`__params.json`. The original projected pixels—not the enhanced 8-bit
-copies—remain the only source for thresholds, masks, intensity audit fields,
-morphology features, and final calls.
+`DISPLAY ONLY - NOT QUANTIFIED`. Preview-only mode deliberately creates no
+parameter or analysis files. The original projected pixels—not the enhanced
+8-bit copies—remain the only source for thresholds, masks, intensity audit
+fields, morphology features, and final calls.
+
+The launcher presents **Preview enhanced images (first 5)** next to
+**Review and run analysis**. Preview mode uses the selected panel and Z-routing
+rules, processes at most five analytical images, and exits immediately after
+writing labeled individual and merged PNGs. It does not run DAPI segmentation,
+cell inclusion, marker decisions, or aggregation, and it writes no masks, CSV,
+Excel, parameter JSON, Z profile, analysis manifest, or launcher record.
+
+The launcher explicitly disables enhanced primary-view export during
+**Review and run analysis**, keeping visualization previews and quantitative
+result folders separate. Expert command-line runs may still opt in with
+`IFQ_EXPORT_DISPLAY_CHANNELS=true`; its default is false.
 
 ## Decision authority and three-state semantics
 
@@ -520,7 +534,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`IFQuantLauncher-v1.6.1.exe`](IFQuantLauncher-v1.6.1.exe). It exposes the
+[`IFQuantLauncher-v1.6.2.exe`](IFQuantLauncher-v1.6.2.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.

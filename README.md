@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`IFQuantLauncher-v1.6.1.exe`](IFQuantLauncher-v1.6.1.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.6.2.exe`](IFQuantLauncher-v1.6.2.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,20 +25,29 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher-v1.6.1.exe`](IFQuantLauncher-v1.6.1.exe), then select:
+Run [`IFQuantLauncher-v1.6.2.exe`](IFQuantLauncher-v1.6.2.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
 3. an output parent folder;
 4. `AUTO` panel detection when marker names are present in file/folder names,
-   or a manual/custom panel when they are not;
-5. whether the **Enhanced marker views** button is on for the primary visual
-   review exports.
+   or a manual/custom panel when they are not.
 
-AUTO is fail-safe rather than permissive: it accepts only one consistently
-recognized built-in panel across all matching analytical images. Unknown or
-mixed-panel folders require a manual choice or a narrower filename filter.
-The pre-run confirmation always shows the resolved marker/channel order.
+AUTO is fail-safe rather than permissive: it recognizes a marker-name
+combination from each matching file/folder path, requires every analytical
+image to resolve to the same built-in panel, and then applies that panel's
+fixed acquisition channel order. It does **not** infer stain identity from
+fluorescence color, intensity, or image content. Unknown or mixed-panel folders
+require a manual choice or a narrower filename filter; a nonstandard channel
+order requires a validated custom panel. The pre-run confirmation always shows
+the resolved marker/channel order.
+
+Use **Preview enhanced images (first 5)** beside **Review and run analysis** to
+check panel labels, Z routing, and display scaling before quantification. This
+separate path processes at most five analytical images and writes only labeled
+per-channel and merged enhanced PNGs. It performs no segmentation or marker
+calling and writes no masks, CSV, Excel, parameter JSON, Z-profile table,
+analysis manifest, or launcher run record.
 
 The same `AnyCPU` executable supports Windows ARM64 and Windows x64. When a Fiji
 folder is selected, ARM64 Windows prefers `fiji-windows-arm64.exe`; x64 Windows
@@ -46,8 +55,8 @@ prefers `fiji-windows-x64.exe` or `ImageJ-win64.exe`. Selecting an executable
 directly overrides automatic selection.
 
 Each click creates a new timestamped output folder and runs the embedded,
-version-matched Groovy pipeline and marker registry. The output includes QC
-images, per-cell tables, `run_summary.csv`, `run_manifest.json`, and
+version-matched Groovy pipeline and marker registry. A full analysis includes
+QC images, per-cell tables, `run_summary.csv`, `run_manifest.json`, and
 `launcher_run.txt` with executable paths, settings, and SHA-256 provenance.
 
 See [`launcher/README.md`](launcher/README.md) for building, advanced thresholds,
@@ -365,7 +374,8 @@ groups are compared; the example values above are not validated cutoffs.
 | `IFQ_Z_CELL_BODY_RANGE` | `auto`, `full`, or inclusive `start:end`; automatic mode selects the brightest contiguous DAPI window |
 | `IFQ_Z_APICAL_RANGE` | `auto`, `full`, or inclusive `start:end`; automatic mode selects the brightest contiguous window in the apical marker channel |
 | `IFQ_Z_CELL_BODY_PLANES` / `IFQ_Z_APICAL_PLANES` | Automatic slab widths; defaults are 5 and 3 planes |
-| `IFQ_EXPORT_DISPLAY_CHANNELS` | `true` by default; exports visualization-only enhanced marker channels and a merged composite |
+| `IFQ_EXPORT_DISPLAY_CHANNELS` | `false` by default; expert CLI opt-in for enhanced PNGs during a full analysis; the launcher keeps them in the separate preview operation |
+| `IFQ_DISPLAY_PREVIEW_ONLY` | launcher-controlled preview mode; caps input at five and exits after enhanced PNG export without quantification outputs |
 | `IFQ_DISPLAY_LOW_PERCENTILE` / `IFQ_DISPLAY_HIGH_PERCENTILE` | display stretch limits; defaults are `1.0` and `99.8` percent |
 | `IFQ_DISPLAY_GAMMA` | positive gamma applied only to display copies; default `1.0` |
 | `IFQ_DAPI_METHOD` | Explicit `local_phansalkar` or `global_otsu`; if omitted, layer-aware mode uses global Otsu and legacy modes retain local Phansalkar |

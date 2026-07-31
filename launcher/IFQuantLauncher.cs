@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.6.1.0")]
-[assembly: AssemblyFileVersion("1.6.1.0")]
+[assembly: AssemblyVersion("1.6.2.0")]
+[assembly: AssemblyFileVersion("1.6.2.0")]
 
 namespace IFQuantLauncher
 {
@@ -58,10 +58,10 @@ namespace IFQuantLauncher
         private ComboBox compartmentModeBox;
         private ComboBox wholeCompartmentBox;
         private CheckBox recursiveBox;
-        private CheckBox displayEnhancementBox;
         private NumericUpDown maxImagesBox;
         private NumericUpDown singlePlaneBox;
         private Button runButton;
+        private Button previewButton;
         private Button cancelButton;
         private Button openOutputButton;
         private Button openSummaryButton;
@@ -78,6 +78,7 @@ namespace IFQuantLauncher
         private string lastRunDirectory;
         private string lastSummaryPath;
         private bool cancellationRequested;
+        private bool runningPreview;
         private readonly object processLock = new object();
 
         private static readonly Dictionary<string, string> PanelDescriptions =
@@ -108,7 +109,7 @@ namespace IFQuantLauncher
                 "IFQ_MARKER_REGISTRY", "IFQ_PANEL_CONFIG",
                 "IFQ_RECURSIVE", "IFQ_INCLUDE_REGEX", "IFQ_MAX_IMAGES",
                 "IFQ_SEGMENTER", "IFQ_PROJECTION", "IFQ_SINGLE_PLANE",
-                "IFQ_EXPORT_DISPLAY_CHANNELS",
+                "IFQ_EXPORT_DISPLAY_CHANNELS", "IFQ_DISPLAY_PREVIEW_ONLY",
                 "IFQ_TISSUE_MODE", "IFQ_COMPARTMENT_MODE",
                 "IFQ_WHOLE_FIELD_COMPARTMENT",
                 "IFQ_ALLOW_NONEMPTY_OUTPUT", "IFQ_MORPHOLOGY_PRIMARY"
@@ -190,7 +191,7 @@ namespace IFQuantLauncher
             intro.Text =
                 "Quick start: (1) choose the folder containing your original microscope files, " +
                 "(2) choose the Fiji installation and where results should be saved, " +
-                "(3) leave panel selection on AUTO when marker names are present in file/folder names, then click Run Fiji analysis. " +
+                "(3) leave panel selection on AUTO when the complete marker panel is named in the file/folder path, then choose preview or analysis. " +
                 "Recommended settings can normally be left unchanged. Research use only.";
             root.Controls.Add(intro, 0, 0);
 
@@ -344,23 +345,9 @@ namespace IFQuantLauncher
             maxImagesBox.Dock = DockStyle.Fill;
             AddSetting(settings, 5, 2, "Image limit (0 = all)", maxImagesBox);
 
-            displayEnhancementBox = new CheckBox();
-            displayEnhancementBox.Checked = true;
-            displayEnhancementBox.AutoSize = true;
-            displayEnhancementBox.Anchor = AnchorStyles.Left;
-            displayEnhancementBox.Appearance = Appearance.Button;
-            displayEnhancementBox.FlatStyle = FlatStyle.Standard;
-            displayEnhancementBox.Padding = new Padding(10, 5, 10, 5);
-            displayEnhancementBox.TextAlign = ContentAlignment.MiddleCenter;
-            displayEnhancementBox.UseVisualStyleBackColor = false;
-            displayEnhancementBox.CheckedChanged += delegate { UpdateDisplayEnhancementButton(); };
-            AddSetting(settings, 6, 0, "Primary visual results", displayEnhancementBox);
-            settings.SetColumnSpan(displayEnhancementBox, 3);
-            UpdateDisplayEnhancementButton();
-
             panelBox.SelectedIndexChanged += delegate { UpdatePanelHelp(); };
             panelBox.TextChanged += delegate { UpdatePanelHelp(); };
-            toolTips.SetToolTip(panelBox, "AUTO infers one built-in panel from marker names in matching file/folder paths. Mixed or ambiguous folders stop for manual review. Manual and custom choices remain available.");
+            toolTips.SetToolTip(panelBox, "AUTO infers one built-in panel from marker names in matching file/folder paths, then applies that preset's fixed acquisition channel order. It does not identify stains from image colors or intensities. Mixed or ambiguous folders stop for manual review.");
             toolTips.SetToolTip(segmenterBox, "Classic is the safest first choice. Choose StarDist only when that Fiji installation has the plugin and model.");
             toolTips.SetToolTip(projectionBox, "Layer-aware mode keeps DAPI across the stack, selects a DAPI-guided cell-body slab, and selects a marker-guided apical slab. Review the saved Z profile and freeze explicit ranges before confirmatory analysis.");
             toolTips.SetToolTip(singlePlaneBox, "Used only when Z-stack handling is single. -1 asks the pipeline to use the middle plane.");
@@ -369,9 +356,6 @@ namespace IFQuantLauncher
             toolTips.SetToolTip(wholeCompartmentBox, "Use this only when the whole image contains one known tissue compartment.");
             toolTips.SetToolTip(includeRegexBox, "Leave .* to include every supported microscope image. This is an expert regular-expression filter.");
             toolTips.SetToolTip(maxImagesBox, "0 analyzes all matching images. Use 1 for a quick pilot run.");
-            toolTips.SetToolTip(displayEnhancementBox,
-                "One-click display enhancement: exports a clearly visible image for every marker channel and an enhanced merge. " +
-                "This never changes segmentation, thresholds, marker decisions, or cell counts.");
 
             TableLayoutPanel advancedContainer = new TableLayoutPanel();
             advancedContainer.Dock = DockStyle.Top;
@@ -455,6 +439,17 @@ namespace IFQuantLauncher
             runButton.Padding = new Padding(12, 5, 12, 5);
             runButton.Click += delegate { StartAnalysis(); };
             actions.Controls.Add(runButton);
+
+            previewButton = new Button();
+            previewButton.Text = "Preview enhanced images (first 5)";
+            previewButton.AutoSize = true;
+            previewButton.Padding = new Padding(12, 5, 12, 5);
+            previewButton.Click += delegate { StartDisplayPreview(); };
+            actions.Controls.Add(previewButton);
+            toolTips.SetToolTip(
+                previewButton,
+                "Runs only import, panel/Z routing, and display scaling for up to five images. " +
+                "No segmentation, cell calls, masks, CSV, Excel, parameters, or analysis manifest are produced.");
 
             cancelButton = new Button();
             cancelButton.Text = "Cancel";
@@ -620,24 +615,6 @@ namespace IFQuantLauncher
                 : Color.FromArgb(75, 75, 75);
         }
 
-        private void UpdateDisplayEnhancementButton()
-        {
-            if (displayEnhancementBox == null)
-                return;
-            if (displayEnhancementBox.Checked)
-            {
-                displayEnhancementBox.Text = "Enhanced marker views: ON (recommended)";
-                displayEnhancementBox.BackColor = Color.FromArgb(210, 239, 224);
-                displayEnhancementBox.ForeColor = Color.FromArgb(0, 90, 55);
-            }
-            else
-            {
-                displayEnhancementBox.Text = "Enhanced marker views: OFF";
-                displayEnhancementBox.BackColor = Color.FromArgb(235, 235, 235);
-                displayEnhancementBox.ForeColor = Color.FromArgb(80, 80, 80);
-            }
-        }
-
         internal static string InferBuiltInPanelFromText(string sourceText)
         {
             string upper = (sourceText ?? "").ToUpperInvariant().Replace("Α", "ALPHA");
@@ -782,11 +759,13 @@ namespace IFQuantLauncher
                 "3. Output parent folder: choose where a new timestamped result folder should be created.\r\n\r\n" +
                 "4. Staining panel: leave AUTO selected when marker names are present in the image or folder names. " +
                 "AUTO stops rather than guessing when files are ambiguous or contain mixed panels. " +
-                "Use a manual/custom choice when naming is insufficient.\r\n\r\n" +
+                "AUTO selects a preset and its fixed acquisition channel order; it does not discover marker identity from fluorescence colors. " +
+                "Use a manual/custom choice when naming is insufficient or channel order differs.\r\n\r\n" +
                 "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
-                "6. Leave Create enhanced marker-channel images checked to receive clearly visible per-marker PNGs. " +
-                "This display option never changes cell counts.\r\n\r\n" +
-                "7. Click Review and run analysis. Watch the progress bar and status text. A successful run enables Open summary Excel.\r\n\r\n" +
+                "6. Click Preview enhanced images (first 5) to inspect display-only PNGs before analysis. " +
+                "This preview performs no segmentation, cell calls, masks, CSV, Excel, or manifest export.\r\n\r\n" +
+                "7. When the panel and display are correct, click Review and run analysis. Watch the progress bar and status text. " +
+                "A successful analysis enables Open summary Excel.\r\n\r\n" +
                 "Always inspect the QC overlays. The software quantifies fluorescence patterns for research and does not make a diagnosis.",
                 "First-time guide",
                 MessageBoxButtons.OK,
@@ -803,7 +782,6 @@ namespace IFQuantLauncher
             SelectChoice(compartmentModeBox, "required");
             SelectChoice(wholeCompartmentBox, "unassigned");
             recursiveBox.Checked = true;
-            displayEnhancementBox.Checked = true;
             includeRegexBox.Text = ".*";
             maxImagesBox.Value = 0;
             MessageBox.Show(
@@ -875,18 +853,33 @@ namespace IFQuantLauncher
 
         private void StartAnalysis()
         {
+            StartFijiRun(false);
+        }
+
+        private void StartDisplayPreview()
+        {
+            StartFijiRun(true);
+        }
+
+        private void StartFijiRun(bool previewOnly)
+        {
             RunConfiguration config;
             try
             {
-                config = ReadAndValidateConfiguration();
+                config = ReadAndValidateConfiguration(previewOnly);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "Cannot start analysis", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    previewOnly ? "Cannot start image preview" : "Cannot start analysis",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
                 return;
             }
 
-            if (!ConfirmRun(config))
+            if (!(previewOnly ? ConfirmDisplayPreview(config) : ConfirmRun(config)))
                 return;
 
             Directory.CreateDirectory(config.OutputDirectory);
@@ -895,6 +888,7 @@ namespace IFQuantLauncher
             lastRunDirectory = config.OutputDirectory;
             lastSummaryPath = null;
             cancellationRequested = false;
+            runningPreview = previewOnly;
             openOutputButton.Enabled = true;
             openSummaryButton.Enabled = false;
             SetProgressPreparing();
@@ -905,6 +899,9 @@ namespace IFQuantLauncher
             AppendLog("Output: " + config.OutputDirectory);
             AppendLog("Fiji:   " + config.FijiExecutable);
             AppendLog("Panel:  " + config.Environment["IFQ_PANEL"]);
+            AppendLog(previewOnly
+                ? "Mode:   enhanced-image preview only; first five matching images; no quantification"
+                : "Mode:   full analysis");
             AppendLog("Starting Fiji...");
 
             ProcessStartInfo psi = new ProcessStartInfo();
@@ -947,7 +944,8 @@ namespace IFQuantLauncher
             catch (Exception ex)
             {
                 lock (processLock) { runningProcess = null; }
-                WriteLauncherRecord(config, -1, "failed_to_start: " + ex.Message);
+                if (!config.PreviewOnly)
+                    WriteLauncherRecord(config, -1, "failed_to_start: " + ex.Message);
                 MessageBox.Show(this, ex.Message, "Fiji could not start", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetRunningState(false);
                 SetProgressTerminal("Fiji could not start", false, false);
@@ -979,9 +977,36 @@ namespace IFQuantLauncher
 
                 BeginInvoke(new Action(delegate
                 {
-                    FinishAnalysis(config, exitCode, waitError);
+                    if (config.PreviewOnly)
+                        FinishDisplayPreview(config, exitCode, waitError);
+                    else
+                        FinishAnalysis(config, exitCode, waitError);
                 }));
             });
+        }
+
+        private bool ConfirmDisplayPreview(RunConfiguration config)
+        {
+            string panelKey = config.Environment["IFQ_PANEL"];
+            string panelDescription;
+            if (!PanelDescriptions.TryGetValue(panelKey, out panelDescription))
+                panelDescription = "Custom validated panel: " + panelKey;
+            DialogResult result = MessageBox.Show(
+                this,
+                "Create enhanced preview images only?\r\n\r\n" +
+                "Input:\r\n" + config.InputDirectory + "\r\n\r\n" +
+                "Detected/selected panel:\r\n" + panelDescription + "\r\n\r\n" +
+                "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
+                "Images: first 5 matching analytical images at most\r\n\r\n" +
+                "Output folder:\r\n" + config.OutputDirectory + "\r\n\r\n" +
+                "This preview will write only labeled enhanced channel PNGs and merged PNGs. " +
+                "It will not run segmentation or create cell counts, masks, CSV, Excel, " +
+                "parameter files, Z-profile tables, or an analysis manifest.\r\n\r\n" +
+                "Continue?",
+                "Review enhanced-image preview",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Information);
+            return result == DialogResult.OK;
         }
 
         private bool ConfirmRun(RunConfiguration config)
@@ -1017,8 +1042,7 @@ namespace IFQuantLauncher
                     : "Panel selection: manual/custom. Confirm the acquisition channel order.\r\n\r\n") +
                 "Nucleus detection: " + config.Environment["IFQ_SEGMENTER"] + "\r\n" +
                 "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
-                "Enhanced marker views: " +
-                    (config.Environment["IFQ_EXPORT_DISPLAY_CHANNELS"] == "true" ? "yes (display only)" : "no") + "\r\n" +
+                "Enhanced marker views: separate preview operation (not part of this analysis)\r\n" +
                 "Files: " + limit + "\r\n\r\n" +
                 "New result folder:\r\n" + config.OutputDirectory + warning +
                 "\r\n\r\nStart Fiji analysis now?",
@@ -1028,7 +1052,7 @@ namespace IFQuantLauncher
             return result == DialogResult.OK;
         }
 
-        private RunConfiguration ReadAndValidateConfiguration()
+        private RunConfiguration ReadAndValidateConfiguration(bool previewOnly)
         {
             string input = inputBox.Text.Trim();
             if (!Directory.Exists(input))
@@ -1090,6 +1114,8 @@ namespace IFQuantLauncher
             string runStem = SanitizeFileName(runNameBox.Text.Trim());
             if (runStem.Length == 0)
                 runStem = "IFQ_run";
+            if (previewOnly)
+                runStem += "_enhanced_preview";
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             string outputDirectory = MakeUniqueDirectory(Path.Combine(outputBase, runStem + "_" + timestamp));
 
@@ -1102,11 +1128,15 @@ namespace IFQuantLauncher
                 env["IFQ_PANEL_CONFIG"] = Path.GetFullPath(panelConfig);
             env["IFQ_RECURSIVE"] = recursiveBox.Checked ? "true" : "false";
             env["IFQ_INCLUDE_REGEX"] = includeRegex;
-            env["IFQ_MAX_IMAGES"] = Decimal.ToInt32(maxImagesBox.Value).ToString(CultureInfo.InvariantCulture);
+            env["IFQ_MAX_IMAGES"] = previewOnly ? "5" :
+                Decimal.ToInt32(maxImagesBox.Value).ToString(CultureInfo.InvariantCulture);
             env["IFQ_SEGMENTER"] = ChoiceKey(segmenterBox);
             env["IFQ_PROJECTION"] = ChoiceKey(projectionBox);
             env["IFQ_SINGLE_PLANE"] = Decimal.ToInt32(singlePlaneBox.Value).ToString(CultureInfo.InvariantCulture);
-            env["IFQ_EXPORT_DISPLAY_CHANNELS"] = displayEnhancementBox.Checked ? "true" : "false";
+            // Enhanced primary-view PNGs are a separate preview operation.
+            // Full analysis retains its normal quantitative/QC outputs only.
+            env["IFQ_EXPORT_DISPLAY_CHANNELS"] = previewOnly ? "true" : "false";
+            env["IFQ_DISPLAY_PREVIEW_ONLY"] = previewOnly ? "true" : "false";
             env["IFQ_TISSUE_MODE"] = ChoiceKey(tissueModeBox);
             env["IFQ_COMPARTMENT_MODE"] = ChoiceKey(compartmentModeBox);
             env["IFQ_WHOLE_FIELD_COMPARTMENT"] = ChoiceKey(wholeCompartmentBox);
@@ -1126,6 +1156,7 @@ namespace IFQuantLauncher
             config.Environment = env;
             config.PanelWasAutoDetected = panelWasAutoDetected;
             config.PanelDetectionImageCount = panelDetectionImageCount;
+            config.PreviewOnly = previewOnly;
             return config;
         }
 
@@ -1187,7 +1218,8 @@ namespace IFQuantLauncher
                     UpdateImageProgress(current, total, progress.Groups[3].Value.Trim());
                 }
             }
-            else if (line.IndexOf("DONE. Wrote run_summary.csv", StringComparison.OrdinalIgnoreCase) >= 0)
+            else if (line.IndexOf("DONE. Wrote run_summary.csv", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     line.IndexOf("DISPLAY PREVIEW COMPLETE", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 UpdateFinalizingProgress();
             }
@@ -1197,8 +1229,12 @@ namespace IFQuantLauncher
         {
             progressBar.Style = ProgressBarStyle.Marquee;
             progressBar.MarqueeAnimationSpeed = 28;
-            progressDetailLabel.Text = "Preparing the embedded pipeline and starting Fiji...";
-            statusLabel.Text = "Starting — Fiji is being prepared";
+            progressDetailLabel.Text = runningPreview
+                ? "Preparing Fiji to create display-only previews..."
+                : "Preparing the embedded pipeline and starting Fiji...";
+            statusLabel.Text = runningPreview
+                ? "Starting — enhanced-image preview is being prepared"
+                : "Starting — Fiji is being prepared";
             statusLabel.ForeColor = Color.DarkBlue;
         }
 
@@ -1216,11 +1252,13 @@ namespace IFQuantLauncher
             progressBar.Minimum = 0;
             progressBar.Maximum = total;
             progressBar.Value = Math.Max(0, current - 1);
-            statusLabel.Text = "Running — processing image " + current + " of " + total;
+            statusLabel.Text = runningPreview
+                ? "Previewing — image " + current + " of " + total
+                : "Running — processing image " + current + " of " + total;
             statusLabel.ForeColor = Color.DarkBlue;
             progressDetailLabel.Text = fileName.Length > 0
-                ? "Currently analyzing: " + fileName
-                : "Fiji analysis is ongoing.";
+                ? (runningPreview ? "Currently creating previews for: " : "Currently analyzing: ") + fileName
+                : (runningPreview ? "Fiji preview generation is ongoing." : "Fiji analysis is ongoing.");
         }
 
         private void UpdateFinalizingProgress()
@@ -1232,9 +1270,13 @@ namespace IFQuantLauncher
             }
             progressBar.MarqueeAnimationSpeed = 25;
             progressBar.Style = ProgressBarStyle.Marquee;
-            statusLabel.Text = "Finalizing — writing summary and run record";
+            statusLabel.Text = runningPreview
+                ? "Finalizing — checking enhanced preview images"
+                : "Finalizing — writing summary and run record";
             statusLabel.ForeColor = Color.DarkBlue;
-            progressDetailLabel.Text = "Image processing finished; checking required output files.";
+            progressDetailLabel.Text = runningPreview
+                ? "Preview generation finished; checking PNG outputs."
+                : "Image processing finished; checking required output files.";
         }
 
         private void SetProgressTerminal(string detail, bool succeeded, bool cancelled)
@@ -1260,6 +1302,75 @@ namespace IFQuantLauncher
                 statusLabel.ForeColor = Color.DarkRed;
             }
             progressDetailLabel.Text = detail;
+        }
+
+        private void FinishDisplayPreview(RunConfiguration config, int exitCode, string waitError)
+        {
+            SetRunningState(false);
+            string[] allFiles = Directory.Exists(config.OutputDirectory)
+                ? Directory.GetFiles(config.OutputDirectory, "*", SearchOption.AllDirectories)
+                : new string[0];
+            string[] previewPngs = allFiles.Where(delegate(string path)
+            {
+                return path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                       Path.GetFileName(path).IndexOf(
+                           "__DISPLAY_ONLY__", StringComparison.OrdinalIgnoreCase) >= 0;
+            }).ToArray();
+            int mergedCount = previewPngs.Count(delegate(string path)
+            {
+                return Path.GetFileName(path).EndsWith(
+                    "__DISPLAY_ONLY__merged_enhanced.png",
+                    StringComparison.OrdinalIgnoreCase);
+            });
+            string[] unexpectedFiles = allFiles.Where(delegate(string path)
+            {
+                return !path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                       Path.GetFileName(path).IndexOf(
+                           "__DISPLAY_ONLY__", StringComparison.OrdinalIgnoreCase) < 0;
+            }).ToArray();
+
+            AppendLog("");
+            AppendLog("Fiji preview exit code: " + exitCode);
+            AppendLog("Enhanced preview PNGs: " + previewPngs.Length +
+                      " across " + mergedCount + " source image(s).");
+            if (unexpectedFiles.Length > 0)
+                AppendLog("Unexpected non-preview files: " + unexpectedFiles.Length + ".");
+            if (waitError != null)
+                AppendLog("Process wait error: " + waitError);
+
+            lastSummaryPath = null;
+            openSummaryButton.Enabled = false;
+            openOutputButton.Enabled = Directory.Exists(config.OutputDirectory);
+            bool complete = exitCode == 0 && waitError == null &&
+                            mergedCount > 0 && mergedCount <= 5 &&
+                            unexpectedFiles.Length == 0;
+            if (cancellationRequested)
+            {
+                SetProgressTerminal(
+                    "Preview was cancelled. Any enhanced PNGs already written remain available for inspection.",
+                    false,
+                    true);
+            }
+            else if (complete)
+            {
+                SetProgressTerminal(
+                    "Created display-only previews for " + mergedCount +
+                    " image(s). No segmentation or quantitative outputs were generated.",
+                    true,
+                    false);
+                statusLabel.Text = "Complete — enhanced preview images are ready";
+                progressDetailLabel.Text =
+                    "Open the output folder to review the labeled per-channel and merged PNGs.";
+            }
+            else
+            {
+                SetProgressTerminal(
+                    "Enhanced-image preview did not complete cleanly. Review the Fiji log; no output is valid for quantification.",
+                    false,
+                    false);
+                statusLabel.Text = "Preview stopped with a problem — review the log";
+            }
+            runningPreview = false;
         }
 
         private void FinishAnalysis(RunConfiguration config, int exitCode, string waitError)
@@ -1355,10 +1466,13 @@ namespace IFQuantLauncher
         private void SetRunningState(bool running)
         {
             runButton.Enabled = !running;
+            previewButton.Enabled = !running;
             cancelButton.Enabled = running;
             if (running)
             {
-                statusLabel.Text = "Running Fiji analysis...";
+                statusLabel.Text = runningPreview
+                    ? "Running Fiji enhanced-image preview..."
+                    : "Running Fiji analysis...";
                 statusLabel.ForeColor = Color.DarkBlue;
             }
         }
@@ -1375,8 +1489,10 @@ namespace IFQuantLauncher
 
             DialogResult result = MessageBox.Show(
                 this,
-                "Cancel the running Fiji analysis? Partial outputs will be retained for diagnosis and must not be aggregated.",
-                "Cancel analysis",
+                runningPreview
+                    ? "Cancel the enhanced-image preview? Any PNGs already written will remain in the preview folder."
+                    : "Cancel the running Fiji analysis? Partial outputs will be retained for diagnosis and must not be aggregated.",
+                runningPreview ? "Cancel image preview" : "Cancel analysis",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
             if (result != DialogResult.Yes)
@@ -1606,7 +1722,6 @@ namespace IFQuantLauncher
                 settings["segmenter"] = ChoiceKey(segmenterBox);
                 settings["projection"] = ChoiceKey(projectionBox);
                 settings["single_plane"] = singlePlaneBox.Value.ToString(CultureInfo.InvariantCulture);
-                settings["display_enhancement"] = displayEnhancementBox.Checked ? "true" : "false";
                 settings["tissue"] = ChoiceKey(tissueModeBox);
                 settings["compartment_mode"] = ChoiceKey(compartmentModeBox);
                 settings["whole_compartment"] = ChoiceKey(wholeCompartmentBox);
@@ -1648,9 +1763,6 @@ namespace IFQuantLauncher
                 SelectChoice(segmenterBox, GetValue(values, "segmenter", "classic"));
                 SelectChoice(projectionBox, GetValue(values, "projection", "layer_aware"));
                 SetNumeric(singlePlaneBox, GetValue(values, "single_plane", "-1"));
-                displayEnhancementBox.Checked =
-                    string.Equals(GetValue(values, "display_enhancement", "true"),
-                                  "true", StringComparison.OrdinalIgnoreCase);
                 SelectChoice(tissueModeBox, GetValue(values, "tissue", "auto"));
                 SelectChoice(compartmentModeBox, GetValue(values, "compartment_mode", "required"));
                 SelectChoice(wholeCompartmentBox, GetValue(values, "whole_compartment", "unassigned"));
@@ -1701,6 +1813,7 @@ namespace IFQuantLauncher
         public string RegistryPath;
         public bool PanelWasAutoDetected;
         public int PanelDetectionImageCount;
+        public bool PreviewOnly;
         public Dictionary<string, string> Environment;
     }
 
@@ -1795,6 +1908,10 @@ namespace IFQuantLauncher
                         StringComparison.OrdinalIgnoreCase) ||
                     MainForm.InferBuiltInPanelFromText(@"C:\images\unnamed\field.oir") != null)
                     return 22;
+                if (pipelineText.IndexOf("IFQ_DISPLAY_PREVIEW_ONLY", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("[IFQ_PREVIEW]", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("DISPLAY PREVIEW COMPLETE", StringComparison.Ordinal) < 0)
+                    return 23;
                 if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
                     return 12;
                 JavaScriptSerializer json = new JavaScriptSerializer();

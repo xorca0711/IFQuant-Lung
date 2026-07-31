@@ -311,7 +311,12 @@ def MIN_INCLUDED_NUCLEI = envInt("IFQ_MIN_INCLUDED_NUCLEI", 1)
 // --- Visualization-only channel enhancement ---
 // These values are applied only to exported display PNGs and QC composites.
 // Quantification always uses markerImg at its original calibrated intensity.
-def EXPORT_DISPLAY_CHANNELS = envBool("IFQ_EXPORT_DISPLAY_CHANNELS", true)
+// Preview-only mode stops immediately after these PNGs and is capped at five
+// analytical images. It writes no cells, masks, summaries, workbook, params,
+// Z-profile CSV, or analysis manifest.
+def DISPLAY_PREVIEW_ONLY = envBool("IFQ_DISPLAY_PREVIEW_ONLY", false)
+def EXPORT_DISPLAY_CHANNELS = DISPLAY_PREVIEW_ONLY ? true :
+                              envBool("IFQ_EXPORT_DISPLAY_CHANNELS", false)
 def DISPLAY_LOW_PERCENTILE = envDouble("IFQ_DISPLAY_LOW_PERCENTILE", 1.0d)
 def DISPLAY_HIGH_PERCENTILE = envDouble("IFQ_DISPLAY_HIGH_PERCENTILE", 99.8d)
 def DISPLAY_GAMMA = envDouble("IFQ_DISPLAY_GAMMA", 1.0d)
@@ -1843,6 +1848,11 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     labeledMerge.close()
     mergedDisplay.close()
   }
+  if (cfg.displayPreviewOnly) {
+    IJ.log("[IFQ_PREVIEW] Display exports complete; segmentation and quantification deliberately not run.")
+    return [summary: [], cells: 0, tissue_source: "not_run_preview_only",
+            channel_signature: channelSignature, preview_only: true]
+  }
   def dapi = markerImg[nuclearMarker]
   def nonNuclearChannels = panelDef.channels.findAll { it.role != "nuclear" }
   def cellChannels = nonNuclearChannels.findAll { it.cellCall != false }
@@ -3208,6 +3218,7 @@ def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles:
            zApicalRange: Z_APICAL_RANGE, zCellBodyPlanes: Z_CELL_BODY_PLANES,
            zApicalPlanes: Z_APICAL_PLANES,
            exportDisplayChannels: EXPORT_DISPLAY_CHANNELS,
+           displayPreviewOnly: DISPLAY_PREVIEW_ONLY,
            displayLowPercentile: DISPLAY_LOW_PERCENTILE,
            displayHighPercentile: DISPLAY_HIGH_PERCENTILE,
            displayGamma: DISPLAY_GAMMA,
@@ -3255,7 +3266,8 @@ def matchedFiles = listed.findAll {
 }.sort { it.getAbsolutePath() }
 def deliberatelySkippedFiles = matchedFiles.findAll { it.name ==~ NON_ANALYTICAL_MAP_FILE }
 def files = matchedFiles.findAll { !(it.name ==~ NON_ANALYTICAL_MAP_FILE) }
-if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)
+if (DISPLAY_PREVIEW_ONLY) files = files.take(5)
+else if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)
 IJ.log("Found " + files.size() + " analytical image(s); deliberately skipped " +
        deliberatelySkippedFiles.size() + " non-analysis acquisition(s).")
 deliberatelySkippedFiles.each { f ->
@@ -3334,6 +3346,18 @@ files.eachWithIndex { f, fileIndex ->
     manifest.images << [ file: f.name, relative_path: relativePath, output_key: outputKey,
                          panel: panelKey, status: "failed", error: t.getMessage() ]
   }
+}
+
+if (DISPLAY_PREVIEW_ONLY) {
+  if (!failures.isEmpty()) {
+    failRun("Display preview failed for " + failures.size() +
+      " image(s): " + failures.join(", ") + ". Review the Fiji log.")
+  }
+  IJ.log("DISPLAY PREVIEW COMPLETE. Wrote enhanced PNGs only for " +
+         manifest.success_count + " image(s) to " + OUTPUT_DIR +
+         "; segmentation and quantification were not run.")
+  if (java.awt.GraphicsEnvironment.isHeadless()) System.exit(0)
+  return
 }
 
 // master summary + manifest

@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.6.1.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.6.2.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 The build reads the assembly version and writes versioned artifacts directly
 to the repository root:
 
-- `IFQuantLauncher-v1.6.1.exe`
-- `IFQuantLauncher-v1.6.1.sha256.txt`
+- `IFQuantLauncher-v1.6.2.exe`
+- `IFQuantLauncher-v1.6.2.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -33,17 +33,19 @@ and Windows x64; no .NET SDK installation is required on the analysis system.
 1. Select the folder containing the original confocal files.
 2. Select the Fiji executable or its installation folder.
 3. Select an output parent folder.
-4. Leave the staining panel on **AUTO** when marker names are present in image
-   or folder names. AUTO proceeds only when every matching analytical image
-   resolves to the same built-in panel. Unknown or mixed-panel folders stop for
-   manual review. The confirmation dialog still requires the detected channel
-   order to be checked. Manual and validated custom-panel choices remain
-   available.
+4. Leave the staining panel on **AUTO** when the complete marker combination is
+   present in image or folder names. AUTO proceeds only when every matching
+   analytical image resolves to the same built-in panel, then applies that
+   preset's fixed acquisition channel order. It does not identify stains from
+   fluorescence colors, intensity, or image content. Unknown or mixed-panel
+   folders stop for manual review, and nonstandard channel order requires a
+   validated custom panel. The confirmation dialog still requires the resolved
+   channel order to be checked.
 5. For a first pilot, set **Image limit** to `1`; otherwise `0` means all
    matching images. The recommended settings can normally remain unchanged.
-6. Leave **Create enhanced marker-channel images** checked to export one
-   clearly visible PNG per marker and an enhanced color merge. It is a
-   visualization-only option and cannot change cell calls or counts.
+6. Click **Preview enhanced images (first 5)** to check image visibility first,
+   if desired. This separate operation creates enhanced per-channel and merged
+   PNGs only; it does not segment cells or create quantitative outputs.
 7. Click **Review and run analysis**, verify the plain-language run summary,
    and click **OK**.
 
@@ -83,16 +85,26 @@ The progress area distinguishes these states:
 - **Cancelled**: the user terminated Fiji. Partial files are diagnostic only
   and must not be aggregated.
 
+For the preview-only operation, the same progress area reports preview
+preparation, the current source image, and PNG verification. Success requires
+one to five merged preview PNGs, Fiji exit code 0, and no unexpected output
+file types. No summary button is enabled because preview mode intentionally
+creates no `run_summary.csv` or workbook.
+
 The launcher creates a new timestamped folder for every run. It will never set
 `IFQ_ALLOW_NONEMPTY_OUTPUT=true`, and it always sets
 `IFQ_MORPHOLOGY_PRIMARY=true`.
 
-The **Enhanced marker views: ON/OFF** button sets
-`IFQ_EXPORT_DISPLAY_CHANNELS`. Its recommended default is on, making the
-enhanced per-channel PNGs and merged composite primary visual-review outputs.
+The adjacent **Preview enhanced images (first 5)** button sets the protected
+`IFQ_DISPLAY_PREVIEW_ONLY=true` mode and forces enhanced display export. It
+uses the current panel selection and Z-stack handling, stops after PNG creation,
+and writes no masks, cell tables, summary CSV/Excel, parameter JSON, Z-profile
+table, analysis manifest, or `launcher_run.txt`.
+
+The launcher sets `IFQ_EXPORT_DISPLAY_CHANNELS=false` for full analyses, so
+these primary display PNGs are not mixed into quantitative result folders.
 Display percentiles and optional gamma remain reproducible expert/panel
-settings; all enhanced files are labeled `DISPLAY ONLY - NOT QUANTIFIED`, and
-the original calibrated projections remain the quantitative source.
+settings; all enhanced files are labeled `DISPLAY ONLY - NOT QUANTIFIED`.
 
 The completed folder contains the normal Fiji pipeline outputs plus
 `launcher_run.txt`, which records:
