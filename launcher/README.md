@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.7.0.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.7.1.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 The build reads the assembly version and writes versioned artifacts directly
 to the repository root:
 
-- `IFQuantLauncher-v1.7.0.exe`
-- `IFQuantLauncher-v1.7.0.sha256.txt`
+- `IFQuantLauncher-v1.7.1.exe`
+- `IFQuantLauncher-v1.7.1.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -44,11 +44,14 @@ and Windows x64; no .NET SDK installation is required on the analysis system.
    The confirmation dialog lists each allocated panel and image count.
 5. For a first pilot, set **Image limit** to `1`; otherwise `0` means all
    matching images. The recommended settings can normally remain unchanged.
-6. Click **Preview enhanced images (first 5)** to check image visibility first,
-   if desired. This separate operation creates enhanced per-channel and merged
-   PNGs only; it does not segment cells or create quantitative outputs.
+6. Click **Create visual merge panels** to generate the merged marker
+   presentation for the configured image scope, if desired. With **Image
+   limit** set to `0`, every matching image is processed. This separate
+   operation creates merged and supporting enhanced channel PNGs only; it does
+   not segment cells or create quantitative outputs.
 7. Click **Review and run analysis**, verify the plain-language run summary,
-   and click **OK**.
+   and click **OK**. The full run exports the same enhanced per-channel and
+   merged views for every analyzed image in addition to quantitative results.
 
 The **First-time help** button explains every required choice. Script-oriented
 settings and custom panel files are hidden under **Show advanced study
@@ -86,26 +89,29 @@ The progress area distinguishes these states:
 - **Cancelled**: the user terminated Fiji. Partial files are diagnostic only
   and must not be aggregated.
 
-For the preview-only operation, the same progress area reports preview
+For the visual-merge-only operation, the same progress area reports
 preparation, the current source image, and PNG verification. Success requires
-one to five merged preview PNGs, Fiji exit code 0, and no unexpected output
-file types. No summary button is enabled because preview mode intentionally
+at least one visual merge panel, Fiji exit code 0, and no unexpected output
+file types. No summary button is enabled because this mode intentionally
 creates no `run_summary.csv` or workbook.
 
 The launcher creates a new timestamped folder for every run. It will never set
 `IFQ_ALLOW_NONEMPTY_OUTPUT=true`, and it always sets
 `IFQ_MORPHOLOGY_PRIMARY=true`.
 
-The adjacent **Preview enhanced images (first 5)** button sets the protected
+The adjacent **Create visual merge panels** button sets the protected internal
 `IFQ_DISPLAY_PREVIEW_ONLY=true` mode and forces enhanced display export. It
-uses the current panel selection and Z-stack handling, stops after PNG creation,
-and writes no masks, cell tables, summary CSV/Excel, parameter JSON, Z-profile
-table, analysis manifest, or `launcher_run.txt`.
+uses the current panel selection, Z-stack handling, filename filter, recursive
+setting, and image limit. An image limit of `0` processes all matching images.
+It stops after PNG creation and writes no masks, cell tables, summary
+CSV/Excel, parameter JSON, Z-profile table, analysis manifest, or
+`launcher_run.txt`.
 
-The launcher sets `IFQ_EXPORT_DISPLAY_CHANNELS=false` for full analyses, so
-these primary display PNGs are not mixed into quantitative result folders.
-Display percentiles and optional gamma remain reproducible expert/panel
-settings; all enhanced files are labeled `DISPLAY ONLY - NOT QUANTIFIED`.
+The launcher sets `IFQ_EXPORT_DISPLAY_CHANNELS=true` for full analyses. Every
+analyzed image therefore receives enhanced per-channel and merged companion
+views in its result folder. Display percentiles and optional gamma remain
+reproducible expert/panel settings; all enhanced files are labeled
+`DISPLAY ONLY - NOT QUANTIFIED` and never feed back into quantification.
 
 The completed folder contains the normal Fiji pipeline outputs plus
 `launcher_run.txt`, which records:

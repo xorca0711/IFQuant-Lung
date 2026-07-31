@@ -316,9 +316,9 @@ def MIN_INCLUDED_NUCLEI = envInt("IFQ_MIN_INCLUDED_NUCLEI", 1)
 // --- Visualization-only channel enhancement ---
 // These values are applied only to exported display PNGs and QC composites.
 // Quantification always uses markerImg at its original calibrated intensity.
-// Preview-only mode stops immediately after these PNGs and is capped at five
-// analytical images. It writes no cells, masks, summaries, workbook, params,
-// Z-profile CSV, or analysis manifest.
+// Visual-merge-only mode stops immediately after these PNGs. Its image scope
+// follows IFQ_MAX_IMAGES (0 = all matching analytical images). It writes no
+// cells, masks, summaries, workbook, params, Z-profile CSV, or manifest.
 def DISPLAY_PREVIEW_ONLY = envBool("IFQ_DISPLAY_PREVIEW_ONLY", false)
 def EXPORT_DISPLAY_CHANNELS = DISPLAY_PREVIEW_ONLY ? true :
                               envBool("IFQ_EXPORT_DISPLAY_CHANNELS", false)
@@ -1867,10 +1867,10 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     def labeledMerge = labelDisplayOnlyExport(
       mergedDisplay, panelDef.channels.collect { c ->
         c.marker + "=" + (c.qcColor ?: "white")
-      }.join(", "))
+      }.join(", "), true)
     transientImages << labeledMerge
     IJ.saveAs(labeledMerge, "PNG", imgOut.getAbsolutePath() + "/" + fileKey +
-              "__DISPLAY_ONLY__merged_enhanced.png")
+              "__VISUAL_MERGE_PANEL__merged_enhanced.png")
     labeledMerge.close()
     mergedDisplay.close()
   }
@@ -2752,7 +2752,8 @@ def buildDisplayChannel(ImagePlus source, String marker, double lowPercentile,
           gamma:gamma]
 }
 
-def labelDisplayOnlyExport(ImagePlus source, String label) {
+def labelDisplayOnlyExport(ImagePlus source, String label,
+                           boolean visualMergePanel = false) {
   ColorProcessor cp = source.getProcessor().convertToRGB() as ColorProcessor
   int bannerHeight = Math.min(30, Math.max(18, cp.getHeight()))
   cp.setColor(Color.BLACK)
@@ -2761,7 +2762,9 @@ def labelDisplayOnlyExport(ImagePlus source, String label) {
   cp.resetRoi()
   cp.setColor(Color.WHITE)
   cp.setFont(new Font("SansSerif", Font.BOLD, 13))
-  cp.drawString("DISPLAY ONLY - NOT QUANTIFIED | " + label, 8, 19)
+  cp.drawString((visualMergePanel ?
+    "VISUAL MERGE PANEL - NOT QUANTIFIED | " :
+    "DISPLAY ONLY - NOT QUANTIFIED | ") + label, 8, 19)
   return new ImagePlus(source.getTitle() + "_labeled", cp)
 }
 
@@ -3336,8 +3339,7 @@ def matchedFiles = listed.findAll {
 }.sort { it.getAbsolutePath() }
 def deliberatelySkippedFiles = matchedFiles.findAll { it.name ==~ NON_ANALYTICAL_MAP_FILE }
 def files = matchedFiles.findAll { !(it.name ==~ NON_ANALYTICAL_MAP_FILE) }
-if (DISPLAY_PREVIEW_ONLY) files = files.take(5)
-else if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)
+if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)
 IJ.log("Found " + files.size() + " analytical image(s); deliberately skipped " +
        deliberatelySkippedFiles.size() + " non-analysis acquisition(s).")
 deliberatelySkippedFiles.each { f ->
@@ -3448,10 +3450,10 @@ files.eachWithIndex { f, fileIndex ->
 
 if (DISPLAY_PREVIEW_ONLY) {
   if (!failures.isEmpty()) {
-    failRun("Display preview failed for " + failures.size() +
+    failRun("Visual merge panel generation failed for " + failures.size() +
       " image(s): " + failures.join(", ") + ". Review the Fiji log.")
   }
-  IJ.log("DISPLAY PREVIEW COMPLETE. Wrote enhanced PNGs only for " +
+  IJ.log("VISUAL MERGE PANELS COMPLETE. Wrote merged and supporting PNGs only for " +
          manifest.success_count + " image(s) to " + OUTPUT_DIR +
          "; segmentation and quantification were not run.")
   if (java.awt.GraphicsEnvironment.isHeadless()) System.exit(0)

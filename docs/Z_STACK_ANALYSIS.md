@@ -134,7 +134,7 @@ Each analyzed image now writes:
   automatic-selection score, voxel anisotropy, and the 2.5D limitation.
 - `*__DISPLAY_ONLY__C#-<marker>_enhanced.png`: an individually labeled marker
   view using a recorded percentile display stretch and optional gamma.
-- `*__DISPLAY_ONLY__merged_enhanced.png`: the labeled color merge assembled
+- `*__VISUAL_MERGE_PANEL__merged_enhanced.png`: the labeled color merge assembled
   from those display copies.
 - The existing call overlays, per-cell CSV, regional summaries, masks and
   workbook outputs.

@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.7.0.0")]
-[assembly: AssemblyFileVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.7.1.0")]
+[assembly: AssemblyFileVersion("1.7.1.0")]
 
 namespace IFQuantLauncher
 {
@@ -193,7 +193,7 @@ namespace IFQuantLauncher
             intro.Text =
                 "Quick start: (1) choose the folder containing your original microscope files, " +
                 "(2) choose the Fiji installation and where results should be saved, " +
-                "(3) leave panel selection on AUTO when the complete marker panel is named in the file/folder path, then choose preview or analysis. " +
+                "(3) leave panel selection on AUTO when the complete marker panel is named in the file/folder path, then create visual merge panels or run analysis. " +
                 "Recommended settings can normally be left unchanged. Research use only.";
             root.Controls.Add(intro, 0, 0);
 
@@ -445,14 +445,14 @@ namespace IFQuantLauncher
             actions.Controls.Add(runButton);
 
             previewButton = new Button();
-            previewButton.Text = "Preview enhanced images (first 5)";
+            previewButton.Text = "Create visual merge panels";
             previewButton.AutoSize = true;
             previewButton.Padding = new Padding(12, 5, 12, 5);
             previewButton.Click += delegate { StartDisplayPreview(); };
             actions.Controls.Add(previewButton);
             toolTips.SetToolTip(
                 previewButton,
-                "Runs only import, panel/Z routing, and display scaling for up to five images. " +
+                "Creates the primary visual merge panel and supporting enhanced channel views for every image in the configured run scope. " +
                 "No segmentation, cell calls, masks, CSV, Excel, parameters, or analysis manifest are produced.");
 
             cancelButton = new Button();
@@ -981,10 +981,11 @@ namespace IFQuantLauncher
                 "Unknown images stop rather than being guessed. Each allocation uses a preset's fixed acquisition channel order; AUTO does not discover marker identity from fluorescence colors. " +
                 "Use a manual/custom choice when naming is insufficient or channel order differs.\r\n\r\n" +
                 "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
-                "6. Click Preview enhanced images (first 5) to inspect display-only PNGs before analysis. " +
-                "This preview performs no segmentation, cell calls, masks, CSV, Excel, or manifest export.\r\n\r\n" +
-                "7. When the panel and display are correct, click Review and run analysis. Watch the progress bar and status text. " +
-                "A successful analysis enables Open summary Excel.\r\n\r\n" +
+                "6. Click Create visual merge panels to generate the merged marker presentation for every image in the configured run scope. " +
+                "This visual-only operation performs no segmentation, cell calls, masks, CSV, Excel, or manifest export.\r\n\r\n" +
+                "7. When the marker allocation and merge presentation are correct, click Review and run analysis. " +
+                "The full run creates a visual merge panel for every analyzed image as well as the quantitative results. " +
+                "Watch the progress bar and status text; a successful analysis enables Open summary Excel.\r\n\r\n" +
                 "Always inspect the QC overlays. The software quantifies fluorescence patterns for research and does not make a diagnosis.",
                 "First-time guide",
                 MessageBoxButtons.OK,
@@ -1092,7 +1093,7 @@ namespace IFQuantLauncher
                 MessageBox.Show(
                     this,
                     ex.Message,
-                    previewOnly ? "Cannot start image preview" : "Cannot start analysis",
+                    previewOnly ? "Cannot create visual merge panels" : "Cannot start analysis",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
@@ -1129,8 +1130,8 @@ namespace IFQuantLauncher
                     }))
                 : "Panel:  " + config.Environment["IFQ_PANEL"]);
             AppendLog(previewOnly
-                ? "Mode:   enhanced-image preview only; first five matching images; no quantification"
-                : "Mode:   full analysis");
+                ? "Mode:   visual merge panels only; configured image scope; no quantification"
+                : "Mode:   full analysis with a visual merge panel for every analyzed image");
             AppendLog("Starting Fiji...");
 
             ProcessStartInfo psi = new ProcessStartInfo();
@@ -1247,18 +1248,20 @@ namespace IFQuantLauncher
         {
             DialogResult result = MessageBox.Show(
                 this,
-                "Create enhanced preview images only?\r\n\r\n" +
+                "Create visual merge panels only?\r\n\r\n" +
                 "Input:\r\n" + config.InputDirectory + "\r\n\r\n" +
                 "Detected/selected marker-channel allocation:\r\n" +
                 DescribePanelAllocation(config) + "\r\n\r\n" +
                 "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
-                "Images: first 5 matching analytical images at most\r\n\r\n" +
+                "Images: " + (config.Environment["IFQ_MAX_IMAGES"] == "0"
+                    ? "all matching analytical images"
+                    : "up to " + config.Environment["IFQ_MAX_IMAGES"] + " matching analytical image(s)") + "\r\n\r\n" +
                 "Output folder:\r\n" + config.OutputDirectory + "\r\n\r\n" +
-                "This preview will write only labeled enhanced channel PNGs and merged PNGs. " +
+                "This operation writes the primary visual merge panel and supporting enhanced channel PNGs. " +
                 "It will not run segmentation or create cell counts, masks, CSV, Excel, " +
                 "parameter files, Z-profile tables, or an analysis manifest.\r\n\r\n" +
                 "Continue?",
-                "Review enhanced-image preview",
+                "Review visual merge panel generation",
                 MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Information);
             return result == DialogResult.OK;
@@ -1300,7 +1303,7 @@ namespace IFQuantLauncher
                     : "Panel selection: manual/custom. Confirm the acquisition channel order.\r\n\r\n") +
                 "Nucleus detection: " + config.Environment["IFQ_SEGMENTER"] + "\r\n" +
                 "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
-                "Enhanced marker views: separate preview operation (not part of this analysis)\r\n" +
+                "Enhanced marker views: exported for every analyzed image (display-only; not quantified)\r\n" +
                 "Files: " + limit + "\r\n\r\n" +
                 "New result folder:\r\n" + config.OutputDirectory + warning +
                 "\r\n\r\nStart Fiji analysis now?",
@@ -1380,7 +1383,7 @@ namespace IFQuantLauncher
             if (runStem.Length == 0)
                 runStem = "IFQ_run";
             if (previewOnly)
-                runStem += "_enhanced_preview";
+                runStem += "_visual_merge_panels";
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             string outputDirectory = MakeUniqueDirectory(Path.Combine(outputBase, runStem + "_" + timestamp));
 
@@ -1395,14 +1398,17 @@ namespace IFQuantLauncher
                 env["IFQ_PANEL_CONFIG"] = Path.GetFullPath(panelConfig);
             env["IFQ_RECURSIVE"] = recursiveBox.Checked ? "true" : "false";
             env["IFQ_INCLUDE_REGEX"] = includeRegex;
-            env["IFQ_MAX_IMAGES"] = previewOnly ? "5" :
+            env["IFQ_MAX_IMAGES"] =
                 Decimal.ToInt32(maxImagesBox.Value).ToString(CultureInfo.InvariantCulture);
             env["IFQ_SEGMENTER"] = ChoiceKey(segmenterBox);
             env["IFQ_PROJECTION"] = ChoiceKey(projectionBox);
             env["IFQ_SINGLE_PLANE"] = Decimal.ToInt32(singlePlaneBox.Value).ToString(CultureInfo.InvariantCulture);
-            // Enhanced primary-view PNGs are a separate preview operation.
-            // Full analysis retains its normal quantitative/QC outputs only.
-            env["IFQ_EXPORT_DISPLAY_CHANNELS"] = previewOnly ? "true" : "false";
+            // Both operations export a disposable visualization branch. In a
+            // full run, quantification still consumes only the untouched
+            // calibrated projections; the enhanced 8-bit PNGs are never fed
+            // back into segmentation, thresholds, masks, or marker calls.
+            env["IFQ_EXPORT_DISPLAY_CHANNELS"] =
+                DisplayChannelExportSetting(previewOnly);
             env["IFQ_DISPLAY_PREVIEW_ONLY"] = previewOnly ? "true" : "false";
             env["IFQ_TISSUE_MODE"] = ChoiceKey(tissueModeBox);
             env["IFQ_COMPARTMENT_MODE"] = ChoiceKey(compartmentModeBox);
@@ -1427,6 +1433,13 @@ namespace IFQuantLauncher
             config.AutoPanelMapPath = autoPanelMapPath;
             config.PreviewOnly = previewOnly;
             return config;
+        }
+
+        internal static string DisplayChannelExportSetting(bool previewOnly)
+        {
+            // Kept as a mode-aware policy seam so the packaged self-test can
+            // verify that both launcher operations request companion views.
+            return "true";
         }
 
         private static Dictionary<string, string> ParseAdvancedEnvironment(string text)
@@ -1488,7 +1501,7 @@ namespace IFQuantLauncher
                 }
             }
             else if (line.IndexOf("DONE. Wrote run_summary.csv", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                     line.IndexOf("DISPLAY PREVIEW COMPLETE", StringComparison.OrdinalIgnoreCase) >= 0)
+                     line.IndexOf("VISUAL MERGE PANELS COMPLETE", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 UpdateFinalizingProgress();
             }
@@ -1499,10 +1512,10 @@ namespace IFQuantLauncher
             progressBar.Style = ProgressBarStyle.Marquee;
             progressBar.MarqueeAnimationSpeed = 28;
             progressDetailLabel.Text = runningPreview
-                ? "Preparing Fiji to create display-only previews..."
+                ? "Preparing Fiji to create visual merge panels..."
                 : "Preparing the embedded pipeline and starting Fiji...";
             statusLabel.Text = runningPreview
-                ? "Starting — enhanced-image preview is being prepared"
+                ? "Starting — visual merge panels are being prepared"
                 : "Starting — Fiji is being prepared";
             statusLabel.ForeColor = Color.DarkBlue;
         }
@@ -1522,12 +1535,12 @@ namespace IFQuantLauncher
             progressBar.Maximum = total;
             progressBar.Value = Math.Max(0, current - 1);
             statusLabel.Text = runningPreview
-                ? "Previewing — image " + current + " of " + total
+                ? "Merging — image " + current + " of " + total
                 : "Running — processing image " + current + " of " + total;
             statusLabel.ForeColor = Color.DarkBlue;
             progressDetailLabel.Text = fileName.Length > 0
-                ? (runningPreview ? "Currently creating previews for: " : "Currently analyzing: ") + fileName
-                : (runningPreview ? "Fiji preview generation is ongoing." : "Fiji analysis is ongoing.");
+                ? (runningPreview ? "Currently creating a visual merge panel for: " : "Currently analyzing: ") + fileName
+                : (runningPreview ? "Fiji visual merge panel generation is ongoing." : "Fiji analysis is ongoing.");
         }
 
         private void UpdateFinalizingProgress()
@@ -1540,11 +1553,11 @@ namespace IFQuantLauncher
             progressBar.MarqueeAnimationSpeed = 25;
             progressBar.Style = ProgressBarStyle.Marquee;
             statusLabel.Text = runningPreview
-                ? "Finalizing — checking enhanced preview images"
+                ? "Finalizing — checking visual merge panels"
                 : "Finalizing — writing summary and run record";
             statusLabel.ForeColor = Color.DarkBlue;
             progressDetailLabel.Text = runningPreview
-                ? "Preview generation finished; checking PNG outputs."
+                ? "Visual merge generation finished; checking PNG outputs."
                 : "Image processing finished; checking required output files.";
         }
 
@@ -1581,29 +1594,31 @@ namespace IFQuantLauncher
                 : new string[0];
             string[] previewPngs = allFiles.Where(delegate(string path)
             {
+                string name = Path.GetFileName(path);
                 return path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
-                       Path.GetFileName(path).IndexOf(
-                           "__DISPLAY_ONLY__", StringComparison.OrdinalIgnoreCase) >= 0;
+                       (name.IndexOf("__DISPLAY_ONLY__", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        name.IndexOf("__VISUAL_MERGE_PANEL__", StringComparison.OrdinalIgnoreCase) >= 0);
             }).ToArray();
             int mergedCount = previewPngs.Count(delegate(string path)
             {
                 return Path.GetFileName(path).EndsWith(
-                    "__DISPLAY_ONLY__merged_enhanced.png",
+                    "__VISUAL_MERGE_PANEL__merged_enhanced.png",
                     StringComparison.OrdinalIgnoreCase);
             });
             string[] unexpectedFiles = allFiles.Where(delegate(string path)
             {
+                string name = Path.GetFileName(path);
                 return !path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                       Path.GetFileName(path).IndexOf(
-                           "__DISPLAY_ONLY__", StringComparison.OrdinalIgnoreCase) < 0;
+                       (name.IndexOf("__DISPLAY_ONLY__", StringComparison.OrdinalIgnoreCase) < 0 &&
+                        name.IndexOf("__VISUAL_MERGE_PANEL__", StringComparison.OrdinalIgnoreCase) < 0);
             }).ToArray();
 
             AppendLog("");
-            AppendLog("Fiji preview exit code: " + exitCode);
-            AppendLog("Enhanced preview PNGs: " + previewPngs.Length +
+            AppendLog("Fiji visual merge panel exit code: " + exitCode);
+            AppendLog("Visual merge/supporting PNGs: " + previewPngs.Length +
                       " across " + mergedCount + " source image(s).");
             if (unexpectedFiles.Length > 0)
-                AppendLog("Unexpected non-preview files: " + unexpectedFiles.Length + ".");
+                AppendLog("Unexpected non-visual files: " + unexpectedFiles.Length + ".");
             if (waitError != null)
                 AppendLog("Process wait error: " + waitError);
 
@@ -1611,33 +1626,33 @@ namespace IFQuantLauncher
             openSummaryButton.Enabled = false;
             openOutputButton.Enabled = Directory.Exists(config.OutputDirectory);
             bool complete = exitCode == 0 && waitError == null &&
-                            mergedCount > 0 && mergedCount <= 5 &&
+                            mergedCount > 0 &&
                             unexpectedFiles.Length == 0;
             if (cancellationRequested)
             {
                 SetProgressTerminal(
-                    "Preview was cancelled. Any enhanced PNGs already written remain available for inspection.",
+                    "Visual merge panel generation was cancelled. Any PNGs already written remain available for inspection.",
                     false,
                     true);
             }
             else if (complete)
             {
                 SetProgressTerminal(
-                    "Created display-only previews for " + mergedCount +
+                    "Created visual merge panels for " + mergedCount +
                     " image(s). No segmentation or quantitative outputs were generated.",
                     true,
                     false);
-                statusLabel.Text = "Complete — enhanced preview images are ready";
+                statusLabel.Text = "Complete — visual merge panels are ready";
                 progressDetailLabel.Text =
                     "Open the output folder to review the labeled per-channel and merged PNGs.";
             }
             else
             {
                 SetProgressTerminal(
-                    "Enhanced-image preview did not complete cleanly. Review the Fiji log; no output is valid for quantification.",
+                    "Visual merge panel generation did not complete cleanly. Review the Fiji log; no output is valid for quantification.",
                     false,
                     false);
-                statusLabel.Text = "Preview stopped with a problem — review the log";
+                statusLabel.Text = "Visual merge panels stopped with a problem — review the log";
             }
             DeleteTemporaryPanelMap(config);
             runningPreview = false;
@@ -1742,7 +1757,7 @@ namespace IFQuantLauncher
             if (running)
             {
                 statusLabel.Text = runningPreview
-                    ? "Running Fiji enhanced-image preview..."
+                    ? "Running Fiji visual merge panel generation..."
                     : "Running Fiji analysis...";
                 statusLabel.ForeColor = Color.DarkBlue;
             }
@@ -1761,9 +1776,9 @@ namespace IFQuantLauncher
             DialogResult result = MessageBox.Show(
                 this,
                 runningPreview
-                    ? "Cancel the enhanced-image preview? Any PNGs already written will remain in the preview folder."
+                    ? "Cancel visual merge panel generation? Any PNGs already written will remain in the output folder."
                     : "Cancel the running Fiji analysis? Partial outputs will be retained for diagnosis and must not be aggregated.",
-                runningPreview ? "Cancel image preview" : "Cancel analysis",
+                runningPreview ? "Cancel visual merge panels" : "Cancel analysis",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
             if (result != DialogResult.Yes)
@@ -2198,7 +2213,7 @@ namespace IFQuantLauncher
                     pipelineText.IndexOf("ALI23_MAP_KRT5_tdTOM", StringComparison.Ordinal) < 0)
                     return 20;
                 if (pipelineText.IndexOf("DISPLAY ONLY - NOT QUANTIFIED", StringComparison.Ordinal) < 0 ||
-                    pipelineText.IndexOf("__DISPLAY_ONLY__merged_enhanced.png", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("__VISUAL_MERGE_PANEL__merged_enhanced.png", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("visualization_only_not_quantification", StringComparison.Ordinal) < 0)
                     return 21;
                 if (!string.Equals(
@@ -2225,12 +2240,26 @@ namespace IFQuantLauncher
                     return 22;
                 if (pipelineText.IndexOf("IFQ_DISPLAY_PREVIEW_ONLY", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("[IFQ_PREVIEW]", StringComparison.Ordinal) < 0 ||
-                    pipelineText.IndexOf("DISPLAY PREVIEW COMPLETE", StringComparison.Ordinal) < 0)
+                    pipelineText.IndexOf("VISUAL MERGE PANELS COMPLETE", StringComparison.Ordinal) < 0)
                     return 23;
                 if (pipelineText.IndexOf("IFQ_PANEL_MAP_PATH", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("auto_panel_assignments.csv", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("per_image_panel_routing", StringComparison.Ordinal) < 0)
                     return 24;
+                if (!string.Equals(
+                        MainForm.DisplayChannelExportSetting(false), "true",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        MainForm.DisplayChannelExportSetting(true), "true",
+                        StringComparison.OrdinalIgnoreCase))
+                    return 26;
+                if (pipelineText.IndexOf(
+                        "if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)",
+                        StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf(
+                        "if (DISPLAY_PREVIEW_ONLY) files = files.take(5)",
+                        StringComparison.Ordinal) >= 0)
+                    return 27;
                 string mixedRoot = Path.Combine(
                     Path.GetTempPath(),
                     "IFQuantLauncher-mixed-panel-" + Guid.NewGuid().ToString("N"));

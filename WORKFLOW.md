@@ -17,7 +17,7 @@ comparing experimental groups.
 | `main` | Universal morphology-first pipeline plus optional layer-aware Z routing and display enhancement | Current production branch |
 | `codex/z-stack-analysis` | Integration history for layer-aware 2.5D Z routing, ALI presets, marker refinements, Z QC, display enhancement, and zero-cell protection | Validated and promoted to `main` |
 | `codex/legacy-pre-reorganization` | Historical pre-reorganization snapshot | Retain as legacy history |
-| Launcher | `IFQuantLauncher-v1.7.0.exe` in the repository root | Per-image AUTO panel/subset routing plus independent five-image enhanced-preview and full-analysis buttons |
+| Launcher | `IFQuantLauncher-v1.7.1.exe` in the repository root | Per-image AUTO routing, all-selected-image visual merge generation, and one companion merge panel per full-analysis image |
 
 The layer-aware implementation is additive. Legacy `max`, `sum`, `avg`, and
 `single` projection modes retain their established behavior. The Windows GUI
@@ -279,15 +279,18 @@ does not claim 3D cell-boundary reconstruction.
 ```mermaid
 flowchart TD
     A[Marker-specific projected channel] --> P{Launcher operation}
-    P -->|Review and run analysis| B[Keep original calibrated pixels]
-    P -->|Preview enhanced images; first 5| C[Duplicate display copy]
+    P -->|Review and run analysis| B[Keep original calibrated pixels for quantification]
+    P -->|Review and run analysis| C[Duplicate display copy for every analyzed image]
+    P -->|Create visual merge panels; configured image scope| C
     C --> D[Resolve per-channel low and high percentiles]
     D --> E[Map display range to 8-bit]
     E --> F[Apply optional display gamma]
     F --> G[Write labeled individual marker PNG]
     F --> H[Color-merge enhanced marker copies]
     H --> I[Write labeled enhanced composite]
-    I --> Q[Stop: PNG files only]
+    I --> Q{Visual-merge-only operation?}
+    Q -->|Yes| R[Stop: PNG files only]
+    Q -->|No| J
     B --> J[Thresholds, masks, morphology, and final calls]
 ```
 
@@ -295,22 +298,25 @@ Intensity adjustment is deliberately isolated from measurement. The default
 display range is the 1.0th to 99.8th percentile with gamma 1.0. A panel channel
 may override `displayLowPercentile`, `displayHighPercentile`, or
 `displayGamma`. All enhanced files contain the banner
-`DISPLAY ONLY - NOT QUANTIFIED`. Preview-only mode deliberately creates no
-parameter or analysis files. The original projected pixels—not the enhanced
+`DISPLAY ONLY - NOT QUANTIFIED`; merged outputs are labeled
+`VISUAL MERGE PANEL - NOT QUANTIFIED`. Visual-merge-only mode deliberately
+creates no parameter or analysis files. The original projected pixels—not the enhanced
 8-bit copies—remain the only source for thresholds, masks, intensity audit
 fields, morphology features, and final calls.
 
-The launcher presents **Preview enhanced images (first 5)** next to
-**Review and run analysis**. Preview mode uses the selected panel and Z-routing
-rules, processes at most five analytical images, and exits immediately after
-writing labeled individual and merged PNGs. It does not run DAPI segmentation,
-cell inclusion, marker decisions, or aggregation, and it writes no masks, CSV,
+The launcher presents **Create visual merge panels** next to **Review and run
+analysis**. Visual-merge-only mode uses the selected panel and Z-routing rules
+and processes the configured run scope: image limit `0` means all matching
+analytical images. It exits immediately after writing the primary visual merge
+panel and supporting channel PNGs. It does not run DAPI segmentation, cell
+inclusion, marker decisions, or aggregation, and it writes no masks, CSV,
 Excel, parameter JSON, Z profile, analysis manifest, or launcher record.
 
-The launcher explicitly disables enhanced primary-view export during
-**Review and run analysis**, keeping visualization previews and quantitative
-result folders separate. Expert command-line runs may still opt in with
-`IFQ_EXPORT_DISPLAY_CHANNELS=true`; its default is false.
+During **Review and run analysis**, the launcher exports the same labeled
+per-channel and merged enhanced views for every analyzed image inside that
+image's result folder. These companion merge panels remain display-only and do not
+change the quantitative branch. Direct command-line runs may opt in with
+`IFQ_EXPORT_DISPLAY_CHANNELS=true`; its CLI default remains false.
 
 ## Decision authority and three-state semantics
 
@@ -560,7 +566,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`IFQuantLauncher-v1.7.0.exe`](IFQuantLauncher-v1.7.0.exe). It exposes the
+[`IFQuantLauncher-v1.7.1.exe`](IFQuantLauncher-v1.7.1.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.

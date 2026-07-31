@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`IFQuantLauncher-v1.7.0.exe`](IFQuantLauncher-v1.7.0.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.7.1.exe`](IFQuantLauncher-v1.7.1.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,7 +25,7 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher-v1.7.0.exe`](IFQuantLauncher-v1.7.0.exe), then select:
+Run [`IFQuantLauncher-v1.7.1.exe`](IFQuantLauncher-v1.7.1.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
@@ -46,15 +46,18 @@ and image count.
 Full AUTO analyses retain `auto_panel_assignments.csv` inside the result folder
 as the per-image allocation audit. Each image is
 processed only with markers present in its allocated panel, so an omitted
-channel is not converted into a negative call. Preview mode uses the same
-routing but remains PNG-only.
+channel is not converted into a negative call. Visual-merge-only mode uses the
+same routing but remains PNG-only.
 
-Use **Preview enhanced images (first 5)** beside **Review and run analysis** to
-check panel labels, Z routing, and display scaling before quantification. This
-separate path processes at most five analytical images and writes only labeled
-per-channel and merged enhanced PNGs. It performs no segmentation or marker
-calling and writes no masks, CSV, Excel, parameter JSON, Z-profile table,
-analysis manifest, or launcher run record.
+Use **Create visual merge panels** beside **Review and run analysis** to
+generate the primary merged marker presentation without quantification. It
+processes the configured image scope: `Image limit = 0` means every matching
+image, while a positive limit restricts both launcher operations. It writes
+the visual merge panel and supporting enhanced per-channel PNGs, but performs
+no segmentation or marker calling and writes no masks, CSV, Excel, parameter
+JSON, Z-profile table, analysis manifest, or launcher run record. A subsequent
+full analysis also exports one visual merge panel for every analyzed image
+alongside its quantitative outputs.
 
 The same `AnyCPU` executable supports Windows ARM64 and Windows x64. When a Fiji
 folder is selected, ARM64 Windows prefers `fiji-windows-arm64.exe`; x64 Windows
@@ -384,8 +387,8 @@ groups are compared; the example values above are not validated cutoffs.
 | `IFQ_Z_CELL_BODY_RANGE` | `auto`, `full`, or inclusive `start:end`; automatic mode selects the brightest contiguous DAPI window |
 | `IFQ_Z_APICAL_RANGE` | `auto`, `full`, or inclusive `start:end`; automatic mode selects the brightest contiguous window in the apical marker channel |
 | `IFQ_Z_CELL_BODY_PLANES` / `IFQ_Z_APICAL_PLANES` | Automatic slab widths; defaults are 5 and 3 planes |
-| `IFQ_EXPORT_DISPLAY_CHANNELS` | `false` by default; expert CLI opt-in for enhanced PNGs during a full analysis; the launcher keeps them in the separate preview operation |
-| `IFQ_DISPLAY_PREVIEW_ONLY` | launcher-controlled preview mode; caps input at five and exits after enhanced PNG export without quantification outputs |
+| `IFQ_EXPORT_DISPLAY_CHANNELS` | `false` by default for direct CLI runs; the launcher sets it to `true` for both visual-merge-only and full-analysis runs |
+| `IFQ_DISPLAY_PREVIEW_ONLY` | internal launcher-controlled visual-merge-only mode; follows `IFQ_MAX_IMAGES` and exits after PNG export without quantification outputs |
 | `IFQ_DISPLAY_LOW_PERCENTILE` / `IFQ_DISPLAY_HIGH_PERCENTILE` | display stretch limits; defaults are `1.0` and `99.8` percent |
 | `IFQ_DISPLAY_GAMMA` | positive gamma applied only to display copies; default `1.0` |
 | `IFQ_DAPI_METHOD` | Explicit `local_phansalkar` or `global_otsu`; if omitted, layer-aware mode uses global Otsu and legacy modes retain local Phansalkar |
@@ -435,7 +438,7 @@ OUTPUT_DIR/
     ├── <stem>__params.json             # per-image parameters, calibration, channel map, thresholds
     ├── <stem>__z_plane_profile.csv     # marker/plane signal profile and selected Z ranges
     ├── <stem>__DISPLAY_ONLY__C#-<marker>_enhanced.png  # percentile-scaled marker view
-    ├── <stem>__DISPLAY_ONLY__merged_enhanced.png       # color composite for visual review
+    ├── <stem>__VISUAL_MERGE_PANEL__merged_enhanced.png # primary merged marker presentation
     ├── <stem>__<region>__QC.png        # QC overlay: tissue (white), nuclei (cyan), KRT5⁺ (magenta), pods (yellow)
     ├── <stem>__<region>__nuclei_mask.tif  # 16-bit label mask of nuclei
     ├── <stem>__<region>__<marker>_morphology_positive_nuclei_mask.tif
@@ -455,8 +458,9 @@ Windows may fail to open. The same signature is stored in `__params.json` and
 `run_manifest.json`. For panels without a recorded fluorophore, the channel's
 biological marker name is used.
 
-Every enhanced PNG is labeled **DISPLAY ONLY - NOT QUANTIFIED**. Percentile
-stretching and optional gamma are applied to duplicate 8-bit display images;
+Every supporting channel PNG is labeled **DISPLAY ONLY - NOT QUANTIFIED** and
+the merged output is labeled **VISUAL MERGE PANEL - NOT QUANTIFIED**.
+Percentile stretching and optional gamma are applied to duplicate 8-bit images;
 cell segmentation, marker thresholds, masks, morphology features, and final
 calls continue to use the original calibrated marker projections. Per-channel
 display overrides can be declared as `displayLowPercentile`,
