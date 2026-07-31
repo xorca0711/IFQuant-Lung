@@ -95,12 +95,13 @@ any required anatomical context are evaluable.
 | Aqp5 | Perinuclear support | 0.20 | 0.40 | Unique ownership |
 | CC10/SCGB1A1 | Perinuclear secretory cytoplasm | 0.20 | 0.40 | Unique ownership |
 | tdTomato | Perinuclear reporter support; independent reporter area also reported | 0.20 | 0.40 | Unique ownership |
-| Acetylated tubulin | Unique nearest ciliary component in a 1-6 um apical shell | 0.10 | 0.30 | Contextual positive allowed if all gates pass; negative requires airway ROI; regional patches are primary at 20x |
+| Acetylated tubulin | Unique nearest high-intensity, locally dense, 2–150 µm² ciliary component in a 1–6 µm apical shell | 0.02 of cilia-specific mask | 0.30 | Contextual positive allowed if all gates pass; negative requires airway ROI; regional patches are primary at 20x |
 | mRAGE | Membrane-support ring | 0.30 | 0.40 | Alveolar ROI; unique ownership |
 
-The AcTub regional patch filter is 2.0 um2. The previous 0.5 um2 filter was only
-about five pixels at the tested 0.311 um/pixel calibration and was too permissive
-for a structure-level criterion.
+The AcTub regional component range is 2–150 µm². High-intensity seeds are
+selected at the 99th percentile, required to form a sufficiently dense local
+tuft, and then size-filtered. This rejects isolated specks and broad stable
+cytoplasmic microtubule sheets before cellular association.
 
 Every value can be overridden without editing the script:
 
@@ -119,8 +120,12 @@ $env:IFQ_KI67_MIN_POSITIVE_FRACTION = '0.10'
 $env:IFQ_YAP_MIN_NUC_CYTO_RATIO = '1.50'
 $env:IFQ_P63_MIN_NUCLEAR_ENRICHMENT = '1.25'
 $env:IFQ_SOX9_MIN_NUCLEAR_ENRICHMENT = '1.25'
-$env:IFQ_ACTUB_MIN_SUPPORT_FRACTION = '0.10'
+$env:IFQ_ACTUB_MIN_SUPPORT_FRACTION = '0.02'
 $env:IFQ_ACTUB_MIN_PATCH_AREA_UM2 = '2.0'
+$env:IFQ_ACTUB_MAX_PATCH_AREA_UM2 = '150'
+$env:IFQ_ACTUB_CILIA_SEED_PERCENTILE = '99'
+$env:IFQ_ACTUB_CILIA_DENSITY_RADIUS_UM = '1.5'
+$env:IFQ_ACTUB_CILIA_MIN_LOCAL_DENSITY = '0.10'
 ```
 
 Use `IFQ_<MARKER>_THRESHOLD` for a fixed marker cutoff. Non-alphanumeric marker
@@ -258,12 +263,20 @@ Ki-67 scoring is not universally standardized.
 
 ### Acetylated alpha-tubulin
 
-AcTub is concentrated in apical cilia. At 20x, the primary endpoint is regional
-ciliary-patch area and component distribution, not an individual-cilium count.
-For a cellular association, each accepted ciliary component is assigned to one
-nearest nucleus only. Its centroid must be 1-6 um outside the approximate
-nuclear boundary, while the nucleus-centered support must satisfy the 0.10
-positive-coverage and 0.30 connected-pattern requirements.
+AcTub is enriched in apical cilia, but acetylated alpha-tubulin also labels
+stable cytoplasmic microtubules, centrioles, spindles, and midbodies. A raw
+AcTub threshold is therefore not cilia-specific. At 20x, the primary endpoint
+is regional cilia-like patch area and component distribution, not total AcTub
+fluorescence or an individual-cilium count.
+
+The apical AcTub slab is filtered in this order: 99th-percentile high-intensity
+seeds, local-density support within a 1.5-µm radius, and a 2–150 µm² component
+range. For a cellular association, each accepted component is assigned to one
+nearest nucleus only. Its centroid must be 1–6 µm outside the approximate
+nuclear boundary, while the nucleus-centered support must satisfy 0.02
+coverage of the sparse cilia-specific mask and the 0.30 connected-pattern
+requirement. The enhanced display also hides pixels outside the accepted mask,
+but the original and raw quantitative projection remain unchanged.
 
 In an ambiguous or unassigned field, passing this full rule authorizes only an
 `exploratory_positive_cellular_context` call. Non-passing nuclei remain
@@ -364,9 +377,11 @@ G002 field from panel E and one 20x G002 field from panel R:
 | R / G002 | 2,108 | tdTomato 1,183 / 817 / 108 | 73,498.7 um2 (18.15%) |
 | R / G002 | 2,108 | mRAGE 113 / 1,887 / 108 | 12,203.2 um2 (3.01%) |
 
-All calls and areas are exploratory because the pilot used image-specific Otsu
-thresholds. The mixed panel-E field was not forced to `airway`, so all AcTub
-per-cell calls are indeterminate. The inspected panel-R field was homogeneous
+These rows are historical pre-v1.7.2 pilot results and are retained for
+provenance; the current AcTub cilia-specific mask will not reproduce their
+regional area. All calls and areas are exploratory because the pilot used
+image-specific Otsu thresholds. The mixed panel-E field was not forced to
+`airway`, so all AcTub per-cell calls were indeterminate. The inspected panel-R field was homogeneous
 alveolar parenchyma and used a provenance-recorded whole-field `alveolar`
 assignment. See [`PILOT_G002_MORPHOLOGY_RESULTS.md`](PILOT_G002_MORPHOLOGY_RESULTS.md)
 for full results.

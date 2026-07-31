@@ -17,7 +17,7 @@ comparing experimental groups.
 | `main` | Universal morphology-first pipeline plus optional layer-aware Z routing and display enhancement | Current production branch |
 | `codex/z-stack-analysis` | Integration history for layer-aware 2.5D Z routing, ALI presets, marker refinements, Z QC, display enhancement, and zero-cell protection | Validated and promoted to `main` |
 | `codex/legacy-pre-reorganization` | Historical pre-reorganization snapshot | Retain as legacy history |
-| Launcher | `IFQuantLauncher-v1.7.1.exe` in the repository root | Per-image AUTO routing, all-selected-image visual merge generation, and one companion merge panel per full-analysis image |
+| Launcher | `IFQuantLauncher-v1.7.2.exe` in the repository root | Per-image AUTO routing, all-selected-image visual merge generation, Channel-4-primary ALI labels, and one companion merge panel per full-analysis image |
 
 The layer-aware implementation is additive. Legacy `max`, `sum`, `avg`, and
 `single` projection modes retain their established behavior. The Windows GUI
@@ -41,6 +41,23 @@ thresholds. They demonstrate that import, Z routing, segmentation, marker
 decisions, workbook export, and provenance complete; they are not frozen
 biological results. Review the QC images and replace automatic ranges and
 thresholds with study-validated settings before inference.
+
+The table above records the pre-v1.7.2 layer-aware validation and is retained
+for provenance. In v1.7.2, ALI channel 4 is declared the primary endpoint:
+p63 for `ALI1`, AcTub for `ALI2`, and MUC5AC for `ALI3`. AcTub no longer uses
+all threshold-positive microtubule signal. It uses a high-intensity,
+local-density, size-bounded ciliary-tuft mask.
+
+### v1.7.2 AcTub/tdTomato correction check
+
+The exact `ALI2` Cycle_01 source corresponding to preview hash `617bb1ae` was
+rerun at 20x with the revised rules. Among 260 included nuclei, tdTomato was
+137 positive, 118 negative, and 5 indeterminate. AcTub yielded six strict
+context-unresolved cellular associations and 254 indeterminate calls because
+no independent airway ROI was supplied. The primary regional AcTub result was
+403.039 µm² (0.966% of tissue), comprising 37 accepted 2–150 µm² cilia-like
+components. These exploratory numbers validate software behavior, not a
+biological cutoff or an individual-cilium count.
 
 The ALI3 field was rerun after enabling display enhancement. It exported four
 individually labeled enhanced channels plus one enhanced merge. Its
@@ -397,11 +414,13 @@ allowed only when the marker is evaluable.
 | Aqp5 | Perinuclear support | 0.20 | 0.40 | Unique ownership |
 | CC10/SCGB1A1 | Perinuclear secretory cytoplasm | 0.20 | 0.40 | Unique ownership |
 | tdTomato | Perinuclear reporter support | 0.20 | 0.40 | Unique ownership; independent reporter area also reported |
-| Acetylated tubulin | Unique nearest ciliary component in a 1-6 um apical shell | 0.10 | 0.30 | Contextual positive allowed if all gates pass; negative requires airway ROI; regional patches are primary at 20x |
+| Acetylated tubulin | Unique nearest high-intensity, locally dense, 2–150 µm² ciliary component in a 1–6 µm apical shell | 0.02 of cilia-specific mask | 0.30 | Contextual positive allowed if all gates pass; negative requires airway ROI; regional patches are primary at 20x |
 
-The AcTub regional patch filter is 2.0 um2. The former 0.5 um2 filter was only
-about five pixels at the tested 0.311 um/pixel calibration and was too permissive
-for a structure-level endpoint.
+The AcTub regional component range is 2–150 µm². The lower bound rejects
+isolated specks; the upper bound rejects broad stable-microtubule sheets. A
+99th-percentile high-intensity seed must also occupy at least 0.10 of a local
+1.5-µm-radius neighborhood. The 0.02 cellular support gate is intentionally
+applied to this sparse, morphology-filtered binary mask, not to raw AcTub.
 
 ## Marker-specific interpretation
 
@@ -441,13 +460,19 @@ different questions and must be reported separately.
 
 ### Acetylated alpha-tubulin
 
-AcTub is concentrated in apical cilia. At 20x, the primary endpoint is regional
-ciliary-patch area and component distribution, not an individual-cilium count.
-For a cellular association, accepted ciliary components (at least 2 um2) are
-assigned to exactly one nearest nucleus. The component centroid must lie at
-least 1 um outside the equivalent-radius nuclear boundary, no farther than the
-6 um apical support shell, and the local support must pass both 0.10 coverage
-and 0.30 connected-pattern gates.
+AcTub is enriched in apical cilia but also labels other stable microtubule
+structures. At 20x, the primary endpoint is therefore regional cilia-like patch
+area and component distribution, not total AcTub fluorescence or an
+individual-cilium count. The marker's apical slab is reduced to bright,
+locally dense, size-bounded components before any display or cellular
+association. The display branch zeros pixels outside that mask; raw microscopy
+pixels are never overwritten.
+
+For a cellular association, accepted 2–150 µm² components are assigned to
+exactly one nearest nucleus. The component centroid must lie at least 1 µm
+outside the equivalent-radius nuclear boundary and no farther than the 6 µm
+apical support shell. The local support must pass 0.02 coverage of the
+cilia-specific binary mask and the 0.30 connected-pattern gate.
 
 This is an asymmetric decision. A nucleus satisfying all component and spatial
 rules may be reported as
@@ -555,8 +580,12 @@ $env:IFQ_CC10_MIN_POSITIVE_FRACTION = '0.20'
 $env:IFQ_CC10_MIN_LARGEST_COMPONENT_SHARE = '0.40'
 $env:IFQ_YAP_MIN_NUC_CYTO_RATIO = '1.50'
 $env:IFQ_P63_MIN_NUCLEAR_ENRICHMENT = '1.25'
-$env:IFQ_ACTUB_MIN_SUPPORT_FRACTION = '0.10'
+$env:IFQ_ACTUB_MIN_SUPPORT_FRACTION = '0.02'
 $env:IFQ_ACTUB_MIN_PATCH_AREA_UM2 = '2.0'
+$env:IFQ_ACTUB_MAX_PATCH_AREA_UM2 = '150'
+$env:IFQ_ACTUB_CILIA_SEED_PERCENTILE = '99'
+$env:IFQ_ACTUB_CILIA_DENSITY_RADIUS_UM = '1.5'
+$env:IFQ_ACTUB_CILIA_MIN_LOCAL_DENSITY = '0.10'
 ```
 
 Use `IFQ_<MARKER>_THRESHOLD` for a fixed cutoff. Non-alphanumeric characters are
@@ -566,7 +595,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`IFQuantLauncher-v1.7.1.exe`](IFQuantLauncher-v1.7.1.exe). It exposes the
+[`IFQuantLauncher-v1.7.2.exe`](IFQuantLauncher-v1.7.2.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.
@@ -600,7 +629,9 @@ region summaries, decision masks, and call-QC PNGs. `run_summary.xlsx` opens on
 **Image Positive Counts**, with one aligned row per image/region containing
 total cells and every marker's final-positive cell count and fraction of that
 row's total cells. The complete three-state audit remains on **Run Summary**,
-and deliberate exclusions remain on **Skipped Inputs**. Microscope
+which also records `primary_endpoint_marker`, `primary_endpoint_channel`, and
+each marker's primary-endpoint flag. Deliberate exclusions remain on
+**Skipped Inputs**. Microscope
 `Map_A##.oir` navigation acquisitions are classified as deliberate skips
 before analysis and do not make an otherwise successful run fail.
 

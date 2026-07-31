@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.7.1.0")]
-[assembly: AssemblyFileVersion("1.7.1.0")]
+[assembly: AssemblyVersion("1.7.2.0")]
+[assembly: AssemblyFileVersion("1.7.2.0")]
 
 namespace IFQuantLauncher
 {
@@ -86,12 +86,12 @@ namespace IFQuantLauncher
             {
                 { "LEFT", "Priority project left panel: DAPI, KRT5-488, AGER-555, T1alpha-647 (channels 1-4). Per-marker final-positive counts remain primary; KRT5 pod area and AGER/T1alpha membrane areas are also exported." },
                 { "RIGHT", "Priority project right panel: DAPI, Pro-SPC-488, AGER-555, KRT8-647 (channels 1-4). Per-marker final-positive counts remain primary; co-expression classes are descriptive research endpoints." },
-                { "ALI1", "20x ALI Z-stack: DAPI, SCGB3A2-488, tdTOM, p63-647 (channels 1-4). SCGB3A2/tdTOM use the cell-body slab; p63 uses the nuclear range." },
-                { "ALI2", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, acetylated-tubulin-647 (channels 1-4). AcTub uses the independent apical slab and regional ciliary area remains primary." },
-                { "ALI3", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, MUC5AC-647 (channels 1-4). MUC5AC uses apical area/cluster analysis and is not forced into a per-cell call." },
+                { "ALI1", "20x ALI Z-stack: DAPI, SCGB3A2-488, tdTOM, p63-647 (channels 1-4). Channel 4 p63 is the primary endpoint and uses the nuclear range. ALI tdTOM uses a permissive candidate-pixel threshold, with morphology still deciding the final call." },
+                { "ALI2", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, acetylated-tubulin-647 (channels 1-4). Channel 4 AcTub is the primary endpoint. Its independent apical slab is filtered to bright, locally dense, size-bounded ciliary tufts so stable cytoplasmic microtubules are suppressed." },
+                { "ALI3", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, MUC5AC-647 (channels 1-4). Channel 4 MUC5AC is the primary endpoint and uses apical area/cluster analysis. ALI tdTOM remains a secondary morphology-gated reporter endpoint." },
                 { "ALI1_MAP", "4x ALI mapping subset: DAPI, SCGB3A2-488, tdTOM (channels 1-3). The named p63 channel is absent from the mapping acquisition and is not analyzed." },
                 { "ALI23_MAP", "4x ALI mapping subset: DAPI, KRT5-488, tdTOM (channels 1-3). The named AcTub/MUC5AC channel is absent from the mapping acquisition and is not analyzed." },
-                { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses uniquely nucleus-owned apical ciliary components. Strict positive evidence can be retained when context is unresolved; a negative still requires an airway ROI." },
+                { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses bright, locally dense, size-bounded apical ciliary components with unique nucleus ownership. Strict positive evidence can be retained when context is unresolved; a negative still requires an airway ROI." },
                 { "R", "20x alveolar panel: DAPI, T1alpha/PDPN, tdTOM, mRAGE (channels 1-4). T1alpha and mRAGE negatives require an alveolar ROI; strict evidence in unresolved context is reported separately." },
                 { "M", "4x mapping panel: DAPI, CC10, tdTOM (channels 1-3)." },
                 { "A", "DAPI, KRT5, AGER (channels 1-3)." },
@@ -981,6 +981,8 @@ namespace IFQuantLauncher
                 "Unknown images stop rather than being guessed. Each allocation uses a preset's fixed acquisition channel order; AUTO does not discover marker identity from fluorescence colors. " +
                 "Use a manual/custom choice when naming is insufficient or channel order differs.\r\n\r\n" +
                 "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
+                "ALI panels treat channel 4 as the primary experimental endpoint: p63, acetylated tubulin, or MUC5AC. " +
+                "The channel map comes from the selected preset or AUTO path-name match, never from displayed colors.\r\n\r\n" +
                 "6. Click Create visual merge panels to generate the merged marker presentation for every image in the configured run scope. " +
                 "This visual-only operation performs no segmentation, cell calls, masks, CSV, Excel, or manifest export.\r\n\r\n" +
                 "7. When the marker allocation and merge presentation are correct, click Review and run analysis. " +
@@ -1280,12 +1282,14 @@ namespace IFQuantLauncher
                 : "";
             bool includesPanelE = string.Equals(panelKey, "E", StringComparison.OrdinalIgnoreCase) ||
                 (config.AutoPanelCounts != null && config.AutoPanelCounts.ContainsKey("E"));
-            if (includesPanelE &&
+            bool includesPanelALI2 = string.Equals(panelKey, "ALI2", StringComparison.OrdinalIgnoreCase) ||
+                (config.AutoPanelCounts != null && config.AutoPanelCounts.ContainsKey("ALI2"));
+            if ((includesPanelE || includesPanelALI2) &&
                 !string.Equals(config.Environment["IFQ_WHOLE_FIELD_COMPARTMENT"], "airway", StringComparison.OrdinalIgnoreCase))
             {
                 warning +=
                     "\r\n\r\nAcTub context note: without an independently assigned airway ROI, " +
-                    "only nuclei meeting the strict apical ciliary-component rule can be exploratory positive. " +
+                    "only nuclei meeting the strict bright, locally dense, size-bounded apical ciliary-component rule can be exploratory positive. " +
                     "All other AcTub calls remain indeterminate, not negative.";
             }
 
@@ -2260,6 +2264,19 @@ namespace IFQuantLauncher
                         "if (DISPLAY_PREVIEW_ONLY) files = files.take(5)",
                         StringComparison.Ordinal) >= 0)
                     return 27;
+                if (pipelineText.IndexOf(
+                        "high_intensity_local_density_bounded_apical_tuft",
+                        StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf(
+                        "ACTUB_CILIA_SEED_PERCENTILE",
+                        StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf(
+                        "thresholdSensitivity:0.60d",
+                        StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf(
+                        "primaryEndpoint:true",
+                        StringComparison.Ordinal) < 0)
+                    return 28;
                 string mixedRoot = Path.Combine(
                     Path.GetTempPath(),
                     "IFQuantLauncher-mixed-panel-" + Guid.NewGuid().ToString("N"));

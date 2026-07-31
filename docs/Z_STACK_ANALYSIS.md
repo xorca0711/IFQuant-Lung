@@ -119,8 +119,11 @@ the default within a restricted slab.
   slab so signal at unrelated depths is not assigned to the nucleus.
 - **AGER/T1alpha:** use cell-body/membrane support plus the regional membrane
   endpoint. Thin AT1 extensions make per-nucleus ownership a secondary result.
-- **AcTub:** use the apical slab. Regional ciliary area/components are primary;
-  the uniquely associated ciliated-cell call is secondary.
+- **AcTub:** use the apical slab, then retain only high-intensity, locally dense,
+  2–150 µm² cilia-like components. Regional area/components in this filtered
+  mask are primary; the uniquely associated ciliated-cell call is secondary.
+  Broad stable cytoplasmic microtubule signal is neither displayed nor used as
+  cellular support.
 - **MUC5AC:** use the apical slab. Mucin-positive area and clusters are primary;
   a goblet-cell count requires separately validated ownership.
 

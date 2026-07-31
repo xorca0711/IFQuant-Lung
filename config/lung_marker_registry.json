@@ -168,6 +168,7 @@
       "default_measurement": "apical_cilia_proximity",
       "default_z_policy": "apical_slab",
       "localization": "apical motile cilia",
+      "specificity_note": "Acetylated tubulin also labels stable cytoplasmic microtubules; cilia calls require apical, locally dense, size-bounded tuft morphology.",
       "lineages_or_states": ["multiciliated"],
       "candidate_compartments": ["airway"]
     },

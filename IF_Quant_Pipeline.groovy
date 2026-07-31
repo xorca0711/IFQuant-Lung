@@ -207,8 +207,23 @@ def MIN_RING_POS_FRACTION = [
 // wider proximity support zone and report ciliary patches as the primary
 // regional readout. These pilot defaults must still be frozen against controls.
 def ACTUB_SUPPORT_EXPAND_UM = envDouble("IFQ_ACTUB_SUPPORT_EXPAND_UM", 6.0d)
-def ACTUB_MIN_SUPPORT_FRACTION = envDouble("IFQ_ACTUB_MIN_SUPPORT_FRACTION", 0.10d)
+// The support fraction is evaluated on the cilia-specific tuft mask below,
+// not on all AcTub-positive pixels. A compact tuft can occupy only a small
+// fraction of the 6-um nucleus association zone.
+def ACTUB_MIN_SUPPORT_FRACTION = envDouble("IFQ_ACTUB_MIN_SUPPORT_FRACTION", 0.02d)
 def ACTUB_MIN_PATCH_AREA_UM2 = envDouble("IFQ_ACTUB_MIN_PATCH_AREA_UM2", 2.0d)
+// Acetylated tubulin also labels stable cytoplasmic microtubules. Ciliary
+// candidates must therefore form a locally dense, high-intensity apical tuft;
+// diffuse/interconnected cell-body filaments are excluded from both the
+// ciliary decision mask and the visualization-only white layer.
+def ACTUB_CILIA_SEED_PERCENTILE =
+  envDouble("IFQ_ACTUB_CILIA_SEED_PERCENTILE", 99.0d)
+def ACTUB_CILIA_DENSITY_RADIUS_UM =
+  envDouble("IFQ_ACTUB_CILIA_DENSITY_RADIUS_UM", 1.5d)
+def ACTUB_CILIA_MIN_LOCAL_DENSITY =
+  envDouble("IFQ_ACTUB_CILIA_MIN_LOCAL_DENSITY", 0.10d)
+def ACTUB_MAX_PATCH_AREA_UM2 =
+  envDouble("IFQ_ACTUB_MAX_PATCH_AREA_UM2", 150.0d)
 // A regional ciliary component is assigned to exactly one nearest nucleus.
 // This preserves cell context in dense airway epithelium without rejecting
 // every 6-um support zone merely because another nucleus overlaps it.
@@ -396,12 +411,29 @@ requireFiniteNonnegative("IFQ_RING_EXPAND_UM", RING_EXPAND_UM, false)
 requireFiniteNonnegative("IFQ_MIN_NUCLEUS_AREA_UM2", MIN_NUCLEUS_AREA_UM2, false)
 requireFiniteNonnegative("IFQ_ACTUB_SUPPORT_EXPAND_UM", ACTUB_SUPPORT_EXPAND_UM, false)
 requireFiniteNonnegative("IFQ_ACTUB_MIN_PATCH_AREA_UM2", ACTUB_MIN_PATCH_AREA_UM2, false)
+requireFiniteNonnegative("IFQ_ACTUB_CILIA_DENSITY_RADIUS_UM",
+                         ACTUB_CILIA_DENSITY_RADIUS_UM, false)
+requireFiniteNonnegative("IFQ_ACTUB_MAX_PATCH_AREA_UM2",
+                         ACTUB_MAX_PATCH_AREA_UM2, false)
 requireFiniteNonnegative("IFQ_ACTUB_MAX_COMPONENT_DISTANCE_UM", ACTUB_MAX_COMPONENT_DISTANCE_UM, false)
 requireFiniteNonnegative("IFQ_ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM",
                          ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM, true)
 requireFiniteNonnegative("IFQ_DAPI_BACKGROUND_RADIUS_UM", DAPI_BACKGROUND_RADIUS_UM, false)
 requireFiniteNonnegative("IFQ_DAPI_LOCAL_RADIUS_UM", DAPI_LOCAL_RADIUS_UM, false)
 requireFiniteNonnegative("IFQ_DAPI_BLUR_SIGMA_PX", DAPI_BLUR_SIGMA_PX, true)
+if (!Double.isFinite(ACTUB_CILIA_SEED_PERCENTILE) ||
+    ACTUB_CILIA_SEED_PERCENTILE <= 0.0d ||
+    ACTUB_CILIA_SEED_PERCENTILE >= 100.0d) {
+  failRun("IFQ_ACTUB_CILIA_SEED_PERCENTILE must satisfy 0 < value < 100")
+}
+if (!Double.isFinite(ACTUB_CILIA_MIN_LOCAL_DENSITY) ||
+    ACTUB_CILIA_MIN_LOCAL_DENSITY <= 0.0d ||
+    ACTUB_CILIA_MIN_LOCAL_DENSITY > 1.0d) {
+  failRun("IFQ_ACTUB_CILIA_MIN_LOCAL_DENSITY must satisfy 0 < value <= 1")
+}
+if (ACTUB_MAX_PATCH_AREA_UM2 < ACTUB_MIN_PATCH_AREA_UM2) {
+  failRun("IFQ_ACTUB_MAX_PATCH_AREA_UM2 must be >= IFQ_ACTUB_MIN_PATCH_AREA_UM2")
+}
 if (!Double.isFinite(DAPI_CONTRAST_SATURATION) ||
     DAPI_CONTRAST_SATURATION < 0.0d || DAPI_CONTRAST_SATURATION > 100.0d) {
   failRun("IFQ_DAPI_CONTRAST_SATURATION must be between 0 and 100; found " + DAPI_CONTRAST_SATURATION)
@@ -456,9 +488,12 @@ def PANELS = [
                [idx:2, marker:"SCGB3A2", role:"cyto", measurement:"perinuclear_secretory_cytoplasm",
                 zPolicy:"cell_body_slab", expectedCompartment:"airway", qcColor:"green", fileLabel:"SCGB3A2-488"],
                [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
-                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
+                zPolicy:"cell_body_slab", qcColor:"red", thresholdSensitivity:0.60d,
+                displayLowPercentile:0.2d, displayHighPercentile:99.8d, displayGamma:0.85d,
+                areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
                [idx:4, marker:"p63", role:"nuc_marker", measurement:"nuclear_transcription_factor",
-                zPolicy:"nuclear_stack", expectedCompartment:"airway", qcColor:"white", fileLabel:"p63-647"] ],
+                zPolicy:"nuclear_stack", expectedCompartment:"airway", qcColor:"white",
+                fileLabel:"p63-647", primaryEndpoint:true] ],
     classify:[ ["tdTOM":true], ["SCGB3A2":true,"tdTOM":true],
                ["p63":true,"tdTOM":true], ["SCGB3A2":true,"p63":true] ] ],
 
@@ -467,10 +502,13 @@ def PANELS = [
                [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
                 zPolicy:"cell_body_slab", qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
                [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
-                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
+                zPolicy:"cell_body_slab", qcColor:"red", thresholdSensitivity:0.60d,
+                displayLowPercentile:0.2d, displayHighPercentile:99.8d, displayGamma:0.85d,
+                areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
                [idx:4, marker:"AcTub", role:"apical_cilia", measurement:"apical_cilia_proximity",
                 zPolicy:"apical_slab", expectedCompartment:"airway", qcColor:"white", fileLabel:"AcTub-647",
-                areaMarker:true, areaMode:"ciliary", areaMinAreaUm2:ACTUB_MIN_PATCH_AREA_UM2, areaBlurSigmaPx:0.7d] ],
+                primaryEndpoint:true, areaMarker:true, areaMode:"ciliary",
+                areaMinAreaUm2:ACTUB_MIN_PATCH_AREA_UM2] ],
     classify:[ ["tdTOM":true], ["KRT5":true,"tdTOM":true],
                ["AcTub":true,"tdTOM":true] ] ],
 
@@ -479,10 +517,13 @@ def PANELS = [
                [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
                 zPolicy:"cell_body_slab", qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
                [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
-                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
+                zPolicy:"cell_body_slab", qcColor:"red", thresholdSensitivity:0.60d,
+                displayLowPercentile:0.2d, displayHighPercentile:99.8d, displayGamma:0.85d,
+                areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
                [idx:4, marker:"MUC5AC", role:"regional_area", measurement:"secreted_mucin_positive_area",
                 zPolicy:"apical_slab", expectedCompartment:"airway", qcColor:"white", fileLabel:"MUC5AC-647",
-                cellCall:false, areaMarker:true, areaMode:"generic", areaMinAreaUm2:8.0d, areaBlurSigmaPx:0.7d] ],
+                primaryEndpoint:true, cellCall:false, areaMarker:true, areaMode:"generic",
+                areaMinAreaUm2:8.0d, areaBlurSigmaPx:0.7d] ],
     classify:[ ["tdTOM":true], ["KRT5":true,"tdTOM":true] ] ],
 
   // Olympus 4x navigation/mapping fields contain only the first three
@@ -495,7 +536,9 @@ def PANELS = [
                [idx:2, marker:"SCGB3A2", role:"cyto", measurement:"perinuclear_secretory_cytoplasm",
                 zPolicy:"cell_body_slab", expectedCompartment:"airway", qcColor:"green", fileLabel:"SCGB3A2-488"],
                [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
-                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d] ],
+                zPolicy:"cell_body_slab", qcColor:"red", thresholdSensitivity:0.60d,
+                displayLowPercentile:0.2d, displayHighPercentile:99.8d, displayGamma:0.85d,
+                areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d] ],
     classify:[ ["tdTOM":true], ["SCGB3A2":true,"tdTOM":true] ] ],
 
   "ALI23_MAP": [ label:"ALI23_MAP_KRT5_tdTOM",
@@ -503,7 +546,9 @@ def PANELS = [
                [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
                 zPolicy:"cell_body_slab", qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
                [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
-                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d] ],
+                zPolicy:"cell_body_slab", qcColor:"red", thresholdSensitivity:0.60d,
+                displayLowPercentile:0.2d, displayHighPercentile:99.8d, displayGamma:0.85d,
+                areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d] ],
     classify:[ ["tdTOM":true], ["KRT5":true,"tdTOM":true] ] ],
 
   "A": [ label:"A_KRT5_AGER",
@@ -777,6 +822,14 @@ PANELS.each { panelKey, panelDef ->
     if (!Double.isFinite(displayGamma) || displayGamma <= 0.0d) {
       failRun("displayGamma must be positive for marker '" + c.marker + "'")
     }
+    if (c.thresholdSensitivity != null &&
+        (!Double.isFinite(c.thresholdSensitivity as double) ||
+         (c.thresholdSensitivity as double) <= 0.0d)) {
+      failRun("thresholdSensitivity must be positive for marker '" + c.marker + "'")
+    }
+    if (c.primaryEndpoint != null && !(c.primaryEndpoint instanceof Boolean)) {
+      failRun("primaryEndpoint must be true/false for marker '" + c.marker + "'")
+    }
     if (c.allowPositiveWithoutCompartment != null &&
         !(c.allowPositiveWithoutCompartment instanceof Boolean)) {
       failRun("allowPositiveWithoutCompartment must be true/false for marker '" +
@@ -913,7 +966,8 @@ def ensureDir(String p) {
 // is present, clear pixels outside it first: ParticleAnalyzer only honors the
 // ROI bounds reliably and can otherwise count particles from excluded parts of
 // a non-rectangular/composite ROI.
-def particlesToRois(ImagePlus imp, double minAreaCal, boolean excludeEdges) {
+def particlesToRois(ImagePlus imp, double minAreaCal, boolean excludeEdges,
+                    double maxAreaCal = Double.POSITIVE_INFINITY) {
   ImagePlus work = imp
   Roi restriction = imp.getRoi()
   if (restriction != null) {
@@ -946,8 +1000,10 @@ def particlesToRois(ImagePlus imp, double minAreaCal, boolean excludeEdges) {
   def workCal = work.getCalibration()
   double pixelArea = workCal.pixelWidth * workCal.pixelHeight
   double minAreaPixels = pixelArea > 0 ? minAreaCal / pixelArea : minAreaCal
+  double maxAreaPixels = Double.isFinite(maxAreaCal) ?
+    (pixelArea > 0 ? maxAreaCal / pixelArea : maxAreaCal) : Double.MAX_VALUE
   def pa = new ParticleAnalyzer(opts, Measurements.AREA, rt,
-                                minAreaPixels, Double.MAX_VALUE)
+                                minAreaPixels, maxAreaPixels)
   pa.setHideOutputImage(true)
   ImageProcessor src = work.getProcessor()
   // Every caller supplies a 0/255 binary mask. Ignore any threshold state left
@@ -1551,10 +1607,11 @@ def buildThresholdMask(ImagePlus ch, double blurSigma, String method, Double fix
 // Remove connected foreground components below the declared physical area.
 // Applying this before both area measurement and mask export keeps the numeric
 // endpoint, component table, and saved QC mask internally consistent.
-def filterBinaryMaskByArea(ImagePlus mask, double minAreaUm2) {
+def filterBinaryMaskByArea(ImagePlus mask, double minAreaUm2,
+                           double maxAreaUm2 = Double.POSITIVE_INFINITY) {
   def work = mask.duplicate()
   work.setCalibration(mask.getCalibration())
-  def accepted = particlesToRois(work, minAreaUm2, false)
+  def accepted = particlesToRois(work, minAreaUm2, false, maxAreaUm2)
   work.close()
   def bp = new ByteProcessor(mask.getWidth(), mask.getHeight())
   bp.setValue(255)
@@ -1563,7 +1620,80 @@ def filterBinaryMaskByArea(ImagePlus mask, double minAreaUm2) {
   out.setCalibration(mask.getCalibration())
   out.setProperty("thresholdValue", mask.getProperty("thresholdValue"))
   out.setProperty("minimumComponentAreaUm2", minAreaUm2)
+  out.setProperty("maximumComponentAreaUm2",
+    Double.isFinite(maxAreaUm2) ? maxAreaUm2 : "unbounded")
   return out
+}
+
+// Build a cilia-specific AcTub mask. Acetylated tubulin is not cilium-specific:
+// it can label stable cytoplasmic microtubules, centrosomes, spindles, and
+// midbodies. Motile-cilia candidates must therefore satisfy three independent
+// gates: high intensity, dense local clustering at the apical scale, and a
+// bounded physical patch size. The returned binary mask is the only AcTub
+// image used for ciliary morphology/area decisions.
+def buildCiliaryTuftMask(ImagePlus ch, cfg, Double fixedThreshold = null) {
+  def bounds = displayPercentileBounds(
+    ch, cfg.actubCiliaSeedPercentile as double, 100.0d)
+  double percentileThreshold = bounds.low as double
+  double seedThreshold = fixedThreshold != null ?
+    Math.max(fixedThreshold as double, percentileThreshold) :
+    percentileThreshold
+
+  ImagePlus seed = buildMaskAtThreshold(ch, seedThreshold)
+  ImagePlus density = null
+  ImagePlus filtered = null
+  try {
+    ImageProcessor densityIp = seed.getProcessor().duplicate().convertToFloat()
+    double sigmaPx = Math.max(
+      0.5d,
+      (cfg.actubCiliaDensityRadiusUm as double) /
+      Math.max(ch.getCalibration().pixelWidth, 1.0e-9d))
+    new GaussianBlur().blurGaussian(densityIp, sigmaPx)
+    density = new ImagePlus(ch.getTitle() + "_ciliary_local_density", densityIp)
+    density.setCalibration(ch.getCalibration())
+    double densityThreshold =
+      255.0d * (cfg.actubCiliaMinLocalDensity as double)
+    density.getProcessor().setThreshold(
+      densityThreshold, 255.0d, ImageProcessor.NO_LUT_UPDATE)
+    IJ.run(density, "Convert to Mask", "")
+    density.setProperty("thresholdValue", seedThreshold)
+    density.setProperty("seedPercentile", cfg.actubCiliaSeedPercentile)
+    density.setProperty("densityRadiusUm", cfg.actubCiliaDensityRadiusUm)
+    density.setProperty("minimumLocalDensity",
+                        cfg.actubCiliaMinLocalDensity)
+    filtered = filterBinaryMaskByArea(
+      density, cfg.actubMinPatchAreaUm2 as double,
+      cfg.actubMaxPatchAreaUm2 as double)
+    filtered.setProperty("thresholdValue", seedThreshold)
+    filtered.setProperty("seedPercentile", cfg.actubCiliaSeedPercentile)
+    filtered.setProperty("densityRadiusUm", cfg.actubCiliaDensityRadiusUm)
+    filtered.setProperty("minimumLocalDensity",
+                         cfg.actubCiliaMinLocalDensity)
+    filtered.setProperty("maskModel",
+      "high_intensity_local_density_bounded_apical_tuft")
+    return filtered
+  } finally {
+    seed.close()
+    if (density != null) density.close()
+  }
+}
+
+// Visualization helper: suppress every pixel not accepted by the cilia mask.
+// This operates only on the disposable 8-bit display copy.
+def applyBinaryDisplayMask(ImagePlus display, ImagePlus binaryMask,
+                           String suffix) {
+  ImageProcessor src = display.getProcessor()
+  ImageProcessor mask = binaryMask.getProcessor()
+  ImageProcessor out = src.duplicate()
+  int width = out.getWidth(), height = out.getHeight()
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      if (mask.get(x, y) == 0) out.set(x, y, 0)
+    }
+  }
+  def result = new ImagePlus(display.getTitle() + suffix, out)
+  result.setCalibration(display.getCalibration())
+  return result
 }
 
 // Perinuclear cytoplasm only = enlarged cell ROI minus the nucleus ROI.
@@ -1837,24 +1967,46 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                             c.displayGamma as double : cfg.displayGamma
       def enhanced = buildDisplayChannel(markerImg[c.marker], c.marker.toString(),
                                          displayLow, displayHigh, displayGamma)
-      displayImages[c.marker] = enhanced.image
+      def displayImage = enhanced.image
+      boolean ciliaFocused = c.role == "apical_cilia"
+      if (ciliaFocused) {
+        boolean fixedCiliaThreshold = cfg.fixedThresholds.containsKey(c.marker)
+        Double fixedThreshold = fixedCiliaThreshold ?
+          cfg.fixedThresholds[c.marker] as double : null
+        def ciliaMask = buildCiliaryTuftMask(
+          markerImg[c.marker], cfg, fixedThreshold)
+        def maskedDisplay = applyBinaryDisplayMask(
+          displayImage, ciliaMask, "_CILIA_FOCUSED")
+        displayImage.close()
+        displayImage = maskedDisplay
+        ciliaMask.close()
+      }
+      displayImages[c.marker] = displayImage
       def zInfo = markerZInfo[c.marker]
       displaySettings[c.marker] = [
         channel_index: c.idx,
         role: c.role,
+        primary_endpoint: c.primaryEndpoint == true,
         color: c.qcColor ?: "white",
         low_percentile: enhanced.low_percentile,
         high_percentile: enhanced.high_percentile,
         resolved_low_intensity: enhanced.low_intensity,
         resolved_high_intensity: enhanced.high_intensity,
         gamma: enhanced.gamma,
+        background_suppression:
+          (ciliaFocused ?
+            "high_intensity_local_density_bounded_apical_tuft" :
+            "none"),
         z_start_plane: zInfo.start,
         z_end_plane: zInfo.end,
         z_projection: zInfo.projection
       ]
       def labeled = labelDisplayOnlyExport(
-        enhanced.image,
-        "C" + c.idx + " " + c.marker + " | p" + displayLow + "-" +
+        displayImage,
+        (c.primaryEndpoint == true ? "PRIMARY ENDPOINT | " : "") +
+        "C" + c.idx + " " + c.marker +
+        (ciliaFocused ? " | cilia-focused cytoskeleton suppressed" : "") +
+        " | p" + displayLow + "-" +
         displayHigh + " gamma " + displayGamma)
       transientImages << labeled
       IJ.saveAs(labeled, "PNG", imgOut.getAbsolutePath() + "/" + fileKey +
@@ -1865,7 +2017,13 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     def mergedDisplay = buildQcComposite(markerImg, panelDef, displayImages)
     transientImages << mergedDisplay
     def labeledMerge = labelDisplayOnlyExport(
-      mergedDisplay, panelDef.channels.collect { c ->
+      mergedDisplay,
+      ((panelDef.channels.find { it.primaryEndpoint == true }) != null ?
+        ("PRIMARY C" +
+         panelDef.channels.find { it.primaryEndpoint == true }.idx + "=" +
+         panelDef.channels.find { it.primaryEndpoint == true }.marker + " | ") :
+        "") +
+      panelDef.channels.collect { c ->
         c.marker + "=" + (c.qcColor ?: "white")
       }.join(", "), true)
     transientImages << labeledMerge
@@ -1906,12 +2064,21 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     double minArea = c.containsKey("areaMinAreaUm2") ? (double)c.areaMinAreaUm2 : cfg.podMinArea
     boolean fixedAreaThreshold = cfg.fixedThresholds.containsKey(c.marker)
     Double resolvedAreaThreshold = fixedAreaThreshold ? (double)cfg.fixedThresholds[c.marker] : null
-    def rawAreaMask = buildThresholdMask(markerImg[c.marker], areaBlur, areaMethod, resolvedAreaThreshold)
-    transientImages << rawAreaMask
-    areaMasks[c.marker] = filterBinaryMaskByArea(rawAreaMask, minArea)
-    areaThresholdSources[c.marker] = fixedAreaThreshold ? "fixed_predeclared" :
-      ("adaptive_" + areaMethod.toLowerCase().replaceAll(/[^a-z0-9]+/, "_") + "_exploratory")
-    rawAreaMask.close()
+    if (c.role == "apical_cilia" || c.areaMode == "ciliary") {
+      areaMasks[c.marker] = buildCiliaryTuftMask(
+        markerImg[c.marker], cfg, resolvedAreaThreshold)
+      areaThresholdSources[c.marker] = fixedAreaThreshold ?
+        "fixed_plus_ciliary_local_density_morphology" :
+        "adaptive_high_percentile_ciliary_local_density_exploratory"
+    } else {
+      def rawAreaMask = buildThresholdMask(
+        markerImg[c.marker], areaBlur, areaMethod, resolvedAreaThreshold)
+      transientImages << rawAreaMask
+      areaMasks[c.marker] = filterBinaryMaskByArea(rawAreaMask, minArea)
+      areaThresholdSources[c.marker] = fixedAreaThreshold ? "fixed_predeclared" :
+        ("adaptive_" + areaMethod.toLowerCase().replaceAll(/[^a-z0-9]+/, "_") + "_exploratory")
+      rawAreaMask.close()
+    }
   }
 
   def cellRows = []      // per-object records (all regions)
@@ -1960,11 +2127,16 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     // per-marker channel thresholds inside THIS region (adaptive)
     def chThresh = [:]
     def chThreshSource = [:]
+    def chThreshSensitivity = [:]
     nonNuclearChannels.each { c ->
       boolean fixed = cfg.fixedThresholds.containsKey(c.marker)
       double t = fixed ? (double)cfg.fixedThresholds[c.marker] : autoThresholdInRoi(markerImg[c.marker], region, "Otsu")
-      double sens = fixed ? 1.0d : (cfg.sensitivity[c.marker] ?: 1.0)
+      double sens = fixed ? 1.0d :
+        (c.thresholdSensitivity != null ?
+          c.thresholdSensitivity as double :
+          (cfg.sensitivity[c.marker] ?: 1.0d))
       chThresh[c.marker] = t * sens
+      chThreshSensitivity[c.marker] = sens
       chThreshSource[c.marker] = fixed ? "fixed_predeclared" : "adaptive_otsu_exploratory"
     }
 
@@ -2000,8 +2172,13 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                               n_components: componentRois.size(),
                               mean_component_area_um2: (componentAreas.isEmpty()? 0 : componentAreas.sum()/componentAreas.size()),
                               min_component_area_um2: minComponentArea,
+                              max_component_area_um2:
+                                (areaMode == "ciliary" ?
+                                  cfg.actubMaxPatchAreaUm2 : ""),
                               threshold: (areaThr != null ? areaThr : -1),
                               threshold_source: areaThresholdSources[c.marker],
+                              mask_model:
+                                (mask.getProperty("maskModel") ?: "threshold_area_filter"),
                               component_stats: componentStats ]
       maskReg.close()
     }
@@ -2162,7 +2339,16 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           row[m + "_measurement_model"] = c.measurement ?: c.role
         }
 
-        def supportStats = spatialSupportStats(img, spatialRoi, chThresh[m])
+        // AcTub morphology is evaluated only on the cilia-specific tuft mask.
+        // Raw AcTub intensity remains an audit field but cytoplasmic stable
+        // microtubules cannot satisfy the final spatial-pattern gate.
+        def morphologySupportImage =
+          (c.role == "apical_cilia" && areaMasks[m] != null) ?
+            areaMasks[m] : img
+        double morphologySupportThreshold =
+          c.role == "apical_cilia" ? 128.0d : chThresh[m]
+        def supportStats = spatialSupportStats(
+          morphologySupportImage, spatialRoi, morphologySupportThreshold)
         double minFraction = (double)rule.minFraction
         double minLargestShare = (double)rule.minLargestShare
         boolean fractionPass = supportStats.fraction >= minFraction
@@ -2235,6 +2421,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         }
 
         row[m + "_threshold_source"] = chThreshSource[m]
+        row[m + "_candidate_threshold_sensitivity"] =
+          chThreshSensitivity[m]
         row[m + "_support_fraction_above_threshold"] = supportStats.fraction
         row[m + "_minimum_support_fraction"] = minFraction
         row[m + "_positive_component_count"] = supportStats.components
@@ -2401,10 +2589,18 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     def rejectedBelowMin = rejectedNuclei.count { it.reason == "area_below_minimum" }
     def rejectedAtEdge = rejectedNuclei.count { it.reason == "image_edge" }
     def rejectedByParticle = rejectedNuclei.count { it.reason == "particle_filter" }
+    def primaryEndpointChannel =
+      panelDef.channels.find { it.primaryEndpoint == true }
     def srow = [ image: sourceStem, output_key: outputKey, panel: panelKey, region: regName,
                  mouse_id: meta.mouse_id, section_id: meta.section_id,
                  genotype: meta.genotype, condition: meta.condition, compartment: compartment,
                  region_tags: regionTags.join("|"),
+                 primary_endpoint_marker:
+                   (primaryEndpointChannel != null ?
+                     primaryEndpointChannel.marker : ""),
+                 primary_endpoint_channel:
+                   (primaryEndpointChannel != null ?
+                     primaryEndpointChannel.idx : ""),
                  region_area_um2: regionAreaUm2,
                   dapi_segmentation_method: cfg.dapiMethod,
                   n_nuclei: nuclei.size(),
@@ -2427,6 +2623,10 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[c.marker + "_raw_mean_density_per_mm2"] = (regionAreaUm2 > 0 ? posCount[c.marker] / (regionAreaUm2/1e6) : 0)
       srow[c.marker + "_pos_threshold"] = chThresh[c.marker]   // resolved raw-intensity cutoff
       srow[c.marker + "_threshold_source"] = chThreshSource[c.marker]
+      srow[c.marker + "_candidate_threshold_sensitivity"] =
+        chThreshSensitivity[c.marker]
+      srow[c.marker + "_is_primary_endpoint"] =
+        c.primaryEndpoint == true
       srow[c.marker + "_measurement_model"] = c.measurement ?: c.role
       srow[c.marker + "_call_authority"] = cfg.morphologyPrimary ? "morphology_primary" : "legacy_mean_intensity"
       srow[c.marker + "_morphology_pos_count"] = finalPosCount[c.marker]
@@ -2516,6 +2716,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       srow[m + "_n_components"] = as.n_components
       srow[m + "_mean_component_area_um2"] = as.mean_component_area_um2
       srow[m + "_min_component_area_um2"] = as.min_component_area_um2
+      srow[m + "_max_component_area_um2"] = as.max_component_area_um2
+      srow[m + "_area_mask_model"] = as.mask_model
       srow[m + "_area_threshold"] = as.threshold
       srow[m + "_area_mode"] = as.mode
       srow[m + "_area_threshold_source"] = as.threshold_source
@@ -2620,9 +2822,15 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                           contrast_saturation_percent: cfg.dapiContrastSaturation ],
     ring_expand_um: cfg.ringExpandUm, min_nucleus_area_um2: cfg.minNucArea,
     acetylated_tubulin_model: [ measurement: "apical_cilia_proximity_and_regional_patches",
+                                biological_specificity_note: "acetylated tubulin also labels stable cytoplasmic microtubules; only the apical tuft mask is authoritative",
                                 support_expand_um: cfg.actubSupportExpandUm,
                                 minimum_support_positive_fraction: cfg.actubMinSupportFraction,
                                 minimum_ciliary_patch_area_um2: cfg.actubMinPatchAreaUm2,
+                                maximum_ciliary_patch_area_um2: cfg.actubMaxPatchAreaUm2,
+                                ciliary_seed_percentile: cfg.actubCiliaSeedPercentile,
+                                ciliary_density_radius_um: cfg.actubCiliaDensityRadiusUm,
+                                minimum_ciliary_local_density: cfg.actubCiliaMinLocalDensity,
+                                mask_model: "high_intensity_local_density_bounded_apical_tuft",
                                 cellular_context_model: "unique_apical_component_plus_local_coverage",
                                 maximum_component_centroid_distance_um: cfg.actubMaxComponentDistanceUm,
                                 minimum_component_boundary_distance_um: cfg.actubMinComponentBoundaryDistanceUm,
@@ -3306,6 +3514,10 @@ def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles:
            actubSupportExpandUm: ACTUB_SUPPORT_EXPAND_UM,
            actubMinSupportFraction: ACTUB_MIN_SUPPORT_FRACTION,
            actubMinPatchAreaUm2: ACTUB_MIN_PATCH_AREA_UM2,
+           actubMaxPatchAreaUm2: ACTUB_MAX_PATCH_AREA_UM2,
+           actubCiliaSeedPercentile: ACTUB_CILIA_SEED_PERCENTILE,
+           actubCiliaDensityRadiusUm: ACTUB_CILIA_DENSITY_RADIUS_UM,
+           actubCiliaMinLocalDensity: ACTUB_CILIA_MIN_LOCAL_DENSITY,
            actubMaxComponentDistanceUm: ACTUB_MAX_COMPONENT_DISTANCE_UM,
            actubMinComponentBoundaryDistanceUm: ACTUB_MIN_COMPONENT_BOUNDARY_DISTANCE_UM,
            tissueMode: TISSUE_MODE, tissueBlur: TISSUE_BLUR_SIGMA_PX,

@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.7.1.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.7.2.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 The build reads the assembly version and writes versioned artifacts directly
 to the repository root:
 
-- `IFQuantLauncher-v1.7.1.exe`
-- `IFQuantLauncher-v1.7.1.sha256.txt`
+- `IFQuantLauncher-v1.7.2.exe`
+- `IFQuantLauncher-v1.7.2.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -65,8 +65,15 @@ retained as an exploratory context-unresolved positive, but absence remains
 indeterminate. A negative requires an independently assigned compatible ROI,
 and a known incompatible ROI remains indeterminate. Context-unresolved
 positives cannot authorize compound lineage/state classes. For panel E, AcTub
-additionally requires a uniquely nucleus-owned apical ciliary component;
-regional ciliary area remains the primary 20x measurement.
+additionally requires a uniquely nucleus-owned, high-intensity, locally dense,
+2–150 µm² apical ciliary component; regional ciliary area remains the primary
+20x measurement.
+
+For `ALI1`, `ALI2`, and `ALI3`, channel 4 is the primary experimental endpoint
+(p63, AcTub, or MUC5AC respectively). ALI tdTOM uses a more permissive
+candidate-pixel threshold to tolerate reporter/acquisition variation, but its
+final cell call still requires the same morphology, ownership, and context
+gates.
 
 The launcher opens maximized by default. Its contents are DPI-aware and
 scrollable so the **Run Fiji analysis**, readiness status, and log remain

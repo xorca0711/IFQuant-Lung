@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`IFQuantLauncher-v1.7.1.exe`](IFQuantLauncher-v1.7.1.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.7.2.exe`](IFQuantLauncher-v1.7.2.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,7 +25,7 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher-v1.7.1.exe`](IFQuantLauncher-v1.7.1.exe), then select:
+Run [`IFQuantLauncher-v1.7.2.exe`](IFQuantLauncher-v1.7.2.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
@@ -109,9 +109,9 @@ maps and do not disable other built-in or custom markers:
 |---|---|---|---|
 | `LEFT` | C1 DAPI; C2 KRT5-488; C3 AGER-555; C4 T1alpha-647 | KRT5, AGER, T1A final-positive/negative/indeterminate cells | KRT5 pod area; AGER and T1A membrane-positive area |
 | `RIGHT` | C1 DAPI; C2 Pro-SPC-488; C3 AGER-555; C4 KRT8-647 | ProSPC, AGER, KRT8 final-positive/negative/indeterminate cells | AGER membrane-positive area |
-| `ALI1` | C1 DAPI; C2 SCGB3A2-488; C3 tdTOM; C4 p63-647 | SCGB3A2, tdTOM and p63 calls using cell-body/nuclear Z policies | tdTOM reporter area; transitional SCGB3A2⁺/p63⁺ class |
-| `ALI2` | C1 DAPI; C2 KRT5-488; C3 tdTOM; C4 AcTub-647 | KRT5, tdTOM and secondary AcTub-associated cell calls | KRT5 area, tdTOM reporter area and primary apical ciliary area/components |
-| `ALI3` | C1 DAPI; C2 KRT5-488; C3 tdTOM; C4 MUC5AC-647 | KRT5 and tdTOM cell calls | KRT5 area, tdTOM reporter area and primary apical MUC5AC area/components |
+| `ALI1` | C1 DAPI; C2 SCGB3A2-488; C3 tdTOM; **C4 p63-647** | C4 p63 is primary; SCGB3A2 and tdTOM remain secondary calls | tdTOM reporter area; transitional SCGB3A2⁺/p63⁺ class |
+| `ALI2` | C1 DAPI; C2 KRT5-488; C3 tdTOM; **C4 AcTub-647** | C4 AcTub is primary and is filtered to cilia-like tufts; KRT5/tdTOM remain secondary calls | Primary apical ciliary area/components; KRT5 and tdTOM reporter area |
+| `ALI3` | C1 DAPI; C2 KRT5-488; C3 tdTOM; **C4 MUC5AC-647** | C4 MUC5AC is primary; KRT5/tdTOM remain secondary calls | Primary apical MUC5AC area/components; KRT5 and tdTOM reporter area |
 | `ALI1_MAP` | C1 DAPI; C2 SCGB3A2-488; C3 tdTOM | Three-channel 4× mapping subset; p63 is absent and receives no call | tdTOM reporter area |
 | `ALI23_MAP` | C1 DAPI; C2 KRT5-488; C3 tdTOM | Three-channel 4× mapping subset; AcTub/MUC5AC is absent and receives no call | KRT5 and tdTOM reporter area |
 
@@ -197,12 +197,21 @@ counts use `<marker>_final_call`; they do not use the raw mean-intensity result.
 Adaptive Otsu calls are explicitly exploratory. Use fixed, control-derived
 `IFQ_<MARKER>_THRESHOLD` values for confirmatory analysis.
 
-For panel E, marker morphology determines the analytical unit. CC10/SCGB1A1 is
+For panel E and ALI2, marker morphology determines the analytical unit. CC10/SCGB1A1 is
 measured in perinuclear cytoplasm as a secretory-cell phenotype, tdTomato is
 measured in perinuclear cytoplasm plus a reporter-positive area mask, and
-acetylated alpha-tubulin is measured as ciliary patches plus a 6-µm
-nucleus-adjacent support zone. At 20x the latter is an association with nearby
-cilia, not proof that an individual nucleus owns a resolved axoneme.
+acetylated alpha-tubulin is first restricted to high-intensity, locally dense,
+2–150 µm² cilia-like patches and then tested in a 6-µm nucleus-adjacent support
+zone. This rejects most stable cytoplasmic microtubule signal. At 20x the
+cellular result remains an association with a nearby ciliary tuft, not proof
+that an individual nucleus owns a resolved axoneme.
+
+In ALI presets, channel 4 is explicitly the primary experimental endpoint:
+p63, AcTub, or MUC5AC. The ALI tdTomato candidate-pixel threshold uses a 0.60
+sensitivity multiplier to recover weak reporter signal caused by acquisition
+variation. This affects which pixels enter the morphology test; it does not
+replace the coverage, connectedness, ownership, or compartment gates that
+authorize the final call.
 
 Do not edit built-in `PANELS` for a new acquisition. Put the new `idx:` mapping
 in a study-owned JSON file so the channel map is versioned independently from
@@ -315,8 +324,12 @@ $env:IFQ_DAPI_LOCAL_RADIUS_UM = '4'
 $env:IFQ_DAPI_BLUR_SIGMA_PX = '1'
 $env:IFQ_MIN_NUCLEUS_AREA_UM2 = '8' # pilot sensitivity; freeze after manual QC
 $env:IFQ_ACTUB_SUPPORT_EXPAND_UM = '6'       # nucleus-to-apical-cilia support zone
-$env:IFQ_ACTUB_MIN_SUPPORT_FRACTION = '0.02' # exploratory; freeze from controls
-$env:IFQ_ACTUB_MIN_PATCH_AREA_UM2 = '0.5'    # 20x ciliary patch, not one axoneme
+$env:IFQ_ACTUB_MIN_SUPPORT_FRACTION = '0.02' # fraction of the cilia-specific binary mask
+$env:IFQ_ACTUB_MIN_PATCH_AREA_UM2 = '2.0'    # reject isolated specks
+$env:IFQ_ACTUB_MAX_PATCH_AREA_UM2 = '150'    # reject broad cytoskeletal sheets
+$env:IFQ_ACTUB_CILIA_SEED_PERCENTILE = '99'
+$env:IFQ_ACTUB_CILIA_DENSITY_RADIUS_UM = '1.5'
+$env:IFQ_ACTUB_CILIA_MIN_LOCAL_DENSITY = '0.10'
 ```
 
 `IFQ_OUTPUT_DIR` must be empty by default, preventing stale masks and cell
@@ -404,8 +417,11 @@ groups are compared; the example values above are not validated cutoffs.
 | `IFQ_<MARKER>_MIN_POSITIVE_FRACTION` | minimum fraction of the role-specific support above cutoff |
 | `IFQ_<MARKER>_MIN_LARGEST_COMPONENT_SHARE` | minimum connectedness of positive support |
 | `IFQ_ACTUB_SUPPORT_EXPAND_UM` | radius beyond each nucleus used for AcTub proximity association |
-| `IFQ_ACTUB_MIN_SUPPORT_FRACTION` | minimum fraction of that support zone above the AcTub threshold |
-| `IFQ_ACTUB_MIN_PATCH_AREA_UM2` | minimum connected AcTub ciliary-patch area at 20x |
+| `IFQ_ACTUB_MIN_SUPPORT_FRACTION` | minimum fraction of that support zone occupied by the cilia-specific binary mask |
+| `IFQ_ACTUB_MIN_PATCH_AREA_UM2` / `IFQ_ACTUB_MAX_PATCH_AREA_UM2` | accepted connected AcTub ciliary-patch area range at 20x |
+| `IFQ_ACTUB_CILIA_SEED_PERCENTILE` | high-intensity seed percentile used before ciliary morphology filtering |
+| `IFQ_ACTUB_CILIA_DENSITY_RADIUS_UM` | physical radius used to test whether high-intensity AcTub pixels form a local tuft |
+| `IFQ_ACTUB_CILIA_MIN_LOCAL_DENSITY` | minimum seed density required inside that local neighborhood |
 | `TISSUE_THRESH_METHOD` / `TISSUE_MIN_AREA_UM2` | auto tissue detection when no manual ROI |
 
 **Positivity rule:** the resolved intensity cutoff is applied to pixels, and the
@@ -446,7 +462,7 @@ OUTPUT_DIR/
     ├── <stem>__<region>__<marker>_CALL_QC.png  # final positive/negative/indeterminate overlay
     ├── <stem>__KRT5_pod_mask.tif       # binary pod mask (255 = KRT5⁺ pod)
     ├── <stem>__tdTOM_reporter_positive_mask.tif
-    ├── <stem>__AcTub_ciliary_mask.tif  # area-filtered ciliary patches
+    ├── <stem>__AcTub_ciliary_mask.tif  # high-intensity, locally dense, size-bounded cilia-like patches
     └── <stem>__T1A_membrane_positive_mask.tif  # analogous AGER/PDPN/mRAGE masks
 ```
 
@@ -470,6 +486,9 @@ display overrides can be declared as `displayLowPercentile`,
 
 - `image, output_key, mouse_id, section_id, genotype, condition, panel, region`
   — identifiers; `output_key` disambiguates repeated acquisition names.
+- `primary_endpoint_marker, primary_endpoint_channel` and
+  `<marker>_is_primary_endpoint` — explicitly identify the priority endpoint;
+  for ALI1/2/3 this is channel 4 (p63/AcTub/MUC5AC).
 - `region_area_um2, n_nuclei` — denominators.
 - `n_nucleus_candidates_total`, nucleus acceptance/rejection fractions, and
   rejection-reason counts — segmentation QC.

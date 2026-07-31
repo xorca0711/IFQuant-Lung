@@ -4,7 +4,8 @@
 
 - `main`: current universal morphology-first pipeline, additive layer-aware
   Z-stack implementation, visualization-only intensity enhancement, ALI
-  presets, and released launcher v1.7.1.
+  presets, Channel-4-primary ALI rules, cilia-specific AcTub filtering, and
+  released launcher v1.7.2.
 - `codex/z-stack-analysis`: retained integration branch for the v1.6
   Z-stack/display release. It has been promoted to `main`; new production work
   should start from `main`.
@@ -45,6 +46,9 @@ The following checks were completed before promoting
    Launcher v1.7.1 additionally exports a companion visual merge panel for
    every image in a full analysis and removes the five-image cap from the
    separate visual-merge-only operation.
+   Launcher v1.7.2 declares ALI channel 4 as the primary endpoint, embeds the
+   cilia-specific AcTub correction, and retains morphology as final authority
+   after the more permissive ALI tdTomato candidate threshold.
 
 Automatic Z ranges remain pilot settings. A confirmatory study must still
 freeze explicit ranges, intensity thresholds, and morphology gates after

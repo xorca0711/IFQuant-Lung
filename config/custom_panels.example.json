@@ -29,8 +29,8 @@
       "channels": [
         {"idx": 1, "marker": "DAPI", "role": "nuclear", "zPolicy": "full_stack", "qcColor": "blue"},
         {"idx": 2, "marker": "KRT5", "zPolicy": "cell_body_slab", "areaMarker": true, "qcColor": "green"},
-        {"idx": 3, "marker": "tdTOM", "zPolicy": "cell_body_slab", "areaMarker": true, "areaMode": "reporter", "areaMinAreaUm2": 8.0, "qcColor": "red"},
-        {"idx": 4, "marker": "AcTub", "zPolicy": "apical_slab", "displayLowPercentile": 1.0, "displayHighPercentile": 99.8, "displayGamma": 1.0, "areaMarker": true, "areaMode": "ciliary", "areaMinAreaUm2": 2.0, "expectedCompartments": ["airway"], "qcColor": "white"}
+        {"idx": 3, "marker": "tdTOM", "zPolicy": "cell_body_slab", "thresholdSensitivity": 0.6, "displayLowPercentile": 0.2, "displayHighPercentile": 99.8, "displayGamma": 0.85, "areaMarker": true, "areaMode": "reporter", "areaMinAreaUm2": 8.0, "qcColor": "red"},
+        {"idx": 4, "marker": "AcTub", "zPolicy": "apical_slab", "primaryEndpoint": true, "displayLowPercentile": 1.0, "displayHighPercentile": 99.8, "displayGamma": 1.0, "areaMarker": true, "areaMode": "ciliary", "areaMinAreaUm2": 2.0, "expectedCompartments": ["airway"], "qcColor": "white"}
       ],
       "classify": [
         {"tdTOM": true},
