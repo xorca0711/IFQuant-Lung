@@ -14,10 +14,10 @@ comparing experimental groups.
 
 | Line | Responsibility | Status |
 |---|---|---|
-| `main` | Stable universal morphology-first pipeline | Preserved; unchanged by this feature branch |
-| `codex/z-stack-analysis` | Layer-aware 2.5D Z routing, ALI presets, marker-profile refinements, Z QC, visualization-only channel enhancement, and zero-cell failure protection | Implemented and smoke-tested |
+| `main` | Universal morphology-first pipeline plus optional layer-aware Z routing and display enhancement | Current production branch |
+| `codex/z-stack-analysis` | Integration history for layer-aware 2.5D Z routing, ALI presets, marker refinements, Z QC, display enhancement, and zero-cell protection | Validated and promoted to `main` |
 | `codex/legacy-pre-reorganization` | Historical pre-reorganization snapshot | Retain as legacy history |
-| Launcher | `IFQuantLauncher-v1.6.0.exe` in the repository root | Rebuilt; embedded-runtime self-test exit code 0 |
+| Launcher | `IFQuantLauncher-v1.6.1.exe` in the repository root | Rebuilt with AUTO panel detection and enhanced-view button; embedded-runtime self-test exit code 0 |
 
 The layer-aware implementation is additive. Legacy `max`, `sum`, `avg`, and
 `single` projection modes retain their established behavior. The Windows GUI
@@ -520,7 +520,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`IFQuantLauncher-v1.6.0.exe`](IFQuantLauncher-v1.6.0.exe). It exposes the
+[`IFQuantLauncher-v1.6.1.exe`](IFQuantLauncher-v1.6.1.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.

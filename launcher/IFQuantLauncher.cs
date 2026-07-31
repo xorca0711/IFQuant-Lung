@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.6.0.0")]
-[assembly: AssemblyFileVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.6.1.0")]
+[assembly: AssemblyFileVersion("1.6.1.0")]
 
 namespace IFQuantLauncher
 {
@@ -114,6 +114,13 @@ namespace IFQuantLauncher
                 "IFQ_ALLOW_NONEMPTY_OUTPUT", "IFQ_MORPHOLOGY_PRIMARY"
             };
 
+        private static readonly HashSet<string> SupportedImageExtensions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".czi", ".lif", ".nd2", ".oir", ".oib", ".oif",
+                ".ics", ".tif", ".tiff"
+            };
+
         public MainForm()
         {
             Text = "IF Quant Launcher";
@@ -183,7 +190,7 @@ namespace IFQuantLauncher
             intro.Text =
                 "Quick start: (1) choose the folder containing your original microscope files, " +
                 "(2) choose the Fiji installation and where results should be saved, " +
-                "(3) select the staining panel that matches the channel order, then click Run Fiji analysis. " +
+                "(3) leave panel selection on AUTO when marker names are present in file/folder names, then click Run Fiji analysis. " +
                 "Recommended settings can normally be left unchanged. Research use only.";
             root.Controls.Add(intro, 0, 0);
 
@@ -241,8 +248,12 @@ namespace IFQuantLauncher
 
             panelBox = MakeCombo(
                 new string[] {
+                    "AUTO",
                     "LEFT — priority: KRT5-488 + AGER-555 + T1alpha-647",
                     "RIGHT — priority: Pro-SPC-488 + AGER-555 + KRT8-647",
+                    "ALI1",
+                    "ALI2",
+                    "ALI3",
                     "E — 20x CC10 + tdTOM + acetylated tubulin",
                     "R — 20x T1alpha + tdTOM + mRAGE",
                     "M — 4x CC10 + tdTOM mapping",
@@ -255,7 +266,7 @@ namespace IFQuantLauncher
                     "S2 — KRT5 + p63 + YAP",
                     "T — pilot test only"
                 },
-                "LEFT — priority: KRT5-488 + AGER-555 + T1alpha-647",
+                "AUTO",
                 true);
             segmenterBox = MakeCombo(
                 new string[] {
@@ -334,16 +345,22 @@ namespace IFQuantLauncher
             AddSetting(settings, 5, 2, "Image limit (0 = all)", maxImagesBox);
 
             displayEnhancementBox = new CheckBox();
-            displayEnhancementBox.Text = "Create enhanced marker-channel images (recommended)";
             displayEnhancementBox.Checked = true;
             displayEnhancementBox.AutoSize = true;
             displayEnhancementBox.Anchor = AnchorStyles.Left;
-            AddSetting(settings, 6, 0, "Clear marker views", displayEnhancementBox);
+            displayEnhancementBox.Appearance = Appearance.Button;
+            displayEnhancementBox.FlatStyle = FlatStyle.Standard;
+            displayEnhancementBox.Padding = new Padding(10, 5, 10, 5);
+            displayEnhancementBox.TextAlign = ContentAlignment.MiddleCenter;
+            displayEnhancementBox.UseVisualStyleBackColor = false;
+            displayEnhancementBox.CheckedChanged += delegate { UpdateDisplayEnhancementButton(); };
+            AddSetting(settings, 6, 0, "Primary visual results", displayEnhancementBox);
             settings.SetColumnSpan(displayEnhancementBox, 3);
+            UpdateDisplayEnhancementButton();
 
             panelBox.SelectedIndexChanged += delegate { UpdatePanelHelp(); };
             panelBox.TextChanged += delegate { UpdatePanelHelp(); };
-            toolTips.SetToolTip(panelBox, "This is the most important choice. It must match the marker identity and acquisition channel order in the original files.");
+            toolTips.SetToolTip(panelBox, "AUTO infers one built-in panel from marker names in matching file/folder paths. Mixed or ambiguous folders stop for manual review. Manual and custom choices remain available.");
             toolTips.SetToolTip(segmenterBox, "Classic is the safest first choice. Choose StarDist only when that Fiji installation has the plugin and model.");
             toolTips.SetToolTip(projectionBox, "Layer-aware mode keeps DAPI across the stack, selects a DAPI-guided cell-body slab, and selects a marker-guided apical slab. Review the saved Z profile and freeze explicit ranges before confirmatory analysis.");
             toolTips.SetToolTip(singlePlaneBox, "Used only when Z-stack handling is single. -1 asks the pipeline to use the middle plane.");
@@ -590,13 +607,158 @@ namespace IFQuantLauncher
                 return;
             string key = ChoiceKey(panelBox);
             string description;
-            if (!PanelDescriptions.TryGetValue(key, out description))
+            if (string.Equals(key, "AUTO", StringComparison.OrdinalIgnoreCase))
+                description =
+                    "Automatic mode scans matching analytical image paths for marker names. " +
+                    "It proceeds only when every image resolves to one built-in panel; ambiguous or mixed folders are rejected.";
+            else if (!PanelDescriptions.TryGetValue(key, out description))
                 description = "Custom panel key. Select a validated custom panel file under Advanced study options.";
             panelHelpLabel.Text =
                 description + " Verify marker identity and acquisition channel order before running; colors in a displayed composite are not sufficient.";
             panelHelpLabel.ForeColor = string.Equals(key, "T", StringComparison.OrdinalIgnoreCase)
                 ? Color.DarkRed
                 : Color.FromArgb(75, 75, 75);
+        }
+
+        private void UpdateDisplayEnhancementButton()
+        {
+            if (displayEnhancementBox == null)
+                return;
+            if (displayEnhancementBox.Checked)
+            {
+                displayEnhancementBox.Text = "Enhanced marker views: ON (recommended)";
+                displayEnhancementBox.BackColor = Color.FromArgb(210, 239, 224);
+                displayEnhancementBox.ForeColor = Color.FromArgb(0, 90, 55);
+            }
+            else
+            {
+                displayEnhancementBox.Text = "Enhanced marker views: OFF";
+                displayEnhancementBox.BackColor = Color.FromArgb(235, 235, 235);
+                displayEnhancementBox.ForeColor = Color.FromArgb(80, 80, 80);
+            }
+        }
+
+        internal static string InferBuiltInPanelFromText(string sourceText)
+        {
+            string upper = (sourceText ?? "").ToUpperInvariant().Replace("Α", "ALPHA");
+            string text = Regex.Replace(upper, "[^A-Z0-9]+", "");
+            bool krt5 = text.Contains("KRT5");
+            bool krt8 = text.Contains("KRT8");
+            bool ager = text.Contains("AGER");
+            bool tdtom = text.Contains("TDTOM");
+            bool t1a = text.Contains("T1ALPHA") || text.Contains("T1A") ||
+                       text.Contains("PDPN") || text.Contains("PODOPLANIN");
+            bool prospc = text.Contains("PROSPC") || text.Contains("SFTPC");
+            bool actub = text.Contains("ACTUB") || text.Contains("ACETYL");
+            bool muc5ac = text.Contains("MUC5AC") || text.Contains("MU5AC");
+            bool cc10 = text.Contains("CC10") || text.Contains("SCGB1A1");
+            bool p63 = text.Contains("P63") || text.Contains("TP63");
+
+            // Resolve the most specific four-channel panels before the shorter
+            // universal marker combinations.
+            if (krt5 && ager && t1a) return "LEFT";
+            if (prospc && ager && krt8) return "RIGHT";
+            if (text.Contains("SCGB3A2") && tdtom && p63) return "ALI1";
+            // CC10 identifies the airway panel even when the mouse genotype
+            // prefix contains "krt5-creERT2".
+            if (cc10 && tdtom && actub) return "E";
+            if (krt5 && tdtom && actub) return "ALI2";
+            if (krt5 && tdtom && muc5ac) return "ALI3";
+            if (t1a && tdtom && text.Contains("MRAGE")) return "R";
+            if (cc10 && tdtom && (text.Contains("4X") || text.Contains("MAPPING"))) return "M";
+            if (krt5 && p63 && text.Contains("YAP")) return "S2";
+            if (krt5 && text.Contains("SOX2")) return "S";
+            if (krt5 && text.Contains("CD8")) return "C";
+            if (krt5 && text.Contains("CD4")) return "D";
+            if (krt5 && prospc) return "B";
+            if (krt5 && ager) return "A";
+            if (krt5 && t1a) return "P";
+            return null;
+        }
+
+        private static string DetectBuiltInPanel(
+            string inputDirectory,
+            string includeRegex,
+            bool recursive,
+            out int analyticalImageCount)
+        {
+            Regex includePattern = new Regex(
+                "^(?:" + includeRegex + ")$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            SearchOption option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            List<string> analyticalFiles;
+            try
+            {
+                analyticalFiles = Directory.EnumerateFiles(inputDirectory, "*", option)
+                    .Where(delegate(string path)
+                    {
+                        return SupportedImageExtensions.Contains(Path.GetExtension(path)) &&
+                               includePattern.IsMatch(Path.GetFullPath(path)) &&
+                               !Regex.IsMatch(
+                                   Path.GetFileName(path),
+                                   @"^Map_A\d+\.(oir|oib|oif)$",
+                                   RegexOptions.IgnoreCase);
+                    })
+                    .OrderBy(delegate(string path) { return path; }, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Automatic panel detection could not scan the input folder:\r\n" + ex.Message);
+            }
+
+            analyticalImageCount = analyticalFiles.Count;
+            if (analyticalFiles.Count == 0)
+                throw new InvalidOperationException(
+                    "Automatic panel detection found no matching analytical image files. " +
+                    "Check the filename filter and subfolder option, or select the panel manually.");
+
+            Dictionary<string, List<string>> detected =
+                new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            List<string> unknown = new List<string>();
+            foreach (string path in analyticalFiles)
+            {
+                string panel = InferBuiltInPanelFromText(path);
+                if (panel == null)
+                {
+                    unknown.Add(path);
+                    continue;
+                }
+                List<string> members;
+                if (!detected.TryGetValue(panel, out members))
+                {
+                    members = new List<string>();
+                    detected[panel] = members;
+                }
+                members.Add(path);
+            }
+
+            if (unknown.Count > 0)
+            {
+                string examples = string.Join(
+                    "\r\n",
+                    unknown.Take(3).Select(delegate(string path) { return "• " + Path.GetFileName(path); }));
+                throw new InvalidOperationException(
+                    "Automatic panel detection could not identify " + unknown.Count +
+                    " of " + analyticalFiles.Count + " matching image(s):\r\n" + examples +
+                    "\r\n\r\nChoose the panel manually or narrow the filename filter. " +
+                    "No image was assigned by color alone.");
+            }
+            if (detected.Count != 1)
+            {
+                string groups = string.Join(
+                    ", ",
+                    detected.OrderBy(delegate(KeyValuePair<string, List<string>> pair) { return pair.Key; })
+                            .Select(delegate(KeyValuePair<string, List<string>> pair)
+                            {
+                                return pair.Key + "=" + pair.Value.Count;
+                            }));
+                throw new InvalidOperationException(
+                    "Automatic panel detection found a mixed-panel input folder (" + groups + "). " +
+                    "Analyze one panel at a time or use a filename filter. No panel was selected.");
+            }
+            return detected.Keys.First();
         }
 
         private void UpdateAdvancedVisibility()
@@ -618,7 +780,9 @@ namespace IFQuantLauncher
                 "1. Original image folder: choose unedited microscope files.\r\n\r\n" +
                 "2. Fiji: choose the Fiji folder or executable. The launcher automatically selects ARM64 or x64.\r\n\r\n" +
                 "3. Output parent folder: choose where a new timestamped result folder should be created.\r\n\r\n" +
-                "4. Staining panel: match both the marker names and their acquisition channel order. This is the most important setting.\r\n\r\n" +
+                "4. Staining panel: leave AUTO selected when marker names are present in the image or folder names. " +
+                "AUTO stops rather than guessing when files are ambiguous or contain mixed panels. " +
+                "Use a manual/custom choice when naming is insufficient.\r\n\r\n" +
                 "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
                 "6. Leave Create enhanced marker-channel images checked to receive clearly visible per-marker PNGs. " +
                 "This display option never changes cell counts.\r\n\r\n" +
@@ -631,6 +795,7 @@ namespace IFQuantLauncher
 
         private void RestoreRecommendedSettings()
         {
+            SelectChoice(panelBox, "AUTO");
             SelectChoice(segmenterBox, "classic");
             SelectChoice(projectionBox, "layer_aware");
             singlePlaneBox.Value = -1;
@@ -643,7 +808,7 @@ namespace IFQuantLauncher
             maxImagesBox.Value = 0;
             MessageBox.Show(
                 this,
-                "Recommended processing settings were restored. The staining panel and folder locations were left unchanged because they must match your experiment.",
+                "Recommended processing settings were restored. Panel selection is now AUTO; folder locations were left unchanged. AUTO still requires you to confirm the detected marker names and channel order before the run starts.",
                 "Recommended settings restored",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -845,6 +1010,11 @@ namespace IFQuantLauncher
                 "Please confirm this analysis:\r\n\r\n" +
                 "Input:\r\n" + config.InputDirectory + "\r\n\r\n" +
                 "Staining panel:\r\n" + panelDescription + "\r\n\r\n" +
+                (config.PanelWasAutoDetected
+                    ? "Panel selection: automatically detected from " +
+                      config.PanelDetectionImageCount + " matching analytical image path(s).\r\n" +
+                      "Confirm that the stated acquisition channel order is correct.\r\n\r\n"
+                    : "Panel selection: manual/custom. Confirm the acquisition channel order.\r\n\r\n") +
                 "Nucleus detection: " + config.Environment["IFQ_SEGMENTER"] + "\r\n" +
                 "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
                 "Enhanced marker views: " +
@@ -889,6 +1059,17 @@ namespace IFQuantLauncher
             string panelKey = ChoiceKey(panelBox);
             if (panelKey.Length == 0)
                 throw new InvalidOperationException("Choose the staining panel that matches the marker names and acquisition channel order.");
+            bool panelWasAutoDetected =
+                string.Equals(panelKey, "AUTO", StringComparison.OrdinalIgnoreCase);
+            int panelDetectionImageCount = 0;
+            if (panelWasAutoDetected)
+            {
+                if (panelConfig.Length > 0)
+                    throw new InvalidOperationException(
+                        "AUTO detects built-in panels only. Choose the custom panel key explicitly when a custom panel JSON is selected.");
+                panelKey = DetectBuiltInPanel(
+                    input, includeRegex, recursiveBox.Checked, out panelDetectionImageCount);
+            }
             string builtInPanelKey = PanelDescriptions.Keys.FirstOrDefault(
                 delegate(string key) { return string.Equals(key, panelKey, StringComparison.OrdinalIgnoreCase); });
             if (builtInPanelKey != null)
@@ -943,6 +1124,8 @@ namespace IFQuantLauncher
             config.ScriptPath = runtime.ScriptPath;
             config.RegistryPath = runtime.RegistryPath;
             config.Environment = env;
+            config.PanelWasAutoDetected = panelWasAutoDetected;
+            config.PanelDetectionImageCount = panelDetectionImageCount;
             return config;
         }
 
@@ -1461,7 +1644,7 @@ namespace IFQuantLauncher
                 fijiBox.Text = GetValue(values, "fiji", fijiBox.Text);
                 outputBaseBox.Text = GetValue(values, "output", outputBaseBox.Text);
                 runNameBox.Text = GetValue(values, "run_name", runNameBox.Text);
-                SelectChoice(panelBox, GetValue(values, "panel", "LEFT"));
+                SelectChoice(panelBox, GetValue(values, "panel", "AUTO"));
                 SelectChoice(segmenterBox, GetValue(values, "segmenter", "classic"));
                 SelectChoice(projectionBox, GetValue(values, "projection", "layer_aware"));
                 SetNumeric(singlePlaneBox, GetValue(values, "single_plane", "-1"));
@@ -1516,6 +1699,8 @@ namespace IFQuantLauncher
         public string RuntimeDirectory;
         public string ScriptPath;
         public string RegistryPath;
+        public bool PanelWasAutoDetected;
+        public int PanelDetectionImageCount;
         public Dictionary<string, string> Environment;
     }
 
@@ -1593,6 +1778,23 @@ namespace IFQuantLauncher
                     pipelineText.IndexOf("__DISPLAY_ONLY__merged_enhanced.png", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("visualization_only_not_quantification", StringComparison.Ordinal) < 0)
                     return 21;
+                if (!string.Equals(
+                        MainForm.InferBuiltInPanelFromText(
+                            @"C:\images\Basal ALI krt5_488 tdTOM acetyl_647\field.oir"),
+                        "ALI2",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        MainForm.InferBuiltInPanelFromText(
+                            @"C:\images\DAPI Pro-SPC_488 AGER_555 KRT8_647\field.czi"),
+                        "RIGHT",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        MainForm.InferBuiltInPanelFromText(
+                            @"C:\images\krt5-creERT2 tdTOM CC10_488 acetyl_647\field.oir"),
+                        "E",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    MainForm.InferBuiltInPanelFromText(@"C:\images\unnamed\field.oir") != null)
+                    return 22;
                 if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
                     return 12;
                 JavaScriptSerializer json = new JavaScriptSerializer();
@@ -1617,8 +1819,20 @@ namespace IFQuantLauncher
                 }
                 return 0;
             }
-            catch
+            catch (Exception ex)
             {
+                try
+                {
+                    File.WriteAllText(
+                        Path.Combine(Path.GetTempPath(), "IFQuantLauncher-self-test-error.txt"),
+                        ex.ToString(),
+                        Encoding.UTF8);
+                }
+                catch
+                {
+                    // The numeric exit code remains authoritative when a
+                    // restricted system cannot write the diagnostic file.
+                }
                 return 10;
             }
         }

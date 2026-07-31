@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.6.0.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.6.1.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 The build reads the assembly version and writes versioned artifacts directly
 to the repository root:
 
-- `IFQuantLauncher-v1.6.0.exe`
-- `IFQuantLauncher-v1.6.0.sha256.txt`
+- `IFQuantLauncher-v1.6.1.exe`
+- `IFQuantLauncher-v1.6.1.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -33,10 +33,12 @@ and Windows x64; no .NET SDK installation is required on the analysis system.
 1. Select the folder containing the original confocal files.
 2. Select the Fiji executable or its installation folder.
 3. Select an output parent folder.
-4. Select the staining panel that matches both the marker names and acquisition
-   channel order. The description below the selector shows the expected order.
-   `LEFT` and `RIGHT` are the priority project presets; all universal, legacy,
-   and validated custom marker panels remain available.
+4. Leave the staining panel on **AUTO** when marker names are present in image
+   or folder names. AUTO proceeds only when every matching analytical image
+   resolves to the same built-in panel. Unknown or mixed-panel folders stop for
+   manual review. The confirmation dialog still requires the detected channel
+   order to be checked. Manual and validated custom-panel choices remain
+   available.
 5. For a first pilot, set **Image limit** to `1`; otherwise `0` means all
    matching images. The recommended settings can normally remain unchanged.
 6. Leave **Create enhanced marker-channel images** checked to export one
@@ -85,11 +87,12 @@ The launcher creates a new timestamped folder for every run. It will never set
 `IFQ_ALLOW_NONEMPTY_OUTPUT=true`, and it always sets
 `IFQ_MORPHOLOGY_PRIMARY=true`.
 
-The single **Create enhanced marker-channel images** control sets
-`IFQ_EXPORT_DISPLAY_CHANNELS`. Its default is on. Display percentiles and
-optional gamma remain reproducible expert/panel settings; all enhanced files
-are labeled `DISPLAY ONLY - NOT QUANTIFIED`, and the original calibrated
-projections remain the quantitative source.
+The **Enhanced marker views: ON/OFF** button sets
+`IFQ_EXPORT_DISPLAY_CHANNELS`. Its recommended default is on, making the
+enhanced per-channel PNGs and merged composite primary visual-review outputs.
+Display percentiles and optional gamma remain reproducible expert/panel
+settings; all enhanced files are labeled `DISPLAY ONLY - NOT QUANTIFIED`, and
+the original calibrated projections remain the quantitative source.
 
 The completed folder contains the normal Fiji pipeline outputs plus
 `launcher_run.txt`, which records:

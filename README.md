@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`IFQuantLauncher-v1.6.0.exe`](IFQuantLauncher-v1.6.0.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.6.1.exe`](IFQuantLauncher-v1.6.1.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,12 +25,20 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher-v1.6.0.exe`](IFQuantLauncher-v1.6.0.exe), then select:
+Run [`IFQuantLauncher-v1.6.1.exe`](IFQuantLauncher-v1.6.1.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
 3. an output parent folder;
-4. the acquisition panel and optional filename filter.
+4. `AUTO` panel detection when marker names are present in file/folder names,
+   or a manual/custom panel when they are not;
+5. whether the **Enhanced marker views** button is on for the primary visual
+   review exports.
+
+AUTO is fail-safe rather than permissive: it accepts only one consistently
+recognized built-in panel across all matching analytical images. Unknown or
+mixed-panel folders require a manual choice or a narrower filename filter.
+The pre-run confirmation always shows the resolved marker/channel order.
 
 The same `AnyCPU` executable supports Windows ARM64 and Windows x64. When a Fiji
 folder is selected, ARM64 Windows prefers `fiji-windows-arm64.exe`; x64 Windows
