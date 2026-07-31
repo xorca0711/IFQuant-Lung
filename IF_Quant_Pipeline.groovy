@@ -86,6 +86,7 @@ import ij.process.ColorProcessor
 import ij.process.ShortProcessor
 import ij.plugin.ZProjector
 import ij.plugin.ChannelSplitter
+import ij.plugin.Duplicator
 import ij.plugin.RoiEnlarger
 import ij.plugin.filter.GaussianBlur
 import ij.plugin.filter.ParticleAnalyzer
@@ -266,6 +267,8 @@ MORPHOLOGY_RULES.each { marker, rule ->
   }
 }
 def DAPI_METHOD = envOr("IFQ_DAPI_METHOD", "local_phansalkar").toLowerCase() // local_phansalkar | global_otsu
+def DAPI_METHOD_EXPLICIT = System.getenv("IFQ_DAPI_METHOD") != null &&
+                           !System.getenv("IFQ_DAPI_METHOD").trim().isEmpty()
 def DAPI_BACKGROUND_RADIUS_UM = envDouble("IFQ_DAPI_BACKGROUND_RADIUS_UM", 15.0d)
 def DAPI_LOCAL_RADIUS_UM = envDouble("IFQ_DAPI_LOCAL_RADIUS_UM", 4.0d)
 def DAPI_BLUR_SIGMA_PX = envDouble("IFQ_DAPI_BLUR_SIGMA_PX", 1.0d)
@@ -285,8 +288,33 @@ def STARDIST_NMS  = 0.40
 def STARDIST_TILES = 1          // raise (e.g. 4/9) for large images / low RAM
 
 // --- Z handling ---
-def PROJECTION  = envOr("IFQ_PROJECTION", "max").toLowerCase() // "max" | "sum" | "avg" | "single"
+// "layer_aware" is an additive 2.5D workflow. It preserves the legacy global
+// projection modes while allowing each marker to use a nuclear, cell-body,
+// apical, full-stack, or single-plane Z policy. Automatic slab discovery is
+// exploratory and every resolved range is written to the per-image provenance.
+def PROJECTION  = envOr("IFQ_PROJECTION", "max").toLowerCase() // max | sum | avg | single | layer_aware
 def SINGLE_PLANE = envInt("IFQ_SINGLE_PLANE", -1) // single only; -1 = middle
+def Z_NUCLEAR_RANGE = envOr("IFQ_Z_NUCLEAR_RANGE", "full").toLowerCase()
+def Z_CELL_BODY_RANGE = envOr("IFQ_Z_CELL_BODY_RANGE", "auto").toLowerCase()
+def Z_APICAL_RANGE = envOr("IFQ_Z_APICAL_RANGE", "auto").toLowerCase()
+def Z_CELL_BODY_PLANES = envInt("IFQ_Z_CELL_BODY_PLANES", 5)
+def Z_APICAL_PLANES = envInt("IFQ_Z_APICAL_PLANES", 3)
+// The dense, bright full-stack DAPI projections typical of layer-aware ALI
+// analysis were empirically rejected by the local Phansalkar path in validation
+// (zero included nuclei). Use global Otsu only as the layer-aware default while
+// preserving the historical local default for every legacy projection mode.
+// An explicit IFQ_DAPI_METHOD always wins.
+def EFFECTIVE_DAPI_METHOD = (!DAPI_METHOD_EXPLICIT && PROJECTION == "layer_aware") ?
+                            "global_otsu" : DAPI_METHOD
+def MIN_INCLUDED_NUCLEI = envInt("IFQ_MIN_INCLUDED_NUCLEI", 1)
+
+// --- Visualization-only channel enhancement ---
+// These values are applied only to exported display PNGs and QC composites.
+// Quantification always uses markerImg at its original calibrated intensity.
+def EXPORT_DISPLAY_CHANNELS = envBool("IFQ_EXPORT_DISPLAY_CHANNELS", true)
+def DISPLAY_LOW_PERCENTILE = envDouble("IFQ_DISPLAY_LOW_PERCENTILE", 1.0d)
+def DISPLAY_HIGH_PERCENTILE = envDouble("IFQ_DISPLAY_HIGH_PERCENTILE", 99.8d)
+def DISPLAY_GAMMA = envDouble("IFQ_DISPLAY_GAMMA", 1.0d)
 
 // --- Geometry (calibrated, micrometres) ---
 def RING_EXPAND_UM      = envDouble("IFQ_RING_EXPAND_UM", 2.0d)
@@ -320,11 +348,11 @@ def requireFiniteNonnegative = { String name, double value, boolean allowZero = 
 if (!(SEGMENTER in ["classic", "stardist"])) {
   failRun("IFQ_SEGMENTER must be classic or stardist; found '" + SEGMENTER + "'")
 }
-if (!(PROJECTION in ["max", "sum", "avg", "single"])) {
-  failRun("IFQ_PROJECTION must be max, sum, avg, or single; found '" + PROJECTION + "'")
+if (!(PROJECTION in ["max", "sum", "avg", "single", "layer_aware"])) {
+  failRun("IFQ_PROJECTION must be max, sum, avg, single, or layer_aware; found '" + PROJECTION + "'")
 }
-if (!(DAPI_METHOD in ["local_phansalkar", "global_otsu"])) {
-  failRun("IFQ_DAPI_METHOD must be local_phansalkar or global_otsu; found '" + DAPI_METHOD + "'")
+if (!(EFFECTIVE_DAPI_METHOD in ["local_phansalkar", "global_otsu"])) {
+  failRun("IFQ_DAPI_METHOD must be local_phansalkar or global_otsu; found '" + EFFECTIVE_DAPI_METHOD + "'")
 }
 if (!(TISSUE_MODE in ["auto", "whole_field"])) {
   failRun("IFQ_TISSUE_MODE must be auto or whole_field; found '" + TISSUE_MODE + "'")
@@ -335,6 +363,19 @@ if (!(COMPARTMENT_MODE in ["optional", "required"])) {
 if (SINGLE_PLANE == 0 || SINGLE_PLANE < -1) {
   failRun("IFQ_SINGLE_PLANE must be -1 (middle) or a positive 1-based Z index")
 }
+if (Z_CELL_BODY_PLANES < 1 || Z_APICAL_PLANES < 1) {
+  failRun("IFQ_Z_CELL_BODY_PLANES and IFQ_Z_APICAL_PLANES must be positive integers")
+}
+if (MIN_INCLUDED_NUCLEI < 0) {
+  failRun("IFQ_MIN_INCLUDED_NUCLEI must be zero or a positive integer")
+}
+if (!Double.isFinite(DISPLAY_LOW_PERCENTILE) ||
+    !Double.isFinite(DISPLAY_HIGH_PERCENTILE) ||
+    DISPLAY_LOW_PERCENTILE < 0.0d || DISPLAY_HIGH_PERCENTILE > 100.0d ||
+    DISPLAY_LOW_PERCENTILE >= DISPLAY_HIGH_PERCENTILE) {
+  failRun("IFQ display percentiles must satisfy 0 <= low < high <= 100")
+}
+requireFiniteNonnegative("IFQ_DISPLAY_GAMMA", DISPLAY_GAMMA, false)
 if (MAX_IMAGES < 0) {
   failRun("IFQ_MAX_IMAGES must be 0 (all) or a positive integer")
 }
@@ -397,6 +438,42 @@ def PANELS = [
     classify:[ ["KRT8":true,"ProSPC":true],
                ["KRT8":true,"AGER":true],
                ["KRT8":true,"ProSPC":false,"AGER":false] ] ],
+
+  // 260730-CW ALI Z-stack panels. These retain the universal decision engine
+  // while declaring marker-specific depth policies for layer-aware mode.
+  "ALI1": [ label:"ALI1_SCGB3A2_tdTOM_p63",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", zPolicy:"full_stack", qcColor:"blue"],
+               [idx:2, marker:"SCGB3A2", role:"cyto", measurement:"perinuclear_secretory_cytoplasm",
+                zPolicy:"cell_body_slab", expectedCompartment:"airway", qcColor:"green", fileLabel:"SCGB3A2-488"],
+               [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
+                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
+               [idx:4, marker:"p63", role:"nuc_marker", measurement:"nuclear_transcription_factor",
+                zPolicy:"nuclear_stack", expectedCompartment:"airway", qcColor:"white", fileLabel:"p63-647"] ],
+    classify:[ ["tdTOM":true], ["SCGB3A2":true,"tdTOM":true],
+               ["p63":true,"tdTOM":true], ["SCGB3A2":true,"p63":true] ] ],
+
+  "ALI2": [ label:"ALI2_KRT5_tdTOM_AcTub",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", zPolicy:"full_stack", qcColor:"blue"],
+               [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
+                zPolicy:"cell_body_slab", qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
+               [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
+                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
+               [idx:4, marker:"AcTub", role:"apical_cilia", measurement:"apical_cilia_proximity",
+                zPolicy:"apical_slab", expectedCompartment:"airway", qcColor:"white", fileLabel:"AcTub-647",
+                areaMarker:true, areaMode:"ciliary", areaMinAreaUm2:ACTUB_MIN_PATCH_AREA_UM2, areaBlurSigmaPx:0.7d] ],
+    classify:[ ["tdTOM":true], ["KRT5":true,"tdTOM":true],
+               ["AcTub":true,"tdTOM":true] ] ],
+
+  "ALI3": [ label:"ALI3_KRT5_tdTOM_MUC5AC",
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", zPolicy:"full_stack", qcColor:"blue"],
+               [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
+                zPolicy:"cell_body_slab", qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
+               [idx:3, marker:"tdTOM", role:"cyto", measurement:"perinuclear_lineage_reporter",
+                zPolicy:"cell_body_slab", qcColor:"red", areaMarker:true, areaMode:"reporter", areaMinAreaUm2:8.0d],
+               [idx:4, marker:"MUC5AC", role:"regional_area", measurement:"secreted_mucin_positive_area",
+                zPolicy:"apical_slab", expectedCompartment:"airway", qcColor:"white", fileLabel:"MUC5AC-647",
+                cellCall:false, areaMarker:true, areaMode:"generic", areaMinAreaUm2:8.0d, areaBlurSigmaPx:0.7d] ],
+    classify:[ ["tdTOM":true], ["KRT5":true,"tdTOM":true] ] ],
 
   "A": [ label:"A_KRT5_AGER",
     channels:[ [idx:1, marker:"DAPI",  role:"nuclear"],
@@ -573,6 +650,9 @@ if (PANEL_CONFIG_PATH != null && !PANEL_CONFIG_PATH.trim().isEmpty()) {
       if (c.measurement == null && matchedProfile?.profile?.default_measurement != null) {
         c.measurement = matchedProfile.profile.default_measurement
       }
+      if (c.zPolicy == null && matchedProfile?.profile?.default_z_policy != null) {
+        c.zPolicy = matchedProfile.profile.default_z_policy
+      }
       if (matchedProfile != null) c.registryKey = matchedProfile.canonical
       if (c.role == "regional_area") {
         c.cellCall = false
@@ -589,6 +669,17 @@ if (PANEL_CONFIG_PATH != null && !PANEL_CONFIG_PATH.trim().isEmpty()) {
 
 def ALLOWED_CHANNEL_ROLES = ["nuclear", "cyto", "membrane", "nuc_marker",
                              "nuc_ratio", "apical_cilia", "regional_area"] as Set
+def ALLOWED_Z_POLICIES = ["full_stack", "nuclear_stack", "cell_body_slab",
+                          "apical_slab", "single_plane", "explicit_range"] as Set
+def ROLE_Z_POLICY_DEFAULTS = [
+  "nuclear"     : "full_stack",
+  "nuc_marker"  : "nuclear_stack",
+  "nuc_ratio"   : "single_plane",
+  "cyto"        : "cell_body_slab",
+  "membrane"    : "cell_body_slab",
+  "apical_cilia": "apical_slab",
+  "regional_area": "full_stack"
+]
 PANELS.each { panelKey, panelDef ->
   if (!(panelDef.channels instanceof Collection) || panelDef.channels.isEmpty()) {
     failRun("Panel '" + panelKey + "' has no channels")
@@ -604,6 +695,30 @@ PANELS.each { panelKey, panelDef ->
       failRun("Panel '" + panelKey + "', marker '" + c.marker +
               "' needs one of roles " + ALLOWED_CHANNEL_ROLES)
     }
+    def matchedProfile = markerProfileFor(c.marker)
+    if (c.measurement == null && matchedProfile?.profile?.default_measurement != null) {
+      c.measurement = matchedProfile.profile.default_measurement
+    }
+    if (c.zPolicy == null && matchedProfile?.profile?.default_z_policy != null) {
+      c.zPolicy = matchedProfile.profile.default_z_policy
+    }
+    if (c.zPolicy == null) c.zPolicy = ROLE_Z_POLICY_DEFAULTS[c.role]
+    c.zPolicy = c.zPolicy.toString().toLowerCase()
+    if (!ALLOWED_Z_POLICIES.contains(c.zPolicy)) {
+      failRun("Panel '" + panelKey + "' marker '" + c.marker +
+        "' has unsupported zPolicy '" + c.zPolicy + "'; use " + ALLOWED_Z_POLICIES)
+    }
+    if (c.zPolicy == "explicit_range" &&
+        (c.zStart == null || c.zEnd == null)) {
+      failRun("Panel '" + panelKey + "' marker '" + c.marker +
+        "' uses zPolicy=explicit_range but does not define zStart and zEnd")
+    }
+    if (c.zStart != null && (c.zStart as int) < 1) {
+      failRun("Panel '" + panelKey + "' marker '" + c.marker + "' has zStart < 1")
+    }
+    if (c.zEnd != null && (c.zEnd as int) < 1) {
+      failRun("Panel '" + panelKey + "' marker '" + c.marker + "' has zEnd < 1")
+    }
     if (c.role == "regional_area") {
       c.cellCall = false
       c.areaMarker = true
@@ -617,6 +732,19 @@ PANELS.each { panelKey, panelDef ->
       if (c[field] != null && (((double)c[field]) < 0.0d || ((double)c[field]) > 1.0d)) {
         failRun(field + " must be between 0 and 1 for marker '" + c.marker + "'")
       }
+    }
+    double displayLow = c.displayLowPercentile != null ?
+                        c.displayLowPercentile as double : DISPLAY_LOW_PERCENTILE
+    double displayHigh = c.displayHighPercentile != null ?
+                         c.displayHighPercentile as double : DISPLAY_HIGH_PERCENTILE
+    double displayGamma = c.displayGamma != null ?
+                          c.displayGamma as double : DISPLAY_GAMMA
+    if (!Double.isFinite(displayLow) || !Double.isFinite(displayHigh) ||
+        displayLow < 0.0d || displayHigh > 100.0d || displayLow >= displayHigh) {
+      failRun("Invalid display percentiles for marker '" + c.marker + "'")
+    }
+    if (!Double.isFinite(displayGamma) || displayGamma <= 0.0d) {
+      failRun("displayGamma must be positive for marker '" + c.marker + "'")
     }
     if (c.allowPositiveWithoutCompartment != null &&
         !(c.allowPositiveWithoutCompartment instanceof Boolean)) {
@@ -924,6 +1052,175 @@ def projectChannel(ImagePlus ch, String projection, int singlePlane) {
   def out = ZProjector.run(ch, method)
   out.setCalibration(ch.getCalibration())
   return out
+}
+
+// Find the contiguous Z window with the greatest integrated mean signal. This
+// is intentionally simple, deterministic, and auditable. It is used only when
+// layer-aware mode receives an "auto" slab; fixed study ranges remain preferred
+// for confirmatory analysis.
+def brightestZWindow(ImagePlus reference, int requestedPlanes) {
+  int n = reference.getNSlices()
+  int width = Math.max(1, Math.min(requestedPlanes, n))
+  def means = []
+  for (int z = 1; z <= n; z++) {
+    reference.setSlice(z)
+    means << (reference.getProcessor().getStatistics().mean as double)
+  }
+  int bestStart = 1
+  double bestScore = Double.NEGATIVE_INFINITY
+  for (int start = 1; start <= n - width + 1; start++) {
+    double score = 0.0d
+    for (int offset = 0; offset < width; offset++) score += means[start - 1 + offset]
+    if (score > bestScore) {
+      bestScore = score
+      bestStart = start
+    }
+  }
+  return [start:bestStart, end:(bestStart + width - 1),
+          source:"auto_brightest_contiguous_window", score:bestScore]
+}
+
+def resolveConfiguredZRange(String rawSetting, ImagePlus reference, int autoPlanes,
+                            String settingName) {
+  int n = reference.getNSlices()
+  String raw = (rawSetting ?: "auto").trim().toLowerCase()
+  if (n <= 1 || raw == "full") {
+    return [start:1, end:n, source:(n <= 1 ? "single_slice_input" : "configured_full")]
+  }
+  if (raw == "auto") return brightestZWindow(reference, autoPlanes)
+  def match = (raw =~ /^\s*(\d+)\s*[:\-]\s*(\d+)\s*$/)
+  if (!match.matches()) {
+    throw new IllegalArgumentException(settingName +
+      " must be 'auto', 'full', or a 1-based inclusive range such as 3:7; found '" +
+      rawSetting + "'")
+  }
+  int start = Integer.parseInt(match.group(1))
+  int end = Integer.parseInt(match.group(2))
+  if (start < 1 || end < start || end > n) {
+    throw new IllegalArgumentException(settingName + "=" + rawSetting +
+      " is outside the available 1:" + n + " Z planes")
+  }
+  return [start:start, end:end, source:"configured_range"]
+}
+
+def resolveMarkerZSelection(ImagePlus markerChannel, ImagePlus nuclearChannel,
+                            Map channelDef, Map cfg) {
+  int n = markerChannel.getNSlices()
+  if (cfg.projection != "layer_aware" || n <= 1) {
+    int single = cfg.projection == "single" ?
+      ((cfg.singlePlane >= 1) ? cfg.singlePlane : (int)Math.ceil(n / 2.0d)) : -1
+    return [policy:"global", start:(single >= 1 ? single : 1),
+            end:(single >= 1 ? single : n), projection:cfg.projection,
+            range_source:(n <= 1 ? "single_slice_input" : "global_projection")]
+  }
+
+  String policy = (channelDef.zPolicy ?: "full_stack").toString().toLowerCase()
+  def range
+  String projection = (channelDef.zProjection ?: "max").toString().toLowerCase()
+  if (!(projection in ["max", "sum", "avg", "single"])) {
+    throw new IllegalArgumentException("Marker '" + channelDef.marker +
+      "' has unsupported zProjection '" + projection + "'")
+  }
+  switch (policy) {
+    case "full_stack":
+      range = [start:1, end:n, source:"policy_full_stack"]
+      break
+    case "nuclear_stack":
+      range = resolveConfiguredZRange(cfg.zNuclearRange, nuclearChannel,
+                                      cfg.zCellBodyPlanes, "IFQ_Z_NUCLEAR_RANGE")
+      break
+    case "cell_body_slab":
+      range = resolveConfiguredZRange(cfg.zCellBodyRange, nuclearChannel,
+                                      cfg.zCellBodyPlanes, "IFQ_Z_CELL_BODY_RANGE")
+      break
+    case "apical_slab":
+      range = resolveConfiguredZRange(cfg.zApicalRange, markerChannel,
+                                      cfg.zApicalPlanes, "IFQ_Z_APICAL_RANGE")
+      break
+    case "single_plane":
+      int plane
+      if (channelDef.zStart != null) {
+        plane = channelDef.zStart as int
+      } else if (cfg.singlePlane >= 1) {
+        plane = cfg.singlePlane
+      } else {
+        def auto = brightestZWindow(nuclearChannel, 1)
+        plane = auto.start as int
+      }
+      if (plane < 1 || plane > n) {
+        throw new IllegalArgumentException("Marker '" + channelDef.marker +
+          "' requested Z plane " + plane + " but the image has " + n + " planes")
+      }
+      range = [start:plane, end:plane, source:"single_plane_policy"]
+      projection = "single"
+      break
+    case "explicit_range":
+      int start = channelDef.zStart as int
+      int end = channelDef.zEnd as int
+      if (start < 1 || end < start || end > n) {
+        throw new IllegalArgumentException("Marker '" + channelDef.marker +
+          "' explicit Z range " + start + ":" + end +
+          " is outside the available 1:" + n + " planes")
+      }
+      range = [start:start, end:end, source:"panel_explicit_range"]
+      break
+    default:
+      throw new IllegalArgumentException("Unsupported Z policy '" + policy +
+        "' for marker '" + channelDef.marker + "'")
+  }
+  return [policy:policy, start:range.start, end:range.end,
+          projection:projection, range_source:range.source,
+          auto_score:(range.score != null ? range.score : "")]
+}
+
+def projectChannelRange(ImagePlus ch, Map selection) {
+  int start = selection.start as int
+  int end = selection.end as int
+  String projection = selection.projection.toString()
+  if (start == end || projection == "single") {
+    ch.setSlice(start)
+    def out = new ImagePlus(ch.getTitle(), ch.getProcessor().duplicate())
+    out.setCalibration(ch.getCalibration())
+    return out
+  }
+  ImagePlus slab = null
+  try {
+    slab = new Duplicator().run(ch, 1, 1, start, end, 1, 1)
+    String method = (projection == "sum") ? "sum" :
+                    (projection == "avg") ? "avg" : "max"
+    def out = ZProjector.run(slab, method)
+    out.setCalibration(ch.getCalibration())
+    return out
+  } finally {
+    if (slab != null) {
+      slab.changes = false
+      slab.close()
+    }
+  }
+}
+
+def channelZProfile(ImagePlus ch, String marker, Map selection, Calibration cal) {
+  def rows = []
+  double weightedSignal = 0.0d
+  double weightedZUm = 0.0d
+  for (int z = 1; z <= ch.getNSlices(); z++) {
+    ch.setSlice(z)
+    def stats = ch.getProcessor().getStatistics()
+    double mean = stats.mean as double
+    double zUm = (z - 1) * (Double.isFinite(cal.pixelDepth) && cal.pixelDepth > 0.0d ?
+                            cal.pixelDepth : 1.0d)
+    weightedSignal += Math.max(0.0d, mean)
+    weightedZUm += Math.max(0.0d, mean) * zUm
+    rows << [marker:marker, z_plane:z, z_um:zUm, mean_intensity:mean,
+             maximum_intensity:(stats.max as double),
+             selected:(z >= (selection.start as int) &&
+                       z <= (selection.end as int) ? 1 : 0),
+             z_policy:selection.policy, z_projection:selection.projection,
+             range_source:selection.range_source]
+  }
+  double centroid = weightedSignal > 0.0d ? weightedZUm / weightedSignal : Double.NaN
+  return [rows:rows, intensity_weighted_z_centroid_um:
+          (Double.isFinite(centroid) ? centroid : "")]
 }
 
 // Iterate ROI pixels safely (respects non-rectangular mask).
@@ -1423,6 +1720,11 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
   ImagePlus raw = null
   def channels = []
   def markerImg = [:]
+  def markerZInfo = [:]
+  def zProfileRows = []
+  def zProfileSummary = [:]
+  def displayImages = [:]
+  def displaySettings = [:]
   def areaMasks = [:]
   def transientImages = []
   try {
@@ -1441,6 +1743,11 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     throw new IllegalArgumentException("Perinuclear ROI enlargement assumes square pixels; found " +
       cal.pixelWidth + " x " + cal.pixelHeight + " um in " + new File(imgPath).name)
   }
+  if (cfg.projection == "layer_aware" && raw.getNSlices() > 1 &&
+      (!Double.isFinite(cal.pixelDepth) || cal.pixelDepth <= 0.0d)) {
+    throw new IllegalArgumentException("Layer-aware Z analysis requires a positive Z calibration; found " +
+      cal.pixelDepth + " " + cal.getUnit() + " in " + new File(imgPath).name)
+  }
   // Channel maps may intentionally skip an unused acquisition channel. The
   // highest referenced index, not the number of mapped channels, defines the
   // minimum acquisition size.
@@ -1451,16 +1758,90 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       " channels but panel '" + panelKey + "' references channel " + nChExpected)
   }
 
-  // Map marker -> projected 2D channel image
+  // Map marker -> projected 2D channel image. In layer-aware mode, each marker
+  // resolves its own slab before projection; legacy modes continue to use the
+  // same range and method for every channel.
   markerImg = [:]
-  def nuclearMarker = null
+  def nuclearDef = panelDef.channels.find { it.role == "nuclear" }
+  def nuclearMarker = nuclearDef?.marker
+  def nuclearChannel = nuclearDef != null ? channels[(nuclearDef.idx as int) - 1] : null
+  if (nuclearChannel == null) {
+    throw new IllegalArgumentException("Panel '" + panelKey + "' has no nuclear channel")
+  }
+  nuclearChannel.setCalibration(cal)
   panelDef.channels.each { c ->
     def ch = channels[c.idx - 1]
     ch.setCalibration(cal)
-    def proj = projectChannel(ch, cfg.projection, cfg.singlePlane)
+    def zSelection = resolveMarkerZSelection(ch, nuclearChannel, c, cfg)
+    def proj = projectChannelRange(ch, zSelection)
     proj.setCalibration(cal)
     markerImg[c.marker] = proj
-    if (c.role == "nuclear") nuclearMarker = c.marker
+    markerZInfo[c.marker] = zSelection
+    def profile = channelZProfile(ch, c.marker.toString(), zSelection, cal)
+    zProfileRows.addAll(profile.rows)
+    zProfileSummary[c.marker] = [policy:zSelection.policy,
+                                 start_plane:zSelection.start,
+                                 end_plane:zSelection.end,
+                                 projection:zSelection.projection,
+                                 range_source:zSelection.range_source,
+                                 auto_score:zSelection.auto_score,
+                                 intensity_weighted_z_centroid_um:
+                                   profile.intensity_weighted_z_centroid_um]
+    IJ.log("[IFQ_Z] " + c.marker + " policy=" + zSelection.policy +
+           " range=" + zSelection.start + ":" + zSelection.end +
+           " projection=" + zSelection.projection +
+           " source=" + zSelection.range_source)
+  }
+
+  // Build a separate, disposable display branch. None of these 8-bit images
+  // are ever assigned back to markerImg, so percentile stretching and gamma
+  // cannot alter thresholds, masks, morphology features, or final calls.
+  if (cfg.exportDisplayChannels) {
+    panelDef.channels.each { c ->
+      double displayLow = c.displayLowPercentile != null ?
+                          c.displayLowPercentile as double : cfg.displayLowPercentile
+      double displayHigh = c.displayHighPercentile != null ?
+                           c.displayHighPercentile as double : cfg.displayHighPercentile
+      double displayGamma = c.displayGamma != null ?
+                            c.displayGamma as double : cfg.displayGamma
+      def enhanced = buildDisplayChannel(markerImg[c.marker], c.marker.toString(),
+                                         displayLow, displayHigh, displayGamma)
+      displayImages[c.marker] = enhanced.image
+      def zInfo = markerZInfo[c.marker]
+      displaySettings[c.marker] = [
+        channel_index: c.idx,
+        role: c.role,
+        color: c.qcColor ?: "white",
+        low_percentile: enhanced.low_percentile,
+        high_percentile: enhanced.high_percentile,
+        resolved_low_intensity: enhanced.low_intensity,
+        resolved_high_intensity: enhanced.high_intensity,
+        gamma: enhanced.gamma,
+        z_start_plane: zInfo.start,
+        z_end_plane: zInfo.end,
+        z_projection: zInfo.projection
+      ]
+      def labeled = labelDisplayOnlyExport(
+        enhanced.image,
+        "C" + c.idx + " " + c.marker + " | p" + displayLow + "-" +
+        displayHigh + " gamma " + displayGamma)
+      transientImages << labeled
+      IJ.saveAs(labeled, "PNG", imgOut.getAbsolutePath() + "/" + fileKey +
+                "__DISPLAY_ONLY__C" + c.idx + "-" + fileSafe(c.marker) +
+                "_enhanced.png")
+      labeled.close()
+    }
+    def mergedDisplay = buildQcComposite(markerImg, panelDef, displayImages)
+    transientImages << mergedDisplay
+    def labeledMerge = labelDisplayOnlyExport(
+      mergedDisplay, panelDef.channels.collect { c ->
+        c.marker + "=" + (c.qcColor ?: "white")
+      }.join(", "))
+    transientImages << labeledMerge
+    IJ.saveAs(labeledMerge, "PNG", imgOut.getAbsolutePath() + "/" + fileKey +
+              "__DISPLAY_ONLY__merged_enhanced.png")
+    labeledMerge.close()
+    mergedDisplay.close()
   }
   def dapi = markerImg[nuclearMarker]
   def nonNuclearChannels = panelDef.channels.findAll { it.role != "nuclear" }
@@ -1594,6 +1975,15 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     def segmentation = segmentNuclei(dapi, region, cfg)
     if (segmentation.candidateMask != null) transientImages << segmentation.candidateMask
     def nuclei = segmentation.included
+    if (nuclei.size() < cfg.minIncludedNuclei) {
+      int rejectedCount = (segmentation.rejected ?: []).size()
+      int candidateCount = nuclei.size() + rejectedCount
+      throw new IllegalStateException("Nucleus QC failed in region '" + regName +
+        "': included " + nuclei.size() + " of " + candidateCount +
+        " candidates, below IFQ_MIN_INCLUDED_NUCLEI=" + cfg.minIncludedNuclei +
+        ". Review DAPI projection, IFQ_DAPI_METHOD, tissue ROI, minimum area, and the DAPI QC mask; " +
+        "this field cannot produce valid cell fractions.")
+    }
     def nucleusStats = nuclei.collect { measureRoi(dapi, it) }
     def nucleusCentroidGrid = buildNucleusCentroidGrid(nuclei)
     logStage("nucleus_segmentation_and_stats")
@@ -1686,7 +2076,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
           row[m + "_nuc_mean"] = nucVal
           row[m + "_cyto_mean"] = cytoVal
           row[m + "_nuc_cyto_ratio"] = enrichmentRatio
-          projectionValid = raw.getNSlices() <= 1 || cfg.projection == "single"
+          projectionValid = raw.getNSlices() <= 1 ||
+                            markerZInfo[m]?.projection == "single"
         } else if (c.role == "apical_cilia") {
           // Ciliary axonemes sit on the luminal/apical surface and commonly lie
           // beyond a 2-um cytoplasmic ring in tissue sections. Use a wider
@@ -1728,7 +2119,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         }
 
         if (c.requiresSinglePlane == true) {
-          projectionValid = raw.getNSlices() <= 1 || cfg.projection == "single"
+          projectionValid = raw.getNSlices() <= 1 ||
+                            markerZInfo[m]?.projection == "single"
         }
         if (!row.containsKey(m + "_measurement_model")) {
           row[m + "_measurement_model"] = c.measurement ?: c.role
@@ -1945,7 +2337,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     logStage("per_cell_decisions")
 
     // ---- QC overlay for this region ----
-    def qc = buildQcOverlay(markerImg, panelDef, region, allNucRois, qcMasks)
+    def qc = buildQcOverlay(markerImg, panelDef, region, allNucRois, qcMasks,
+                            displayImages.isEmpty() ? null : displayImages)
     transientImages << qc
     def qcPath = imgOut.getAbsolutePath() + "/" + fileKey + "__" + regFileToken + "__QC.png"
     IJ.saveAs(qc, "PNG", qcPath); qc.close()
@@ -2159,8 +2552,32 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                    pixel_depth_um: cal.pixelDepth, unit: cal.getUnit(),
                    n_slices: raw.getNSlices(), n_channels: channels.length ],
     projection: cfg.projection, single_plane: cfg.singlePlane,
+    z_handling: [
+      mode: cfg.projection == "layer_aware" ? "layer_aware_2_5d" : "legacy_global_projection",
+      nuclear_range_setting: cfg.zNuclearRange,
+      cell_body_range_setting: cfg.zCellBodyRange,
+      apical_range_setting: cfg.zApicalRange,
+      cell_body_auto_planes: cfg.zCellBodyPlanes,
+      apical_auto_planes: cfg.zApicalPlanes,
+      resolved_marker_ranges: zProfileSummary,
+      voxel_anisotropy_z_to_xy: (raw.getNSlices() > 1 && cal.pixelWidth > 0.0d ?
+                                  cal.pixelDepth / cal.pixelWidth : 1.0d),
+      limitation: "Layer-aware mode uses restricted 2D slab projections; it does not claim true 3D cell-boundary reconstruction."
+    ],
+    display_enhancement: [
+      enabled: cfg.exportDisplayChannels,
+      authority: "visualization_only_not_quantification",
+      quantitative_source: "original calibrated marker projections in markerImg",
+      processing: "duplicate projection, percentile display stretch, 8-bit conversion, optional gamma",
+      global_low_percentile: cfg.displayLowPercentile,
+      global_high_percentile: cfg.displayHighPercentile,
+      global_gamma: cfg.displayGamma,
+      resolved_channels: displaySettings,
+      warning: "Enhanced PNGs and enhanced QC backgrounds must not be used for intensity measurement or threshold calibration."
+    ],
     segmenter: cfg.segmenter, stardist_prob: cfg.prob, stardist_nms: cfg.nms, stardist_tiles: cfg.tiles,
     dapi_preprocessing: [ method: cfg.dapiMethod,
+                          method_source: cfg.dapiMethodSource,
                           background_radius_um: cfg.dapiBackgroundRadiusUm,
                           local_radius_um: cfg.dapiLocalRadiusUm,
                           blur_sigma_px: cfg.dapiBlurSigmaPx,
@@ -2195,11 +2612,15 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     minimum_ring_positive_fraction: cfg.minRingPosFraction,
     tissue_mode: cfg.tissueMode, tissue_roi_source: tissue.source,
     tissue_thresh_method: cfg.tissueMethod,
-    rejected_nucleus_rules: [minimum_area_um2: cfg.minNucArea, exclude_image_edge: true],
+    rejected_nucleus_rules: [minimum_area_um2: cfg.minNucArea,
+                             minimum_included_nuclei_per_region: cfg.minIncludedNuclei,
+                             exclude_image_edge: true],
     channel_map: panelDef.channels
   ]
   new File(imgOut, fileKey + "__params.json").setText(
     JsonOutput.prettyPrint(JsonOutput.toJson(params)), "UTF-8")
+  writeCsv(zProfileRows, imgOut.getAbsolutePath() + "/" +
+           fileKey + "__z_plane_profile.csv")
 
   // write per-image cell CSV
   writeCsv(cellRows, imgOut.getAbsolutePath() + "/" + fileKey + "__cells.csv")
@@ -2213,6 +2634,7 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
     def seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap())
     def resources = []
     resources.addAll(markerImg.values())
+    resources.addAll(displayImages.values())
     resources.addAll(areaMasks.values())
     resources.addAll(transientImages)
     resources.addAll(channels ?: [])
@@ -2239,15 +2661,85 @@ def markerOutlineColor(String marker) {
   }
 }
 
+def displayPercentileBounds(ImagePlus imp, double lowPercentile,
+                            double highPercentile) {
+  ImageProcessor ip = imp.getProcessor()
+  int[] histogram = ip.getHistogram()
+  long total = 0L
+  histogram.each { total += it as long }
+  def rawStats = ip.getStatistics()
+  double rawMin = rawStats.min as double
+  double rawMax = rawStats.max as double
+  if (total <= 0L || rawMax <= rawMin) {
+    return [low:rawMin, high:(rawMax > rawMin ? rawMax : rawMin + 1.0d)]
+  }
+  long lowRank = (long)Math.floor((lowPercentile / 100.0d) * (total - 1L))
+  long highRank = (long)Math.floor((highPercentile / 100.0d) * (total - 1L))
+  def findBin = { long rank ->
+    long cumulative = 0L
+    for (int i = 0; i < histogram.length; i++) {
+      cumulative += histogram[i] as long
+      if (cumulative > rank) return i
+    }
+    return histogram.length - 1
+  }
+  int lowBin = findBin(lowRank) as int
+  int highBin = findBin(highRank) as int
+  def binToValue = { int bin ->
+    if ((imp.getBitDepth() == 8 && histogram.length == 256) ||
+        (imp.getBitDepth() == 16 && histogram.length == 65536)) {
+      return bin as double
+    }
+    return rawMin + (bin / Math.max(1.0d, histogram.length - 1.0d)) *
+                    (rawMax - rawMin)
+  }
+  double low = binToValue(lowBin) as double
+  double high = binToValue(highBin) as double
+  if (!Double.isFinite(low) || !Double.isFinite(high) || high <= low) {
+    low = rawMin
+    high = rawMax > rawMin ? rawMax : rawMin + 1.0d
+  }
+  return [low:low, high:high]
+}
+
+def buildDisplayChannel(ImagePlus source, String marker, double lowPercentile,
+                        double highPercentile, double gamma) {
+  def bounds = displayPercentileBounds(source, lowPercentile, highPercentile)
+  ImageProcessor work = source.getProcessor().duplicate()
+  work.setMinAndMax(bounds.low as double, bounds.high as double)
+  ImageProcessor byteIp = work.convertToByte(true)
+  if (Math.abs(gamma - 1.0d) > 1.0e-9d) byteIp.gamma(gamma)
+  def out = new ImagePlus(marker + "_DISPLAY_ONLY", byteIp)
+  out.setCalibration(source.getCalibration())
+  return [image:out, low_intensity:bounds.low, high_intensity:bounds.high,
+          low_percentile:lowPercentile, high_percentile:highPercentile,
+          gamma:gamma]
+}
+
+def labelDisplayOnlyExport(ImagePlus source, String label) {
+  ColorProcessor cp = source.getProcessor().convertToRGB() as ColorProcessor
+  int bannerHeight = Math.min(30, Math.max(18, cp.getHeight()))
+  cp.setColor(Color.BLACK)
+  cp.setRoi(0, 0, cp.getWidth(), bannerHeight)
+  cp.fill()
+  cp.resetRoi()
+  cp.setColor(Color.WHITE)
+  cp.setFont(new Font("SansSerif", Font.BOLD, 13))
+  cp.drawString("DISPLAY ONLY - NOT QUANTIFIED | " + label, 8, 19)
+  return new ImagePlus(source.getTitle() + "_labeled", cp)
+}
+
 // Additively merge display-normalized channels into a headless-safe RGB image.
 // For panel R: DAPI=blue, T1A=green, tdTOM=red, mRAGE=white.
-def buildQcComposite(markerImg, panelDef) {
-  def first = markerImg.values().iterator().next()
+def buildQcComposite(markerImg, panelDef, displayImages = null) {
+  def sourceImages = displayImages ?: markerImg
+  def first = sourceImages.values().iterator().next()
   int w = first.getWidth(), h = first.getHeight()
   def layers = panelDef.channels.collect { c ->
-    def ip = markerImg[c.marker].getProcessor().duplicate()
-    ip.resetMinAndMax()
-    return [color: (c.qcColor ?: "white"), ip: ip.convertToByte(true)]
+    def ip = sourceImages[c.marker].getProcessor().duplicate()
+    if (displayImages == null) ip.resetMinAndMax()
+    return [color: (c.qcColor ?: "white"),
+            ip:(displayImages == null ? ip.convertToByte(true) : ip)]
   }
   def out = new ColorProcessor(w, h)
   for (int y = 0; y < h; y++) {
@@ -2269,8 +2761,9 @@ def buildQcComposite(markerImg, panelDef) {
   return new ImagePlus("four_channel_QC", out)
 }
 
-def buildQcOverlay(markerImg, panelDef, Roi region, nucRois, channelMasks) {
-  def rgb = buildQcComposite(markerImg, panelDef)
+def buildQcOverlay(markerImg, panelDef, Roi region, nucRois, channelMasks,
+                   displayImages = null) {
+  def rgb = buildQcComposite(markerImg, panelDef, displayImages)
   ImageProcessor cp = rgb.getProcessor()
 
   // Continuous fluorescence-region boundaries replace the former per-cell
@@ -2299,7 +2792,8 @@ def buildQcOverlay(markerImg, panelDef, Roi region, nucRois, channelMasks) {
   cp.setMask(null); cp.setColor(Color.BLACK); cp.setRoi(0, 0, Math.min(cp.getWidth(), 1190), 64); cp.fill()
   cp.resetRoi(); cp.setMask(null); cp.setFont(new Font("SansSerif", Font.BOLD, 16)); cp.setColor(Color.WHITE)
   def rawLegend = panelDef.channels.collect { c -> c.marker + " " + (c.qcColor ?: "gray") }.join(" | ")
-  cp.drawString("RAW: " + rawLegend, 10, 22)
+  cp.drawString((displayImages == null ? "RAW DISPLAY: " : "DISPLAY-NORMALIZED: ") +
+                rawLegend, 10, 22)
   cp.drawString("OUTLINES: counted DAPI nuclei cyan | ROI orange | thresholded marker regions", 10, 48)
   return rgb
 }
@@ -2630,9 +3124,13 @@ def parseMeta(String fname, sheet, defaultPanel, String sourceContext = "", Stri
              condition: cw.group(3).toLowerCase(), panel: inferredPanel ]
   }
   def toks = stem.split("_")
+  // The launcher/IFQ_PANEL is authoritative when a filename does not match a
+  // recognized acquisition convention. Arbitrary underscore-delimited stain
+  // text must never be interpreted as a panel key. A samplesheet remains the
+  // explicit per-image override mechanism.
   return [ mouse_id: (toks.length > 0 ? toks[0] : "NA"),
            condition: (toks.length > 1 ? toks[1] : "NA"),
-           panel: (toks.length > 2 ? toks[2] : defaultPanel),
+           panel: defaultPanel,
            section_id: (toks.length > 3 ? toks[3] : "NA"),
            genotype: "NA" ]
 }
@@ -2698,12 +3196,23 @@ if (!ALLOW_NONEMPTY_OUTPUT && existingOutputEntries.length > 0) {
     "IFQ_ALLOW_NONEMPTY_OUTPUT=true after reviewing the existing contents.")
 }
 def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles: STARDIST_TILES,
-           dapiMethod: DAPI_METHOD, dapiBackgroundRadiusUm: DAPI_BACKGROUND_RADIUS_UM,
+           dapiMethod: EFFECTIVE_DAPI_METHOD,
+           dapiMethodSource: DAPI_METHOD_EXPLICIT ? "explicit_environment" :
+                             (PROJECTION == "layer_aware" ? "layer_aware_safe_default" : "legacy_default"),
+           dapiBackgroundRadiusUm: DAPI_BACKGROUND_RADIUS_UM,
            dapiLocalRadiusUm: DAPI_LOCAL_RADIUS_UM, dapiBlurSigmaPx: DAPI_BLUR_SIGMA_PX,
            dapiContrastSaturation: DAPI_CONTRAST_SATURATION,
            blackBackground: true,
            projection: PROJECTION, singlePlane: SINGLE_PLANE,
+           zNuclearRange: Z_NUCLEAR_RANGE, zCellBodyRange: Z_CELL_BODY_RANGE,
+           zApicalRange: Z_APICAL_RANGE, zCellBodyPlanes: Z_CELL_BODY_PLANES,
+           zApicalPlanes: Z_APICAL_PLANES,
+           exportDisplayChannels: EXPORT_DISPLAY_CHANNELS,
+           displayLowPercentile: DISPLAY_LOW_PERCENTILE,
+           displayHighPercentile: DISPLAY_HIGH_PERCENTILE,
+           displayGamma: DISPLAY_GAMMA,
            ringExpandUm: RING_EXPAND_UM, minNucArea: MIN_NUCLEUS_AREA_UM2,
+           minIncludedNuclei: MIN_INCLUDED_NUCLEI,
            podMinArea: POD_MIN_AREA_UM2, podBlur: POD_BLUR_SIGMA_PX, podMethod: POD_THRESH_METHOD,
            sensitivity: POS_SENSITIVITY, fixedThresholds: FIXED_POS_THRESHOLDS,
            morphologyPrimary: MORPHOLOGY_PRIMARY, morphologyRules: MORPHOLOGY_RULES,

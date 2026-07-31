@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.5.0.0")]
-[assembly: AssemblyFileVersion("1.5.0.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyFileVersion("1.6.0.0")]
 
 namespace IFQuantLauncher
 {
@@ -58,6 +58,7 @@ namespace IFQuantLauncher
         private ComboBox compartmentModeBox;
         private ComboBox wholeCompartmentBox;
         private CheckBox recursiveBox;
+        private CheckBox displayEnhancementBox;
         private NumericUpDown maxImagesBox;
         private NumericUpDown singlePlaneBox;
         private Button runButton;
@@ -84,6 +85,9 @@ namespace IFQuantLauncher
             {
                 { "LEFT", "Priority project left panel: DAPI, KRT5-488, AGER-555, T1alpha-647 (channels 1-4). Per-marker final-positive counts remain primary; KRT5 pod area and AGER/T1alpha membrane areas are also exported." },
                 { "RIGHT", "Priority project right panel: DAPI, Pro-SPC-488, AGER-555, KRT8-647 (channels 1-4). Per-marker final-positive counts remain primary; co-expression classes are descriptive research endpoints." },
+                { "ALI1", "20x ALI Z-stack: DAPI, SCGB3A2-488, tdTOM, p63-647 (channels 1-4). SCGB3A2/tdTOM use the cell-body slab; p63 uses the nuclear range." },
+                { "ALI2", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, acetylated-tubulin-647 (channels 1-4). AcTub uses the independent apical slab and regional ciliary area remains primary." },
+                { "ALI3", "20x ALI Z-stack: DAPI, KRT5-488, tdTOM, MUC5AC-647 (channels 1-4). MUC5AC uses apical area/cluster analysis and is not forced into a per-cell call." },
                 { "E", "20x airway panel: DAPI, CC10, tdTOM, acetylated tubulin (channels 1-4). AcTub uses uniquely nucleus-owned apical ciliary components. Strict positive evidence can be retained when context is unresolved; a negative still requires an airway ROI." },
                 { "R", "20x alveolar panel: DAPI, T1alpha/PDPN, tdTOM, mRAGE (channels 1-4). T1alpha and mRAGE negatives require an alveolar ROI; strict evidence in unresolved context is reported separately." },
                 { "M", "4x mapping panel: DAPI, CC10, tdTOM (channels 1-3)." },
@@ -104,6 +108,7 @@ namespace IFQuantLauncher
                 "IFQ_MARKER_REGISTRY", "IFQ_PANEL_CONFIG",
                 "IFQ_RECURSIVE", "IFQ_INCLUDE_REGEX", "IFQ_MAX_IMAGES",
                 "IFQ_SEGMENTER", "IFQ_PROJECTION", "IFQ_SINGLE_PLANE",
+                "IFQ_EXPORT_DISPLAY_CHANNELS",
                 "IFQ_TISSUE_MODE", "IFQ_COMPARTMENT_MODE",
                 "IFQ_WHOLE_FIELD_COMPARTMENT",
                 "IFQ_ALLOW_NONEMPTY_OUTPUT", "IFQ_MORPHOLOGY_PRIMARY"
@@ -261,12 +266,13 @@ namespace IFQuantLauncher
                 false);
             projectionBox = MakeCombo(
                 new string[] {
-                    "max — Maximum intensity; usual z-stack choice",
+                    "layer_aware — Marker-specific Z slabs; recommended for multichannel stacks",
+                    "max — Whole-stack maximum intensity; legacy/global mode",
                     "single — One z-plane; required for YAP ratio",
                     "avg — Average intensity",
                     "sum — Sum intensity"
                 },
-                "max — Maximum intensity; usual z-stack choice",
+                "layer_aware — Marker-specific Z slabs; recommended for multichannel stacks",
                 false);
             tissueModeBox = MakeCombo(
                 new string[] {
@@ -327,17 +333,28 @@ namespace IFQuantLauncher
             maxImagesBox.Dock = DockStyle.Fill;
             AddSetting(settings, 5, 2, "Image limit (0 = all)", maxImagesBox);
 
+            displayEnhancementBox = new CheckBox();
+            displayEnhancementBox.Text = "Create enhanced marker-channel images (recommended)";
+            displayEnhancementBox.Checked = true;
+            displayEnhancementBox.AutoSize = true;
+            displayEnhancementBox.Anchor = AnchorStyles.Left;
+            AddSetting(settings, 6, 0, "Clear marker views", displayEnhancementBox);
+            settings.SetColumnSpan(displayEnhancementBox, 3);
+
             panelBox.SelectedIndexChanged += delegate { UpdatePanelHelp(); };
             panelBox.TextChanged += delegate { UpdatePanelHelp(); };
             toolTips.SetToolTip(panelBox, "This is the most important choice. It must match the marker identity and acquisition channel order in the original files.");
             toolTips.SetToolTip(segmenterBox, "Classic is the safest first choice. Choose StarDist only when that Fiji installation has the plugin and model.");
-            toolTips.SetToolTip(projectionBox, "Maximum intensity is typical for z-stacks. YAP nuclear-to-cytoplasmic analysis should use a single plane.");
+            toolTips.SetToolTip(projectionBox, "Layer-aware mode keeps DAPI across the stack, selects a DAPI-guided cell-body slab, and selects a marker-guided apical slab. Review the saved Z profile and freeze explicit ranges before confirmatory analysis.");
             toolTips.SetToolTip(singlePlaneBox, "Used only when Z-stack handling is single. -1 asks the pipeline to use the middle plane.");
             toolTips.SetToolTip(tissueModeBox, "Auto excludes empty background. Whole field is appropriate only when the entire image should be analyzed.");
             toolTips.SetToolTip(compartmentModeBox, "Required protects the negative denominator. Strict marker evidence may be retained when anatomy is unresolved, but a negative requires a compatible compartment; a known incompatible compartment remains indeterminate.");
             toolTips.SetToolTip(wholeCompartmentBox, "Use this only when the whole image contains one known tissue compartment.");
             toolTips.SetToolTip(includeRegexBox, "Leave .* to include every supported microscope image. This is an expert regular-expression filter.");
             toolTips.SetToolTip(maxImagesBox, "0 analyzes all matching images. Use 1 for a quick pilot run.");
+            toolTips.SetToolTip(displayEnhancementBox,
+                "One-click display enhancement: exports a clearly visible image for every marker channel and an enhanced merge. " +
+                "This never changes segmentation, thresholds, marker decisions, or cell counts.");
 
             TableLayoutPanel advancedContainer = new TableLayoutPanel();
             advancedContainer.Dock = DockStyle.Top;
@@ -603,7 +620,9 @@ namespace IFQuantLauncher
                 "3. Output parent folder: choose where a new timestamped result folder should be created.\r\n\r\n" +
                 "4. Staining panel: match both the marker names and their acquisition channel order. This is the most important setting.\r\n\r\n" +
                 "5. For a first pilot, set Image limit to 1. Leave the other recommended settings unchanged.\r\n\r\n" +
-                "6. Click Review and run analysis. Watch the progress bar and status text. A successful run enables Open summary Excel.\r\n\r\n" +
+                "6. Leave Create enhanced marker-channel images checked to receive clearly visible per-marker PNGs. " +
+                "This display option never changes cell counts.\r\n\r\n" +
+                "7. Click Review and run analysis. Watch the progress bar and status text. A successful run enables Open summary Excel.\r\n\r\n" +
                 "Always inspect the QC overlays. The software quantifies fluorescence patterns for research and does not make a diagnosis.",
                 "First-time guide",
                 MessageBoxButtons.OK,
@@ -613,12 +632,13 @@ namespace IFQuantLauncher
         private void RestoreRecommendedSettings()
         {
             SelectChoice(segmenterBox, "classic");
-            SelectChoice(projectionBox, "max");
+            SelectChoice(projectionBox, "layer_aware");
             singlePlaneBox.Value = -1;
             SelectChoice(tissueModeBox, "auto");
             SelectChoice(compartmentModeBox, "required");
             SelectChoice(wholeCompartmentBox, "unassigned");
             recursiveBox.Checked = true;
+            displayEnhancementBox.Checked = true;
             includeRegexBox.Text = ".*";
             maxImagesBox.Value = 0;
             MessageBox.Show(
@@ -827,6 +847,8 @@ namespace IFQuantLauncher
                 "Staining panel:\r\n" + panelDescription + "\r\n\r\n" +
                 "Nucleus detection: " + config.Environment["IFQ_SEGMENTER"] + "\r\n" +
                 "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
+                "Enhanced marker views: " +
+                    (config.Environment["IFQ_EXPORT_DISPLAY_CHANNELS"] == "true" ? "yes (display only)" : "no") + "\r\n" +
                 "Files: " + limit + "\r\n\r\n" +
                 "New result folder:\r\n" + config.OutputDirectory + warning +
                 "\r\n\r\nStart Fiji analysis now?",
@@ -875,10 +897,11 @@ namespace IFQuantLauncher
                 throw new InvalidOperationException(
                     "Panel '" + panelKey + "' is not built in. Select its validated custom panel JSON under Advanced study options.");
             if (string.Equals(panelKey, "S2", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(ChoiceKey(projectionBox), "single", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(ChoiceKey(projectionBox), "single", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(ChoiceKey(projectionBox), "layer_aware", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
-                    "Panel S2 contains YAP nuclear-to-cytoplasmic analysis and requires Z-stack handling = single. " +
-                    "Choose single and confirm the intended z-plane.");
+                    "Panel S2 contains YAP nuclear-to-cytoplasmic analysis and requires either Z-stack handling = single " +
+                    "or layer_aware, which assigns YAP a single-plane policy. Confirm the intended plane in the saved Z profile.");
 
             Dictionary<string, string> advanced = ParseAdvancedEnvironment(advancedBox.Text);
             RuntimePaths runtime = RuntimeBundle.EnsureExtracted();
@@ -902,6 +925,7 @@ namespace IFQuantLauncher
             env["IFQ_SEGMENTER"] = ChoiceKey(segmenterBox);
             env["IFQ_PROJECTION"] = ChoiceKey(projectionBox);
             env["IFQ_SINGLE_PLANE"] = Decimal.ToInt32(singlePlaneBox.Value).ToString(CultureInfo.InvariantCulture);
+            env["IFQ_EXPORT_DISPLAY_CHANNELS"] = displayEnhancementBox.Checked ? "true" : "false";
             env["IFQ_TISSUE_MODE"] = ChoiceKey(tissueModeBox);
             env["IFQ_COMPARTMENT_MODE"] = ChoiceKey(compartmentModeBox);
             env["IFQ_WHOLE_FIELD_COMPARTMENT"] = ChoiceKey(wholeCompartmentBox);
@@ -1399,6 +1423,7 @@ namespace IFQuantLauncher
                 settings["segmenter"] = ChoiceKey(segmenterBox);
                 settings["projection"] = ChoiceKey(projectionBox);
                 settings["single_plane"] = singlePlaneBox.Value.ToString(CultureInfo.InvariantCulture);
+                settings["display_enhancement"] = displayEnhancementBox.Checked ? "true" : "false";
                 settings["tissue"] = ChoiceKey(tissueModeBox);
                 settings["compartment_mode"] = ChoiceKey(compartmentModeBox);
                 settings["whole_compartment"] = ChoiceKey(wholeCompartmentBox);
@@ -1438,8 +1463,11 @@ namespace IFQuantLauncher
                 runNameBox.Text = GetValue(values, "run_name", runNameBox.Text);
                 SelectChoice(panelBox, GetValue(values, "panel", "LEFT"));
                 SelectChoice(segmenterBox, GetValue(values, "segmenter", "classic"));
-                SelectChoice(projectionBox, GetValue(values, "projection", "max"));
+                SelectChoice(projectionBox, GetValue(values, "projection", "layer_aware"));
                 SetNumeric(singlePlaneBox, GetValue(values, "single_plane", "-1"));
+                displayEnhancementBox.Checked =
+                    string.Equals(GetValue(values, "display_enhancement", "true"),
+                                  "true", StringComparison.OrdinalIgnoreCase);
                 SelectChoice(tissueModeBox, GetValue(values, "tissue", "auto"));
                 SelectChoice(compartmentModeBox, GetValue(values, "compartment_mode", "required"));
                 SelectChoice(wholeCompartmentBox, GetValue(values, "whole_compartment", "unassigned"));
@@ -1554,6 +1582,17 @@ namespace IFQuantLauncher
                 if (pipelineText.IndexOf("LEFT_KRT5_AGER_T1A", StringComparison.Ordinal) < 0 ||
                     pipelineText.IndexOf("RIGHT_ProSPC_AGER_KRT8", StringComparison.Ordinal) < 0)
                     return 18;
+                if (pipelineText.IndexOf("layer_aware_2_5d", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("__z_plane_profile.csv", StringComparison.Ordinal) < 0)
+                    return 19;
+                if (pipelineText.IndexOf("ALI1_SCGB3A2_tdTOM_p63", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("ALI2_KRT5_tdTOM_AcTub", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("ALI3_KRT5_tdTOM_MUC5AC", StringComparison.Ordinal) < 0)
+                    return 20;
+                if (pipelineText.IndexOf("DISPLAY ONLY - NOT QUANTIFIED", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("__DISPLAY_ONLY__merged_enhanced.png", StringComparison.Ordinal) < 0 ||
+                    pipelineText.IndexOf("visualization_only_not_quantification", StringComparison.Ordinal) < 0)
+                    return 21;
                 if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
                     return 12;
                 JavaScriptSerializer json = new JavaScriptSerializer();

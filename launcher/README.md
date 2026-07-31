@@ -1,6 +1,6 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.5.0.exe` is a Windows Forms front end for
+`IFQuantLauncher-v1.6.0.exe` is a Windows Forms front end for
 `IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
 marker registry present at build time. It does not reimplement image analysis.
 
@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 The build reads the assembly version and writes versioned artifacts directly
 to the repository root:
 
-- `IFQuantLauncher-v1.5.0.exe`
-- `IFQuantLauncher-v1.5.0.sha256.txt`
+- `IFQuantLauncher-v1.6.0.exe`
+- `IFQuantLauncher-v1.6.0.sha256.txt`
 
 The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
 and Windows x64; no .NET SDK installation is required on the analysis system.
@@ -39,7 +39,10 @@ and Windows x64; no .NET SDK installation is required on the analysis system.
    and validated custom marker panels remain available.
 5. For a first pilot, set **Image limit** to `1`; otherwise `0` means all
    matching images. The recommended settings can normally remain unchanged.
-6. Click **Review and run analysis**, verify the plain-language run summary,
+6. Leave **Create enhanced marker-channel images** checked to export one
+   clearly visible PNG per marker and an enhanced color merge. It is a
+   visualization-only option and cannot change cell calls or counts.
+7. Click **Review and run analysis**, verify the plain-language run summary,
    and click **OK**.
 
 The **First-time help** button explains every required choice. Script-oriented
@@ -81,6 +84,12 @@ The progress area distinguishes these states:
 The launcher creates a new timestamped folder for every run. It will never set
 `IFQ_ALLOW_NONEMPTY_OUTPUT=true`, and it always sets
 `IFQ_MORPHOLOGY_PRIMARY=true`.
+
+The single **Create enhanced marker-channel images** control sets
+`IFQ_EXPORT_DISPLAY_CHANNELS`. Its default is on. Display percentiles and
+optional gamma remain reproducible expert/panel settings; all enhanced files
+are labeled `DISPLAY ONLY - NOT QUANTIFIED`, and the original calibrated
+projections remain the quantitative source.
 
 The completed folder contains the normal Fiji pipeline outputs plus
 `launcher_run.txt`, which records:

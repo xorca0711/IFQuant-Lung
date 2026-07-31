@@ -8,7 +8,7 @@ same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
 immune, and lung-adenocarcinoma lineage research without hard-coding each new
 antibody combination.
 
-- **[`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe)** — portable Windows
+- **[`IFQuantLauncher-v1.6.0.exe`](IFQuantLauncher-v1.6.0.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
@@ -25,7 +25,7 @@ antibody combination.
 
 ## Windows launcher — recommended
 
-Run [`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe), then select:
+Run [`IFQuantLauncher-v1.6.0.exe`](IFQuantLauncher-v1.6.0.exe), then select:
 
 1. the folder containing the original confocal images;
 2. the Fiji executable or Fiji installation folder;
@@ -82,6 +82,9 @@ maps and do not disable other built-in or custom markers:
 |---|---|---|---|
 | `LEFT` | C1 DAPI; C2 KRT5-488; C3 AGER-555; C4 T1alpha-647 | KRT5, AGER, T1A final-positive/negative/indeterminate cells | KRT5 pod area; AGER and T1A membrane-positive area |
 | `RIGHT` | C1 DAPI; C2 Pro-SPC-488; C3 AGER-555; C4 KRT8-647 | ProSPC, AGER, KRT8 final-positive/negative/indeterminate cells | AGER membrane-positive area |
+| `ALI1` | C1 DAPI; C2 SCGB3A2-488; C3 tdTOM; C4 p63-647 | SCGB3A2, tdTOM and p63 calls using cell-body/nuclear Z policies | tdTOM reporter area; transitional SCGB3A2⁺/p63⁺ class |
+| `ALI2` | C1 DAPI; C2 KRT5-488; C3 tdTOM; C4 AcTub-647 | KRT5, tdTOM and secondary AcTub-associated cell calls | KRT5 area, tdTOM reporter area and primary apical ciliary area/components |
+| `ALI3` | C1 DAPI; C2 KRT5-488; C3 tdTOM; C4 MUC5AC-647 | KRT5 and tdTOM cell calls | KRT5 area, tdTOM reporter area and primary apical MUC5AC area/components |
 
 The marker identity and acquisition index are authoritative; displayed colors
 alone are not. `T1A` is the output label for T1alpha/podoplanin, and `ProSPC`
@@ -266,7 +269,10 @@ $env:IFQ_RECURSIVE = 'true'
 $env:IFQ_INCLUDE_REGEX = '.*CC10_488.*20x 2k_Cycle.*G001_0001\.oir$'
 $env:IFQ_MAX_IMAGES = '1'            # 0 means all matching files
 $env:IFQ_SEGMENTER = 'classic'
-$env:IFQ_PROJECTION = 'max'           # max | sum | avg | single
+$env:IFQ_PROJECTION = 'layer_aware'   # layer_aware | max | sum | avg | single
+$env:IFQ_Z_NUCLEAR_RANGE = 'full'     # full | auto | 1-based start:end
+$env:IFQ_Z_CELL_BODY_RANGE = 'auto'
+$env:IFQ_Z_APICAL_RANGE = 'auto'
 # $env:IFQ_SINGLE_PLANE = '4'         # 1-based index when projection=single
 $env:IFQ_TISSUE_MODE = 'whole_field' # count disconnected DAPI objects across the field
 $env:IFQ_COMPARTMENT_MODE = 'required' # final run: require alveoli/airway ROI names
@@ -345,8 +351,17 @@ groups are compared; the example values above are not validated cutoffs.
 |---|---|
 | `IFQ_SEGMENTER` | `"stardist"` (preferred) or `"classic"` watershed |
 | `STARDIST_PROB` / `STARDIST_NMS` | detection probability / overlap thresholds |
-| `IFQ_PROJECTION` | `"max"` (default), `"sum"`, `"avg"`, or `"single"` |
+| `IFQ_PROJECTION` | `"max"` CLI default, `"layer_aware"` marker-specific slabs, `"sum"`, `"avg"`, or `"single"` |
 | `IFQ_SINGLE_PLANE` | 1-based plane index when projection is `single`; `-1` = middle |
+| `IFQ_Z_NUCLEAR_RANGE` | `full`, `auto`, or inclusive `start:end`; used by layer-aware nuclear policies |
+| `IFQ_Z_CELL_BODY_RANGE` | `auto`, `full`, or inclusive `start:end`; automatic mode selects the brightest contiguous DAPI window |
+| `IFQ_Z_APICAL_RANGE` | `auto`, `full`, or inclusive `start:end`; automatic mode selects the brightest contiguous window in the apical marker channel |
+| `IFQ_Z_CELL_BODY_PLANES` / `IFQ_Z_APICAL_PLANES` | Automatic slab widths; defaults are 5 and 3 planes |
+| `IFQ_EXPORT_DISPLAY_CHANNELS` | `true` by default; exports visualization-only enhanced marker channels and a merged composite |
+| `IFQ_DISPLAY_LOW_PERCENTILE` / `IFQ_DISPLAY_HIGH_PERCENTILE` | display stretch limits; defaults are `1.0` and `99.8` percent |
+| `IFQ_DISPLAY_GAMMA` | positive gamma applied only to display copies; default `1.0` |
+| `IFQ_DAPI_METHOD` | Explicit `local_phansalkar` or `global_otsu`; if omitted, layer-aware mode uses global Otsu and legacy modes retain local Phansalkar |
+| `IFQ_MIN_INCLUDED_NUCLEI` | Minimum included nuclei required per analysis region; default `1` prevents a false-success zero-cell result |
 | `IFQ_RING_EXPAND_UM` | perinuclear ring width for the cytoplasm/membrane proxy |
 | `IFQ_ALLOW_NONEMPTY_OUTPUT` | `false` by default; prevents stale mixed-run exports |
 | `POD_MIN_AREA_UM2` | minimum particle size to count as a KRT5⁺ pod |
@@ -390,6 +405,9 @@ OUTPUT_DIR/
 └── <image_stem>/
     ├── <stem>__cells.csv               # per-cell measurements (one row per nucleus/cell)
     ├── <stem>__params.json             # per-image parameters, calibration, channel map, thresholds
+    ├── <stem>__z_plane_profile.csv     # marker/plane signal profile and selected Z ranges
+    ├── <stem>__DISPLAY_ONLY__C#-<marker>_enhanced.png  # percentile-scaled marker view
+    ├── <stem>__DISPLAY_ONLY__merged_enhanced.png       # color composite for visual review
     ├── <stem>__<region>__QC.png        # QC overlay: tissue (white), nuclei (cyan), KRT5⁺ (magenta), pods (yellow)
     ├── <stem>__<region>__nuclei_mask.tif  # 16-bit label mask of nuclei
     ├── <stem>__<region>__<marker>_morphology_positive_nuclei_mask.tif
@@ -408,6 +426,13 @@ directory carries the specimen ID, avoiding the long duplicated paths that
 Windows may fail to open. The same signature is stored in `__params.json` and
 `run_manifest.json`. For panels without a recorded fluorophore, the channel's
 biological marker name is used.
+
+Every enhanced PNG is labeled **DISPLAY ONLY - NOT QUANTIFIED**. Percentile
+stretching and optional gamma are applied to duplicate 8-bit display images;
+cell segmentation, marker thresholds, masks, morphology features, and final
+calls continue to use the original calibrated marker projections. Per-channel
+display overrides can be declared as `displayLowPercentile`,
+`displayHighPercentile`, and `displayGamma` in a panel channel definition.
 
 **Key `run_summary.csv` columns** (marker columns vary by panel):
 
@@ -500,6 +525,11 @@ sections as repeated measures).
 - **Projection matters.** MAX projection is fine for pod **area**. For **YAP**
   (Scheme 2) a MAX projection corrupts the nuclear:cytoplasmic ratio — set
   `PROJECTION="single"` and use one representative plane.
+- **Multichannel Z-stacks need marker-specific depth handling.**
+  `IFQ_PROJECTION=layer_aware` uses registry/panel `zPolicy` values and writes a
+  per-plane selection table. Automatic ranges are pilot settings; replace them
+  with fixed ranges after QC. See
+  [`docs/Z_STACK_ANALYSIS.md`](docs/Z_STACK_ANALYSIS.md).
 - **Auto thresholds are exploratory placeholders.** They adapt per image and
   define candidate pixels for morphology gates. Confirm them against controls,
   replace them with fixed marker cutoffs, and freeze every morphology parameter

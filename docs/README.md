@@ -15,6 +15,10 @@
 - [`COMPARTMENT_TAGS_AND_PROGRESSION.md`](COMPARTMENT_TAGS_AND_PROGRESSION.md):
   descriptions of every anatomical tag and subcellular analytical role,
   multi-tag precedence, naming examples, and the complete call progression.
+- [`Z_STACK_ANALYSIS.md`](Z_STACK_ANALYSIS.md): marker-specific Z policies,
+  automatic/fixed slab selection, per-plane QC, and true-3D escalation criteria.
+- [`BRANCHING.md`](BRANCHING.md): stable-main, Z-stack feature, legacy snapshot,
+  and merge-gate responsibilities.
 - [`../WORKFLOW.md`](../WORKFLOW.md): concise current operational workflow.
 - [`../README.md`](../README.md): installation, configuration, output schema,
   and statistics.

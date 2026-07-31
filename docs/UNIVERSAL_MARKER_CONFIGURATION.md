@@ -181,6 +181,11 @@ marker, declare it explicitly. Useful optional channel fields are:
 | Field | Meaning |
 |---|---|
 | `measurement` | Human-readable measurement model stored in provenance |
+| `zPolicy` | `full_stack`, `nuclear_stack`, `cell_body_slab`, `apical_slab`, `single_plane`, or `explicit_range`; active when `IFQ_PROJECTION=layer_aware` |
+| `zProjection` | Projection within the selected slab: `max`, `avg`, `sum`, or `single` |
+| `zStart` / `zEnd` | Inclusive 1-based planes required by `explicit_range` |
+| `displayLowPercentile` / `displayHighPercentile` | Optional per-channel display stretch; affects labeled enhanced PNGs only |
+| `displayGamma` | Optional positive gamma for the display copy only |
 | `expectedCompartments` | Any accepted ROI context tags |
 | `requiresSinglePlane` | Marks multi-plane projections indeterminate |
 | `cellCall` | Set `false` to disable per-nucleus calls |
@@ -195,6 +200,10 @@ marker, declare it explicitly. Useful optional channel fields are:
 | `minNucCytoRatio` | Nuclear localization ratio override |
 | `supportExpandUm` | Ciliary/support-zone distance override |
 | `allowPositiveWithoutCompartment` | Default `true`; retain strict evidence as an exploratory context-unresolved marker-positive call. Set `false` when even positivity is uninterpretable without geography |
+
+Marker registry entries may provide `default_z_policy`. The panel remains the
+final authority because acquisition geometry and preparation can change the
+appropriate depth policy. See [`Z_STACK_ANALYSIS.md`](Z_STACK_ANALYSIS.md).
 
 Custom panels cannot replace built-in panel keys. This prevents a study file
 from silently changing a previously validated acquisition map.

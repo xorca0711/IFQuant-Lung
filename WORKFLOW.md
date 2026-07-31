@@ -10,6 +10,56 @@ universal biological cutoffs. Derive intensity cutoffs and validate morphology
 parameters using blinded negative and positive controls, then freeze them before
 comparing experimental groups.
 
+## Current branch and release status
+
+| Line | Responsibility | Status |
+|---|---|---|
+| `main` | Stable universal morphology-first pipeline | Preserved; unchanged by this feature branch |
+| `codex/z-stack-analysis` | Layer-aware 2.5D Z routing, ALI presets, marker-profile refinements, Z QC, visualization-only channel enhancement, and zero-cell failure protection | Implemented and smoke-tested |
+| `codex/legacy-pre-reorganization` | Historical pre-reorganization snapshot | Retain as legacy history |
+| Launcher | `IFQuantLauncher-v1.6.0.exe` in the repository root | Rebuilt; embedded-runtime self-test exit code 0 |
+
+The layer-aware implementation is additive. Legacy `max`, `sum`, `avg`, and
+`single` projection modes retain their established behavior. The Windows GUI
+recommends `layer_aware` for multichannel stacks, while command-line runs remain
+explicitly configurable.
+
+### Representative 20× Z-stack validation
+
+The final built-in presets were run headlessly with ARM64 Fiji/ImageJ 1.54p99,
+Bio-Formats 8.5.0, Java 21.0.7, classic segmentation, whole-field airway
+context, and automatic layer-aware ranges:
+
+| Preset | Stack | Resolved Z ranges | Included nuclei | Exploratory outputs | Manifest |
+|---|---:|---|---:|---|---|
+| `ALI1` | 10 planes | DAPI 1–10; SCGB3A2/tdTOM 4–8; p63 1–10 | 1,990 | SCGB3A2⁺ 51; tdTOM⁺ 644; p63⁺ 414 | complete |
+| `ALI2` | 12 planes | DAPI 1–12; KRT5/tdTOM 1–5; AcTub 6–8 | 1,734 | KRT5⁺ 729; tdTOM⁺ 645; AcTub-associated cells 62; AcTub area fraction 0.0301 | complete |
+| `ALI3` | 12 planes | DAPI 1–12; KRT5/tdTOM 8–12; MUC5AC 10–12 | 874 | KRT5⁺ 282; tdTOM⁺ 68; MUC5AC area fraction 0.2781; 543 components | complete |
+
+These are software-validation outputs generated with adaptive exploratory
+thresholds. They demonstrate that import, Z routing, segmentation, marker
+decisions, workbook export, and provenance complete; they are not frozen
+biological results. Review the QC images and replace automatic ranges and
+thresholds with study-validated settings before inference.
+
+The ALI3 field was rerun after enabling display enhancement. It exported four
+individually labeled enhanced channels plus one enhanced merge. Its
+quantitative outputs were exactly unchanged from the pre-enhancement run:
+874 nuclei, 282 KRT5-positive cells, 68 tdTomato-positive cells, KRT5 area
+fraction 0.1670835, tdTomato area fraction 0.1015151, and MUC5AC area fraction
+0.2781129. This regression confirms that the display copies are isolated from
+the quantitative branch.
+
+Validation also identified and corrected two unsafe false-success paths:
+
+1. Unrecognized underscore-heavy filenames can no longer override the panel
+   selected by the launcher; only a recognized convention or samplesheet may
+   provide a per-image override.
+2. Layer-aware dense ALI DAPI defaults to global Otsu when no DAPI method is
+   explicitly supplied. Local Phansalkar rejected all candidates in the tested
+   field. Any region below `IFQ_MIN_INCLUDED_NUCLEI` now fails instead of
+   exporting a successful zero-cell result.
+
 ## Active entry points
 
 - [`IF_Quant_Pipeline.groovy`](IF_Quant_Pipeline.groovy): production
@@ -27,6 +77,9 @@ comparing experimental groups.
 - [`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md):
   anatomical tag meanings, subcellular analytical roles, ROI naming, and
   image-to-call progression.
+- [`docs/Z_STACK_ANALYSIS.md`](docs/Z_STACK_ANALYSIS.md): layer-aware Z policies,
+  automatic or fixed slab selection, per-plane QC, and the boundary between
+  restricted 2.5D projections and true 3D analysis.
 - [`config/lung_marker_registry.json`](config/lung_marker_registry.json): marker
   aliases, localization, lineage/state notes, and analytical-role defaults.
 - [`config/custom_panels.example.json`](config/custom_panels.example.json):
@@ -45,6 +98,17 @@ project:
 |---|---|---|---|---|
 | `LEFT` | DAPI | KRT5-488 | AGER-555 | T1alpha-647 |
 | `RIGHT` | DAPI | Pro-SPC-488 | AGER-555 | KRT8-647 |
+
+The 260730-CW ALI Z-stack acquisitions are available as additional presets:
+
+| Preset | C1 | C2 | C3 | C4 |
+|---|---|---|---|---|
+| `ALI1` | DAPI | SCGB3A2-488 | tdTomato | p63-647 |
+| `ALI2` | DAPI | KRT5-488 | tdTomato | acetylated-tubulin-647 |
+| `ALI3` | DAPI | KRT5-488 | tdTomato | MUC5AC-647 |
+
+The ALI presets declare nuclear, cell-body and apical Z policies but do not
+replace `LEFT`/`RIGHT` as the priority biological panels.
 
 Primary tracking is per image and per marker: total included DAPI cells,
 final-positive cells, final-negative cells, indeterminate cells, and
@@ -102,8 +166,12 @@ mutation, malignancy, or disease state by itself.
 ```mermaid
 flowchart TD
     A[Original Bio-Formats image] --> B[Verify file identity, channel map, calibration, bit depth, and Z policy]
-    B --> C[Define blinded tissue and anatomical/context ROIs]
-    C --> D[Split channels and project each channel using the declared Z policy]
+    B --> Z{Z handling}
+    Z -- Global legacy mode --> D1[Apply one declared projection to every channel]
+    Z -- Layer-aware mode --> D2[Resolve full, nuclear, cell-body, apical, single-plane, or explicit range per marker]
+    D1 --> C[Define blinded tissue and anatomical/context ROIs]
+    D2 --> C
+    C --> D[Create the declared global or marker-specific restricted projections]
     D --> E[Segment DAPI nuclei and reject undersized or edge-touching candidates]
     E --> F{Nucleus and marker support technically evaluable?}
     F -- No: invalid projection, empty support, or shared ownership --> U[Indeterminate]
@@ -127,8 +195,82 @@ flowchart TD
     V --> X[Export cell CSV, summaries, masks, call-QC overlays, and provenance]
     W --> X
     X --> Y[Review QC; exclude failed fields without relabeling them negative]
-    Y --> Z[Aggregate accepted regions to section or mouse level]
+    Y --> AA[Aggregate accepted regions to section or mouse level]
 ```
+
+### Layer-aware Z routing
+
+```mermaid
+flowchart TD
+    A[Calibrated multichannel stack] --> B[Retain all channels and Z planes]
+    B --> C{Marker Z policy}
+    C -- full_stack --> D[Use all planes]
+    C -- nuclear_stack --> E[Use configured nuclear range]
+    C -- cell_body_slab --> F[Use configured range or brightest contiguous DAPI window]
+    C -- apical_slab --> G[Use configured range or brightest contiguous marker window]
+    C -- single_plane --> H[Use declared or DAPI-selected plane]
+    C -- explicit_range --> I[Use validated panel zStart:zEnd]
+    D --> J[Restricted max, average, sum, or single-plane image]
+    E --> J
+    F --> J
+    G --> J
+    H --> J
+    I --> J
+    J --> K[Write per-plane profile and resolved range provenance]
+    K --> L[Run the unchanged morphology-first decision hierarchy]
+```
+
+#### What each schematic block does
+
+| Block | Algorithmic meaning | Output or safeguard |
+|---|---|---|
+| **A. Calibrated multichannel stack** | Bio-Formats imports the original channels and Z planes. The pipeline requires positive XY calibration and, for a multi-plane layer-aware run, positive Z spacing. | Preserves physical units and rejects an uncalibrated stack instead of applying pixel-based biological distances. |
+| **B. Retain all channels and Z planes** | Channels are split without collapsing Z. The declared channel index is checked against the acquired channel count. | Prevents a single global projection from erasing marker-specific depth information. |
+| **C. Marker Z policy** | Each panel channel receives a policy from its panel definition, marker registry, or role default. A panel-specific declaration has priority. | Routes every marker deterministically and records the policy used. |
+| **D. `full_stack`** | Select planes 1 through the final plane. This is appropriate for robust regional signal or a complete DAPI overview. | Full-stack inclusive range. |
+| **E. `nuclear_stack`** | Use `IFQ_Z_NUCLEAR_RANGE`; `full` is the default, `auto` selects the brightest DAPI plane, and `start:end` freezes a validated range. | Nuclear-localized marker range that is independent of cytoplasmic/apical ranges. |
+| **F. `cell_body_slab`** | Use the configured cell-body range, or select the brightest contiguous DAPI window of `IFQ_Z_CELL_BODY_PLANES` planes. The window score is the summed DAPI signal. | DAPI-guided epithelial/cell-body slab for keratins, reporters, secretory cytoplasm, Pro-SPC, and related markers. |
+| **G. `apical_slab`** | Use the configured apical range, or select the brightest contiguous window in that marker's own channel using `IFQ_Z_APICAL_PLANES`. | Marker-guided luminal/apical slab for AcTub, MUC5AC, and similarly localized structures. |
+| **H. `single_plane`** | Use an explicitly declared plane; otherwise use the configured global plane or a DAPI-selected plane. | A local optical section for ratios such as nuclear YAP, where a projection would mix compartments. |
+| **I. `explicit_range`** | Require and validate the panel's 1-based inclusive `zStart:zEnd`. Out-of-stack values stop the image. | Frozen, study-specific range suitable for a confirmatory cohort. |
+| **J. Restricted projection** | Project only the resolved range with the declared `max`, `avg`, `sum`, or `single` method. The default is maximum intensity within the restricted slab. | One marker-specific 2D analysis image; the source stack remains unchanged. |
+| **K. Profile and provenance** | Export every plane's intensity profile, selected status, resolved range/source, projection, automatic score, and intensity-weighted Z centroid. | Makes automatic selection auditable and allows a fixed range to be chosen before confirmatory analysis. |
+| **L. Morphology-first hierarchy** | Feed the marker-specific projection into the same pixel-threshold, localization, connectedness, compartment, ownership, and evaluability rules used by the established workflow. | Z routing changes the optical support presented to the decision algorithm; it does not replace or weaken the final marker rules. |
+
+The automatic branches select a range from image signal only. They do not use
+condition, genotype, experimental group, or the eventual positive/negative
+cell calls. When acquisition orientation is reproducible, inspect pilot Z
+profiles and replace `auto` with predeclared ranges before cohort-level
+statistics.
+
+Automatic windows are deterministic pilot choices. A confirmatory cohort
+should use explicit ranges whenever acquisition orientation and depth are
+consistent. The current layer-aware path is 2.5D: it restricts projections but
+does not claim 3D cell-boundary reconstruction.
+
+### Visualization-only channel enhancement
+
+```mermaid
+flowchart TD
+    A[Marker-specific projected channel] --> B[Quantitative branch keeps original calibrated pixels]
+    A --> C[Duplicate display copy]
+    C --> D[Resolve per-channel low and high percentiles]
+    D --> E[Map display range to 8-bit]
+    E --> F[Apply optional display gamma]
+    F --> G[Write labeled individual marker PNG]
+    F --> H[Color-merge enhanced marker copies]
+    H --> I[Write labeled enhanced composite and QC background]
+    B --> J[Thresholds, masks, morphology, and final calls]
+```
+
+Intensity adjustment is deliberately isolated from measurement. The default
+display range is the 1.0th to 99.8th percentile with gamma 1.0. A panel channel
+may override `displayLowPercentile`, `displayHighPercentile`, or
+`displayGamma`. All enhanced files contain the banner
+`DISPLAY ONLY - NOT QUANTIFIED`; the resolved limits are saved in
+`__params.json`. The original projected pixels—not the enhanced 8-bit
+copies—remain the only source for thresholds, masks, intensity audit fields,
+morphology features, and final calls.
 
 ## Decision authority and three-state semantics
 
@@ -276,13 +418,24 @@ remains the primary 20x endpoint.
 
 - One-plane acquisitions are analyzed as that plane.
 - Maximum projection is acceptable for robust area measurements when validated.
+- `IFQ_PROJECTION=layer_aware` keeps the legacy decision hierarchy but resolves
+  separate full-stack, nuclear, DAPI-guided cell-body, marker-guided apical, or
+  explicit Z ranges before thresholding.
 - YAP nuclear:cytoplasmic analysis requires a representative single plane or a
   validated 3D method.
 - Apical cilia are best assessed in a single apical plane or restricted apical Z
   range when a stack is available.
+- Automatic cell-body/apical slab discovery is exploratory. Review
+  `*__z_plane_profile.csv`, then freeze explicit ranges when acquisition
+  geometry is consistent.
+- The layer-aware path is a restricted-projection 2.5D method. Dense nuclei that
+  overlap in XY, volumetric endpoints, and genuinely three-dimensional
+  ownership require a separately validated anisotropy-aware 3D segmenter.
 
 The tested G002 and G003 Olympus OIR files each contain one optical section, so
-no marker-specific Z projection is needed for those files.
+no marker-specific Z projection is needed for those particular files. The
+260730-CW examples contain 10–12 planes and should use the layer-aware pathway
+or prevalidated explicit ranges.
 
 ### Anatomical sectioning
 
@@ -367,7 +520,7 @@ removed from the environment token: `tdTOM` becomes `IFQ_TDTOM_THRESHOLD` and
 ## Minimal Fiji batch configuration
 
 The recommended Windows route is
-[`IFQuantLauncher-v1.5.0.exe`](IFQuantLauncher-v1.5.0.exe). It exposes the
+[`IFQuantLauncher-v1.6.0.exe`](IFQuantLauncher-v1.6.0.exe). It exposes the
 directories and settings below in a GUI, creates a fresh timestamped output
 folder, clears stale inherited `IFQ_*` variables, and chooses the appropriate
 ARM64 or x64 Fiji launcher when a Fiji installation folder is selected.
@@ -379,7 +532,10 @@ $env:IFQ_INPUT_DIR = 'G:\path\to\originals'
 $env:IFQ_OUTPUT_DIR = "$PWD\analysis_output\run_name"
 $env:IFQ_PANEL = 'E'
 $env:IFQ_SEGMENTER = 'classic'
-$env:IFQ_PROJECTION = 'max'
+$env:IFQ_PROJECTION = 'layer_aware'
+$env:IFQ_Z_NUCLEAR_RANGE = 'full'
+$env:IFQ_Z_CELL_BODY_RANGE = 'auto'
+$env:IFQ_Z_APICAL_RANGE = 'auto'
 $env:IFQ_MARKER_REGISTRY = "$PWD\config\lung_marker_registry.json"
 # For a new study: $env:IFQ_PANEL_CONFIG = 'D:\study\panels.json'
 $env:IFQ_INCLUDE_REGEX = '.*A01_G002_0001.*'
@@ -437,15 +593,17 @@ indeterminate nuclei in magenta, and the analysis ROI in orange.
 
 ## QC acceptance order
 
-1. Confirm image identity, channel order, calibration, and projection.
-2. Review DAPI candidate, accepted, rejected, split, and merged objects.
-3. Confirm threshold boundaries follow the intended marker structure.
-4. Confirm connected-support gates reject isolated bright specks.
-5. Review call-QC images and verify spatially plausible positives.
-6. Confirm shared support is not forced to a cell.
-7. Confirm airway, alveolar, and ambiguous ROI labels are defensible.
-8. Confirm no blank final call was converted to zero.
-9. Freeze thresholds and morphology parameters before blinded group analysis.
+1. Confirm image identity, channel order, XY/Z calibration, and projection mode.
+2. For a stack, review `*__z_plane_profile.csv` and every resolved marker range.
+3. Review DAPI candidate, accepted, rejected, split, and merged objects.
+4. Confirm threshold boundaries follow the intended marker structure.
+5. Confirm connected-support gates reject isolated bright specks.
+6. Review call-QC images and verify spatially plausible positives.
+7. Confirm shared support is not forced to a cell.
+8. Confirm airway, alveolar, and ambiguous ROI labels are defensible.
+9. Confirm no blank final call was converted to zero.
+10. Freeze Z ranges, thresholds and morphology parameters before blinded group
+    analysis.
 
 ## Statistical unit
 

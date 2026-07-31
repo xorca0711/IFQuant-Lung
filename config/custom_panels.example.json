@@ -5,9 +5,52 @@
     "Channel idx values must be changed to match the acquisition metadata.",
     "Copy this file outside the repository, keep only the panels you use, and set IFQ_PANEL_CONFIG to that copy.",
     "Derive fixed intensity thresholds and morphology settings from study controls before confirmatory analysis.",
-    "The Red2Kras reporter areaMinAreaUm2 value is a placeholder example and must be validated for the acquisition resolution, section thickness, and clone endpoint."
+    "The Red2Kras reporter and MUC5AC areaMinAreaUm2 values are placeholder examples and must be validated for the acquisition resolution, section thickness, and biological endpoint.",
+    "zPolicy is used only when IFQ_PROJECTION=layer_aware. Automatic slab selection is exploratory; freeze explicit study ranges before confirmatory analysis."
   ],
   "panels": {
+    "ALI_SCGB3A2_TDTOM_TP63": {
+      "label": "ALI secretory/basal lineage-reporter Z-stack",
+      "channels": [
+        {"idx": 1, "marker": "DAPI", "role": "nuclear", "zPolicy": "full_stack", "qcColor": "blue"},
+        {"idx": 2, "marker": "SCGB3A2", "zPolicy": "cell_body_slab", "expectedCompartments": ["airway"], "qcColor": "green"},
+        {"idx": 3, "marker": "tdTOM", "zPolicy": "cell_body_slab", "areaMarker": true, "areaMode": "reporter", "areaMinAreaUm2": 8.0, "qcColor": "red"},
+        {"idx": 4, "marker": "TP63", "zPolicy": "nuclear_stack", "expectedCompartments": ["airway"], "qcColor": "white"}
+      ],
+      "classify": [
+        {"tdTOM": true},
+        {"SCGB3A2": true, "tdTOM": true},
+        {"TP63": true, "tdTOM": true},
+        {"SCGB3A2": true, "TP63": true}
+      ]
+    },
+    "ALI_KRT5_TDTOM_ACTUB": {
+      "label": "ALI basal/ciliated lineage-reporter Z-stack",
+      "channels": [
+        {"idx": 1, "marker": "DAPI", "role": "nuclear", "zPolicy": "full_stack", "qcColor": "blue"},
+        {"idx": 2, "marker": "KRT5", "zPolicy": "cell_body_slab", "areaMarker": true, "qcColor": "green"},
+        {"idx": 3, "marker": "tdTOM", "zPolicy": "cell_body_slab", "areaMarker": true, "areaMode": "reporter", "areaMinAreaUm2": 8.0, "qcColor": "red"},
+        {"idx": 4, "marker": "AcTub", "zPolicy": "apical_slab", "displayLowPercentile": 1.0, "displayHighPercentile": 99.8, "displayGamma": 1.0, "areaMarker": true, "areaMode": "ciliary", "areaMinAreaUm2": 2.0, "expectedCompartments": ["airway"], "qcColor": "white"}
+      ],
+      "classify": [
+        {"tdTOM": true},
+        {"KRT5": true, "tdTOM": true},
+        {"AcTub": true, "tdTOM": true}
+      ]
+    },
+    "ALI_KRT5_TDTOM_MUC5AC": {
+      "label": "ALI basal/goblet lineage-reporter Z-stack",
+      "channels": [
+        {"idx": 1, "marker": "DAPI", "role": "nuclear", "zPolicy": "full_stack", "qcColor": "blue"},
+        {"idx": 2, "marker": "KRT5", "zPolicy": "cell_body_slab", "areaMarker": true, "qcColor": "green"},
+        {"idx": 3, "marker": "tdTOM", "zPolicy": "cell_body_slab", "areaMarker": true, "areaMode": "reporter", "areaMinAreaUm2": 8.0, "qcColor": "red"},
+        {"idx": 4, "marker": "MUC5AC", "zPolicy": "apical_slab", "areaMinAreaUm2": 8.0, "expectedCompartments": ["airway"], "qcColor": "white"}
+      ],
+      "classify": [
+        {"tdTOM": true},
+        {"KRT5": true, "tdTOM": true}
+      ]
+    },
     "ARI_DATP": {
       "label": "Acute injury alveolar transitional-state research",
       "channels": [
