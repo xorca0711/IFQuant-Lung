@@ -444,6 +444,12 @@ slides.each { slideFile ->
   if (aspect > 0.01d)
     failRun("Non-square pixels (" + pxUm + " x " + pxUmH + " um, " + (aspect*100) + "%). " +
             "IF_Quant_Pipeline.groovy rejects > 1%.")
+  // This scanner reports pixelWidth != pixelHeight (0.3449973537 vs 0.3449984138).
+  // ImageJ computes area as width*height, so collapsing to a single scalar and
+  // squaring it makes every Stage 1 area disagree with Stage 2 by ~3e-6. Small,
+  // but it is a pure bookkeeping error and it muddies the reconciliation check
+  // that exists to detect real problems.
+  double pxAreaUm2 = pxUm * pxUmH
   int W = server.getWidth(), H = server.getHeight()
 
   // ---- global tissue detection ----------------------------------------
@@ -490,12 +496,12 @@ slides.each { slideFile ->
   // Y stretch on this format.
   def req = RegionRequest.createInstance(server.getPath(), TISSUE_DS, 0, 0, W, H)
   Geometry g = ContourTracing.createTracedGeometry(simple, 0.5d, Double.POSITIVE_INFINITY, req)
-  double minFragPx = (MIN_FRAG_MM2 * 1e6) / (pxUm * pxUm)
+  double minFragPx = (MIN_FRAG_MM2 * 1e6) / pxAreaUm2
   g = GeometryTools.removeFragments(g, minFragPx)
   if (FILL_HOLES) g = GeometryTools.removeInteriorRings(g, minFragPx)
   g = GeometryTools.constrainToBounds(g, 0, 0, W, H)
   if (g == null || g.isEmpty()) failRun("Tissue geometry empty after cleanup for " + slideFile.name)
-  double tissueMm2 = g.getArea() * pxUm * pxUm / 1e6
+  double tissueMm2 = g.getArea() * pxAreaUm2 / 1e6
   logMsg(String.format("  tissue: Otsu=%.2f  mask=%.2f%%  area=%.2f mm2  (%d ms)",
       thr, 100.0 * fgPx / (mw * (double) mh), tissueMm2, System.currentTimeMillis() - t0))
 
@@ -521,7 +527,7 @@ slides.each { slideFile ->
       Geometry gi = g.intersection(rect)
       if (gi == null || gi.isEmpty()) continue
       double coreTissuePx = gi.getArea()
-      if (coreTissuePx * pxUm * pxUm < MIN_TISSUE_UM2) { nSkipped++; continue }
+      if (coreTissuePx * pxAreaUm2 < MIN_TISSUE_UM2) { nSkipped++; continue }
 
       // export window = core grown by the halo, clipped to the slide
       int ex = Math.max(0, cx - HALO_PX)
@@ -602,13 +608,13 @@ slides.each { slideFile ->
         tile_id: tileId, tile_file: tileFile.name, roiset_file: roiFile.name,
         slide_stem: stem, source_vsi: slideFile.name,
         series_index: chosen.series, series_name: chosen.name,
-        pixel_size_um: pxUm,
+        pixel_size_um: pxUm, pixel_size_um_y: pxUmH,
         core_x: cx, core_y: cy, core_w: cw, core_h: chh,
         export_x: ex, export_y: ey, export_w: ew, export_h: eh,
         halo_left: cx - ex, halo_top: cy - ey,
         halo_right: ex2 - (cx + cw), halo_bottom: ey2 - (cy + chh),
         core_tissue_area_px: coreTissuePx,
-        core_tissue_area_um2: coreTissuePx * pxUm * pxUm,
+        core_tissue_area_um2: coreTissuePx * pxAreaUm2,
         mouse_id: md.mouse_id, genotype: md.genotype, condition: md.condition,
         section_id: tileId, panel: PANEL, region_name: ROI_NAME
       ]
@@ -622,7 +628,7 @@ slides.each { slideFile ->
     failRun("No tiles intersect tissue for " + slideFile.name + " -- refusing to emit an empty run.")
 
   // ---- reconciliation: per-tile core areas must sum to the slide tissue ----
-  double sumMm2 = coreTissueTotalPx * pxUm * pxUm / 1e6
+  double sumMm2 = coreTissueTotalPx * pxAreaUm2 / 1e6
   double relDiff = Math.abs(sumMm2 - tissueMm2) / tissueMm2
   logMsg(String.format("  tiles=%d written=%d resumed=%d skipped(<%.0f um2)=%d   (%d ms)",
       manifestRows.size(), nWritten, nResumed, MIN_TISSUE_UM2, nSkipped,
@@ -653,7 +659,7 @@ slides.each { slideFile ->
   runRecord.slides << [
     source_vsi: slideFile.name, slide_stem: stem,
     series_index: chosen.series, series_name: chosen.name,
-    width: W, height: H, pixel_size_um: pxUm, n_channels: chosen.nChannels,
+    width: W, height: H, pixel_size_um: pxUm, pixel_size_um_y: pxUmH, n_channels: chosen.nChannels,
     channel_names: chosen.channelNames,
     tissue_threshold_otsu: thr, tissue_area_mm2: tissueMm2,
     sum_core_tissue_mm2: sumMm2, seam_check_rel_diff: relDiff,

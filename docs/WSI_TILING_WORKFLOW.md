@@ -125,6 +125,13 @@ Two settings change it materially, both measured on the pilot slide:
 Both are written into `stage1_manifest.json` for every run. Do not compare
 results produced with different values.
 
+One further detail matters for the reconciliation check: this scanner reports
+`pixelWidth != pixelHeight` (0.3449973537 vs 0.3449984138 µm). ImageJ computes
+area as width x height, so Stage 1 does too. Squaring a single "pixel size"
+scalar instead shifts every area by ~3e-6 — harmless in itself, but it puts a
+permanent floor under the Stage 3 reconciliation and would mask a real problem.
+Both values are recorded as `pixel_size_um` and `pixel_size_um_y`.
+
 The global mask is computed **once per slide**, not per tile. Per-tile Otsu
 would use a different threshold in every tile — a tile that is 95% airspace and
 one that is 95% tissue would get wildly different cutoffs.
@@ -254,7 +261,7 @@ The plumbing is verified end to end on real data (QuPath 0.7.0, Fiji/ImageJ
 | channel names round trip | `DAPI, FITC, Cy3, Cy5(Gray)` preserved |
 | series/resolution count of exported tile | 1 / 1 (flat, as the engine requires) |
 | per-tile ROI area vs `tile_manifest.csv` core area | rel diff **0.00e+00**, 6/6 tiles, all in bounds |
-| Stage 2 `sum(region_area_um2)` vs Stage 1 core tissue area | 1106122.89 vs 1106119.49 µm², rel diff **3.1e-06** |
+| Stage 2 `sum(region_area_um2)` vs Stage 1 core tissue area | 1106122.8907924264 vs …67 µm², rel diff **2.1e-16** (machine epsilon) |
 | Stage 2 batch status | `complete`, 6/6 success, 0 failures |
 | Z handling on single-plane tiles | `range=1:1 projection=max source=single_slice_input` (no ZProjector) |
 | seam count inflation | 22 duplicate pairs / 6215 cells = **0.35%** |
