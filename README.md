@@ -14,6 +14,13 @@ antibody combination.
 - **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
 - **`aggregate_to_mouse.py`** — rolls per-region results up to the **mouse**
   (biological replicate) level and produces a stats-ready group summary.
+- **`qupath_wsi_tile_export.groovy`** — whole-slide front end. Opens an Olympus
+  `.vsi` slide scan in QuPath, picks the true 20x series, detects tissue once
+  globally, and exports calibrated OME-TIFF tiles for the **unchanged** engine
+  above. It measures nothing. See
+  [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
+- **`aggregate_tiles_to_slide.py`** — rolls per-tile results up to the slide
+  level and refuses to emit a summary when tiles are missing.
 - **`samplesheet_template.csv`** — per-image metadata template.
 - **[`WORKFLOW.md`](WORKFLOW.md)** — current end-to-end operational sequence.
 - **[`docs/`](docs/README.md)** — marker morphology and validated pilot results.
