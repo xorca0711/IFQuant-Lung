@@ -549,6 +549,27 @@ slides.each { slideFile ->
             .translationInstance((double) -ex, (double) -ey).transform(gi)
         ROI roi = GeometryTools.geometryToROI(local, ImagePlane.getDefaultPlane())
         def ijRoi = IJTools.convertToIJRoi(roi, new ij.measure.Calibration(), 1.0d)
+
+        // BOUNDS HARDENING. resolveTissueRois() rejects any ROI whose bounds
+        // fall outside the image, and geometric containment is NOT sufficient:
+        // java.awt.geom.Area.getBounds() rounds OUTWARD from getBounds2D(), so a
+        // curved boundary or sub-pixel float residue turns an in-bounds shape
+        // into Rectangle[x=-1, width=2305] on a 2304 px tile. That would make
+        // the engine fail this tile, dropping its tissue area AND its KRT5 pod
+        // area from run_summary.csv while the batch carries on.
+        def b = ijRoi.getBounds()
+        if (b.x < 0 || b.y < 0 || b.x + b.width > ew || b.y + b.height > eh) {
+          // Clamp in ImageJ space: AND with an integer rectangle yields integer bounds.
+          def clamped = new ij.gui.ShapeRoi(ijRoi).and(new ij.gui.ShapeRoi(new ij.gui.Roi(0, 0, ew, eh)))
+          def b2 = clamped.getBounds()
+          if (b2.x < 0 || b2.y < 0 || b2.x + b2.width > ew || b2.y + b2.height > eh) {
+            failRun("Tile " + tileBase + ": ROI bounds " + b2 + " still outside the " + ew + "x" + eh +
+                    " tile after clamping. Writing it would make Stage 2 reject the tile and " +
+                    "silently drop its tissue and pod area.")
+          }
+          logMsg("    bounds-clamped ROI for " + tileId + ": " + b + " -> " + b2)
+          ijRoi = clamped
+        }
         ijRoi.setName(ROI_NAME)
         def bos = new ByteArrayOutputStream()
         new RoiEncoder(bos).write(ijRoi)     // returns void; do not test its value

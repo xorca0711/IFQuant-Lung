@@ -97,6 +97,36 @@ def load_stage1_manifest(path):
         return json.load(fh)
 
 
+def read_stage2_manifests(analysis_dirs):
+    """
+    Collect Stage 2 per-image failures from run_manifest.json.
+
+    The engine catches every per-image Throwable, records it, and carries on;
+    outputs are all written before the terminal failRun, and the process exits 1
+    whenever ANY image failed. So a non-zero exit does NOT mean "no results",
+    and run_summary.csv alone cannot tell you a tile is missing -- the row is
+    simply absent. Reading the manifest turns that into a precise reason.
+    """
+    total_fail, reasons, statuses = 0, [], []
+    for d in analysis_dirs:
+        p = os.path.join(d, "run_manifest.json")
+        if not os.path.isfile(p):
+            continue
+        try:
+            with open(p, encoding="utf-8") as fh:
+                man = json.load(fh)
+        except Exception as exc:                       # noqa: BLE001
+            reasons.append(f"{p}: unreadable ({exc})")
+            continue
+        statuses.append(str(man.get("status", "unknown")))
+        total_fail += int(man.get("failure_count", 0) or 0)
+        for img in (man.get("images") or []):
+            err = img.get("error")
+            if err:
+                reasons.append(f"{img.get('image', '<unknown>')}: {err}")
+    return total_fail, reasons, statuses
+
+
 # --------------------------------------------------------------------------
 # Seam diagnostics
 # --------------------------------------------------------------------------
@@ -181,7 +211,7 @@ def estimate_seam_duplicates(centroids, merge_dist_um):
 
 # --------------------------------------------------------------------------
 def aggregate_slide(slide_name, manifest_rows, header, tile_rows, stage1_slide,
-                    seam_dup, n_cells):
+                    seam_dup, n_cells, stage2_failures=0, stage2_reasons=()):
     """Sum tile rows into one slide row, after reconciling coverage."""
     cats = classify_columns(header)
 
@@ -192,10 +222,17 @@ def aggregate_slide(slide_name, manifest_rows, header, tile_rows, stage1_slide,
 
     problems = []
     if missing:
+        detail = ""
+        if stage2_reasons:
+            detail = " Stage 2 reported: " + " || ".join(stage2_reasons[:4])
         problems.append(
             f"{len(missing)} tile(s) in tile_manifest.csv have NO run_summary row "
             f"(their tissue area and KRT5 pod area are missing from this slide): "
-            + ", ".join(missing[:8]) + ("..." if len(missing) > 8 else ""))
+            + ", ".join(missing[:8]) + ("..." if len(missing) > 8 else "") + detail)
+    if stage2_failures and not missing:
+        problems.append(
+            f"Stage 2 run_manifest.json reports {stage2_failures} per-image failure(s) even "
+            "though every tile has a summary row. Inspect before trusting this slide.")
     if extra:
         problems.append(f"{len(extra)} run_summary row(s) are not in tile_manifest.csv: "
                         + ", ".join(extra[:8]))
@@ -348,10 +385,15 @@ def main():
         print(f"{entry}: {len(manifest_rows)} tiles expected, {len(tile_rows)} run_summary rows "
               f"from {len(summaries)} Stage 2 output folder(s)")
 
+        analysis_dirs = sorted({os.path.dirname(s) for s in summaries})
+        stage2_failures, stage2_reasons, stage2_statuses = read_stage2_manifests(analysis_dirs)
+        if stage2_failures:
+            print(f"  Stage 2 reported {stage2_failures} per-image failure(s); "
+                  f"status={','.join(sorted(set(stage2_statuses))) or 'unknown'}")
+
         seam_dup, n_cells = 0, 0
         if args.seam_counts == "report":
             by_section = {r["section_id"]: r for r in manifest_rows}
-            analysis_dirs = sorted({os.path.dirname(s) for s in summaries})
             centroids, unmatched = collect_cell_centroids(analysis_dirs, by_section)
             if unmatched:
                 print(f"  note: {unmatched} __cells.csv file(s) could not be matched to a tile")
@@ -362,7 +404,8 @@ def main():
                       "across a tile boundary")
 
         rec, problems = aggregate_slide(entry, manifest_rows, header, tile_rows,
-                                        stage1_by_stem.get(entry), seam_dup, n_cells)
+                                        stage1_by_stem.get(entry), seam_dup, n_cells,
+                                        stage2_failures, stage2_reasons)
         for p in problems:
             print(f"  QC: {p}")
         all_problems.extend(f"{entry}: {p}" for p in problems)
