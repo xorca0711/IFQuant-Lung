@@ -100,7 +100,7 @@ def load_stage1_manifest(path):
 # --------------------------------------------------------------------------
 # Seam diagnostics
 # --------------------------------------------------------------------------
-def collect_cell_centroids(slide_dir, manifest_by_section):
+def collect_cell_centroids(analysis_dirs, manifest_by_section):
     """
     Read every per-tile __cells.csv and return global centroids in microns.
 
@@ -108,10 +108,17 @@ def collect_cell_centroids(slide_dir, manifest_by_section):
     calibrated coordinates, relative to the exported tile origin. tile_manifest
     gives that origin in full-resolution slide pixels, so
         global_um = (export_origin_px * pixel_size_um) + local_um
+
+    Only the analysis folders that actually contributed a run_summary.csv are
+    scanned. Globbing the whole slide folder would also pick up abandoned or
+    partial Stage 2 output directories and count their cells a second time.
     """
     out = []
     missing_cells = 0
-    for cells_path in glob.glob(os.path.join(slide_dir, "**", "*__cells.csv"), recursive=True):
+    paths = []
+    for d in analysis_dirs:
+        paths.extend(glob.glob(os.path.join(d, "**", "*__cells.csv"), recursive=True))
+    for cells_path in sorted(set(paths)):
         # output folder name is <mouse>_<condition>_<panel>_<section_id>[__hash]
         folder = os.path.basename(os.path.dirname(cells_path))
         section = None
@@ -174,7 +181,7 @@ def estimate_seam_duplicates(centroids, merge_dist_um):
 
 # --------------------------------------------------------------------------
 def aggregate_slide(slide_name, manifest_rows, header, tile_rows, stage1_slide,
-                    seam_dup, n_cells, strict):
+                    seam_dup, n_cells):
     """Sum tile rows into one slide row, after reconciling coverage."""
     cats = classify_columns(header)
 
@@ -344,7 +351,8 @@ def main():
         seam_dup, n_cells = 0, 0
         if args.seam_counts == "report":
             by_section = {r["section_id"]: r for r in manifest_rows}
-            centroids, unmatched = collect_cell_centroids(slide_dir, by_section)
+            analysis_dirs = sorted({os.path.dirname(s) for s in summaries})
+            centroids, unmatched = collect_cell_centroids(analysis_dirs, by_section)
             if unmatched:
                 print(f"  note: {unmatched} __cells.csv file(s) could not be matched to a tile")
             seam_dup, n_cells = estimate_seam_duplicates(centroids, args.seam_merge_um)
@@ -354,8 +362,7 @@ def main():
                       "across a tile boundary")
 
         rec, problems = aggregate_slide(entry, manifest_rows, header, tile_rows,
-                                        stage1_by_stem.get(entry), seam_dup, n_cells,
-                                        not args.allow_incomplete)
+                                        stage1_by_stem.get(entry), seam_dup, n_cells)
         for p in problems:
             print(f"  QC: {p}")
         all_problems.extend(f"{entry}: {p}" for p in problems)

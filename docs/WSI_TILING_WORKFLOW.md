@@ -75,9 +75,13 @@ candidate and would be applied to every tile.
 
 `ParticleAnalyzer` **clips** nuclei at the ROI edge rather than excluding them,
 so one nucleus straddling a core boundary can appear as a fragment in each
-neighbour. Area endpoints are unaffected. Cell counts can be inflated by a few
-percent. Stage 3 measures this from the per-cell centroids and reports
-`seam_duplicate_fraction`; it does not silently alter counts.
+neighbour. Area endpoints are unaffected; cell counts run slightly high.
+
+Measured on the pilot (6 adjacent tiles, 6215 cells): **22 duplicate pairs,
+0.35%**. Stage 3 computes this from the per-cell centroids and records it as
+`seam_duplicate_fraction`. It does **not** silently alter counts — the
+correction is smaller than the threshold uncertainty, and a silent adjustment
+would be harder to audit than a reported number.
 
 ## 4. Series selection: refusing to quantify the wrong image
 
@@ -240,14 +244,23 @@ support a group comparison.
 
 ## 10. Validation status
 
-The plumbing is verified end to end on real data:
+The plumbing is verified end to end on real data (QuPath 0.7.0, Fiji/ImageJ
+1.54p, Olympus VS200 `.vsi`, 2026-08-06 dataset, 6-tile pilot):
 
-* exported tiles are **bit-identical** to the source region in all 4 channels;
-* pixel calibration (0.3449973537372698 µm) and channel names survive the round
-  trip; output is a single flat series, as the engine requires;
-* per-tile core ROI areas sum to the whole-slide tissue geometry area exactly;
-* the unchanged engine reads the tiles, selects panel LEFT, and reports
-  `range=1:1 source=single_slice_input` (no Z projection on single-plane tiles).
+| Check | Result |
+|-------|--------|
+| exported tile vs source region, all 4 channels | **0 differing pixels** (bit-identical) |
+| pixel calibration round trip | `0.3449973537372698` µm preserved |
+| channel names round trip | `DAPI, FITC, Cy3, Cy5(Gray)` preserved |
+| series/resolution count of exported tile | 1 / 1 (flat, as the engine requires) |
+| per-tile ROI area vs `tile_manifest.csv` core area | rel diff **0.00e+00**, 6/6 tiles, all in bounds |
+| Stage 2 `sum(region_area_um2)` vs Stage 1 core tissue area | 1106122.89 vs 1106119.49 µm², rel diff **3.1e-06** |
+| Stage 2 batch status | `complete`, 6/6 success, 0 failures |
+| Z handling on single-plane tiles | `range=1:1 projection=max source=single_slice_input` (no ZProjector) |
+| seam count inflation | 22 duplicate pairs / 6215 cells = **0.35%** |
+| full chain to `aggregate_to_mouse.py` | 6 tile rows -> 1 slide row -> 1 mouse, `n_mice=1` |
+
+That last row is the point: the tile count never becomes the n.
 
 **Thresholds are NOT validated.** The gate defaults and any
 `IFQ_*_THRESHOLD` values in examples here are placeholders. Per the project
