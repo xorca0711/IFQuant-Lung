@@ -195,7 +195,10 @@ $env:IFQ_KRT5_THRESHOLD = "<calibrated>"
 $env:IFQ_AGER_THRESHOLD = "<calibrated>"
 $env:IFQ_T1A_THRESHOLD  = "<calibrated>"
 $fj = "X:\Fiji"
-& "$fj\java\win-arm64\...\bin\java.exe" `
+# Resolve the bundled JVM rather than hard-coding its version-stamped folder.
+# The Fiji launcher .exe is broken on win-arm64, so the JVM is invoked directly.
+$jre = (Get-ChildItem "$fj\java" -Recurse -Filter java.exe | Select-Object -First 1).FullName
+& $jre `
   '--add-opens=java.base/java.lang=ALL-UNNAMED' `
   "-javaagent:$fj\jars\ij1-patcher-2.0.0.jar=init" `
   '-Djava.awt.headless=true' "-Dplugins.dir=$fj" '-Xmx8g' `

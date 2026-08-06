@@ -9,8 +9,11 @@ These executables are retained only for historical reproducibility:
 - `IFQuantLauncher-v1.6.1.exe`
 - `IFQuantLauncher-v1.6.2.exe`
 - `IFQuantLauncher-v1.7.0.exe`
+- `IFQuantLauncher-v1.7.1.exe`
 
 Do not use them for a new analysis. The current launcher is
-[`../../IFQuantLauncher-v1.7.1.exe`](../../IFQuantLauncher-v1.7.1.exe), which
-embeds the current pipeline and marker registry. Where a checksum file is
+[`../../IFQuantLauncher-v1.7.2.exe`](../../IFQuantLauncher-v1.7.2.exe), which
+embeds the current pipeline and marker registry. Note that it covers the
+field / confocal route only — it does not know about the whole-slide route
+(`qupath_wsi_tile_export.groovy`), which is run by script. Where a checksum file is
 present, it belongs only to the matching archived executable.

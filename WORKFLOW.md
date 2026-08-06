@@ -1,7 +1,19 @@
 # Active Quantification and Marker Morphology Workflow
 
-This is the primary operational and interpretation reference for the current
-morphology-first Fiji/ImageJ pipeline. Final marker calls are determined by
+> **Scope.** This document covers the **field / confocal route** — small
+> calibrated images fed directly to the Fiji measurement engine — and the marker
+> interpretation model, which is shared by every route.
+>
+> For **whole-slide** input (Olympus `.vsi` slide scans), QuPath opens and tiles
+> the slide first and the tiles then enter the same engine described here. That
+> front end is documented in
+> [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
+>
+> For the KRT5⁺ ectopic pod endpoint and its denominator, see
+> [`docs/ECTOPIC_POD_ENDPOINT.md`](docs/ECTOPIC_POD_ENDPOINT.md).
+
+This is the primary operational and interpretation reference for the
+morphology-first measurement engine. Final marker calls are determined by
 role-appropriate spatial morphology. Mean intensity is retained for audit, but
 it does not authorize a positive or negative call.
 
@@ -78,6 +90,12 @@ Validation also identified and corrected two unsafe false-success paths:
    exporting a successful zero-cell result.
 
 ## Active entry points
+
+Whole-slide entry points not covered by this document:
+`qupath_wsi_tile_export.groovy` (QuPath, Stage 1 tiling),
+`scripts/Invoke-Stage2Sharded.ps1` (parallel engine runs over tiles), and
+`aggregate_tiles_to_slide.py` (tile → slide, with coverage reconciliation).
+
 
 - [`IF_Quant_Pipeline.groovy`](IF_Quant_Pipeline.groovy): production
   Fiji/ImageJ analysis.
