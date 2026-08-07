@@ -60,7 +60,9 @@ import ome.units.UNITS
 import ij.io.RoiEncoder
 import ij.process.ByteProcessor
 import ij.process.FloatProcessor
+import ij.process.ImageProcessor
 import ij.process.AutoThresholder
+import ij.plugin.filter.ThresholdToSelection
 import ij.plugin.filter.RankFilters
 import ij.plugin.filter.GaussianBlur
 
@@ -107,6 +109,25 @@ def envBool = { String name, boolean fallback ->
   return raw == "true"
 }
 
+// Clipping a traced mask by a tile rectangle frequently yields a
+// GeometryCollection (a polygon plus stray lines/points where the tile edge
+// grazes the mask). JTS overlay operations REJECT GeometryCollection inputs
+// with "Operation does not support GeometryCollection arguments", so every
+// geometry must be reduced to its polygonal part before any boolean op.
+// Dropping the lines/points loses no area -- they are zero-area artifacts.
+def polygonal = { Geometry gm ->
+  if (gm == null || gm.isEmpty()) return gm
+  if (!(gm instanceof org.locationtech.jts.geom.GeometryCollection) ||
+      gm instanceof org.locationtech.jts.geom.MultiPolygon) return gm
+  def polys = []
+  for (int i = 0; i < gm.getNumGeometries(); i++) {
+    def part = gm.getGeometryN(i)
+    if (part instanceof org.locationtech.jts.geom.Polygonal && !part.isEmpty()) polys << part
+  }
+  if (polys.isEmpty()) return gm.getFactory().createPolygon()
+  return gm.getFactory().buildGeometry(polys)
+}
+
 // ---- inputs -----------------------------------------------------------------
 def INPUT          = envOr("IFQ_WSI_INPUT", "")
 def OUTPUT         = envOr("IFQ_WSI_OUTPUT", "")
@@ -145,21 +166,72 @@ def DRY_RUN        = envBool("IFQ_WSI_DRY_RUN", false)
 // NOT a valid analysis -- the manifest records the cap so Stage 3 refuses it.
 def MAX_TILES      = envInt("IFQ_WSI_MAX_TILES_PER_SLIDE", 0)
 
+// ---- damaged-area partition (the endpoint DENOMINATOR) ----------------------
+// Endpoint: KRT5+ area / DAMAGED ALVEOLAR area (Lin et al. 2024, JCI
+// 134(19):e176828 -- they drew it by hand). Damaged = parenchyma lacking AT1
+// coverage. "Pixels below the AGER threshold" is NOT that: healthy alveolus is
+// mostly airspace with thin AT1 membranes. It must be measured as a LOCAL AREA
+// FRACTION over an alveolus-sized neighbourhood.
+//
+// Off by default because it REQUIRES a control-derived fixed AGER threshold.
+// With per-slide adaptive thresholds the comparison inverts -- measured on the
+// pilot: adaptive Otsu made UNINFECTED lung read MORE damaged than infected at
+// every parameter setting. See docs/ECTOPIC_POD_ENDPOINT.md.
+def PARTITION      = envBool("IFQ_WSI_PARTITION_DAMAGE", false)
+def AGER_CH        = envInt("IFQ_WSI_AGER_CHANNEL", 2)
+def AGER_THR_RAW   = envOr("IFQ_WSI_AGER_THRESHOLD", "")
+def DAMAGE_SIGMA   = envDouble("IFQ_WSI_DAMAGE_SIGMA_UM", 30.0d)
+def DAMAGE_CUTOFF  = envDouble("IFQ_WSI_DAMAGE_CUTOFF", 0.10d)
+
 // ---- downstream metadata ----------------------------------------------------
 def PANEL          = envOr("IFQ_WSI_PANEL", "LEFT")
-// The ROI name becomes the "region" column AND supplies the compartment token.
-// AGER and T1A declare expectedCompartment:"alveolar"; without a matching token
-// every AGER/T1A call degrades to context_unresolved / indeterminate.
-def ROI_NAME       = envOr("IFQ_WSI_ROI_NAME", "alveolar_core")
+// The ROI name becomes the "region" column AND supplies the compartment token
+// the engine matches on ("alveol" -> alveolar, "airway"/"bronch" -> airway...).
+//
+// The default is deliberately NEUTRAL. Naming a tile "alveolar_*" asserts that
+// it contains no conducting airway, and nothing here establishes that -- airway
+// basal cells are KRT5+ in every animal. Until airway annotations are supplied,
+// claiming "alveolar" would mislabel pure-airway tiles.
+// Consequence of the neutral name: AGER/T1A declare expectedCompartment
+// "alveolar", so their calls degrade to context_unresolved / indeterminate.
+// KRT5 pod area -- the primary endpoint -- is unaffected either way.
+// To assert the compartment anyway, set IFQ_WSI_ROI_COMPARTMENT=alveolar.
+def ROI_COMPARTMENT = envOr("IFQ_WSI_ROI_COMPARTMENT", "")
+def ROI_NAME       = envOr("IFQ_WSI_ROI_NAME", "parenchyma_core")
+def ROI_DAMAGED    = envOr("IFQ_WSI_ROI_NAME_DAMAGED", "parenchyma_damaged")
+def ROI_INTACT     = envOr("IFQ_WSI_ROI_NAME_INTACT",  "parenchyma_intact")
+if (!ROI_COMPARTMENT.isEmpty()) {
+  ROI_NAME    = ROI_COMPARTMENT + "_" + ROI_NAME
+  ROI_DAMAGED = ROI_COMPARTMENT + "_" + ROI_DAMAGED
+  ROI_INTACT  = ROI_COMPARTMENT + "_" + ROI_INTACT
+}
 
 if (INPUT.isEmpty())  failRun("IFQ_WSI_INPUT is required (a .vsi file or a folder containing .vsi files)")
 if (OUTPUT.isEmpty()) failRun("IFQ_WSI_OUTPUT is required")
 if (HALO_PX < 0)      failRun("IFQ_WSI_HALO_PX must be >= 0")
 if (CORE_PX <= 0)     failRun("IFQ_WSI_CORE_PX must be > 0")
-if (!ROI_NAME.toLowerCase().contains("alveol")) {
-  logMsg("WARNING: IFQ_WSI_ROI_NAME='" + ROI_NAME + "' has no 'alveol' token. " +
-         "AGER/T1A carry expectedCompartment:'alveolar' and will report " +
-         "context_unresolved / indeterminate. KRT5 pod area is unaffected.")
+if (ROI_NAME.toLowerCase().contains("alveol")) {
+  logMsg("NOTE: ROI names assert compartment 'alveolar'. This is only true if " +
+         "conducting airways have been excluded; airway basal cells are KRT5+ " +
+         "in every animal, including uninfected controls.")
+} else {
+  logMsg("NOTE: ROI names carry no compartment token, so AGER/T1A will report " +
+         "context_unresolved / indeterminate (they declare expectedCompartment " +
+         "'alveolar'). The KRT5 pod endpoint is unaffected. Set " +
+         "IFQ_WSI_ROI_COMPARTMENT=alveolar once airways are excluded.")
+}
+double AGER_THRESHOLD = -1.0d
+if (PARTITION) {
+  if (AGER_THR_RAW.isEmpty())
+    failRun("IFQ_WSI_PARTITION_DAMAGE=true requires an explicit IFQ_WSI_AGER_THRESHOLD. " +
+            "A per-slide adaptive threshold INVERTS the endpoint: on the pilot it made " +
+            "uninfected lung read more damaged than infected at every setting. " +
+            "Derive it from blinded controls first (see docs/ECTOPIC_POD_ENDPOINT.md).")
+  try { AGER_THRESHOLD = Double.parseDouble(AGER_THR_RAW.trim()) }
+  catch (Exception e) { failRun("IFQ_WSI_AGER_THRESHOLD must be a number; found '" + AGER_THR_RAW + "'") }
+  if (!(AGER_THRESHOLD > 0)) failRun("IFQ_WSI_AGER_THRESHOLD must be > 0")
+  if (!(DAMAGE_CUTOFF > 0 && DAMAGE_CUTOFF < 1)) failRun("IFQ_WSI_DAMAGE_CUTOFF must be in (0,1)")
+  if (!(DAMAGE_SIGMA > 0)) failRun("IFQ_WSI_DAMAGE_SIGMA_UM must be > 0")
 }
 def compType
 try { compType = CompressionType.valueOf(COMPRESSION) }
@@ -505,6 +577,65 @@ slides.each { slideFile ->
   logMsg(String.format("  tissue: Otsu=%.2f  mask=%.2f%%  area=%.2f mm2  (%d ms)",
       thr, 100.0 * fgPx / (mw * (double) mh), tissueMm2, System.currentTimeMillis() - t0))
 
+  // ---- damaged-alveolar territory (endpoint denominator) ----------------
+  // AT1-INTACT territory = where AGER+ pixels occupy at least DAMAGE_CUTOFF of
+  // an alveolus-sized neighbourhood. Smoothing a 0/1 mask with a Gaussian IS
+  // the local area fraction. Everything else in tissue is damaged.
+  Geometry gDamaged = null
+  double damagedMm2 = 0.0d
+  if (PARTITION) {
+    long tD = System.currentTimeMillis()
+    short[] apix
+    if (fast) {
+      apix = ((DataBufferUShort) db).getData(AGER_CH)
+    } else {
+      int[] tmp2 = new int[mw * mh]
+      raster.getSamples(0, 0, mw, mh, AGER_CH, tmp2)
+      apix = new short[mw * mh]
+      for (int i = 0; i < tmp2.length; i++) apix[i] = (short) tmp2[i]
+    }
+    def afp = Px.toFloat(apix, mw, mh)
+    new GaussianBlur().blurGaussian(afp, 1.0d)
+    float[] af = (float[]) afp.getPixels()
+
+    byte[] tmask = (byte[]) bp.getPixels()
+    def dfp = new FloatProcessor(mw, mh)
+    float[] dens = (float[]) dfp.getPixels()
+    long agerPos = 0
+    for (int i = 0; i < dens.length; i++) {
+      boolean inTissue = (tmask[i] & 0xFF) > 127
+      boolean pos = inTissue && af[i] >= AGER_THRESHOLD
+      dens[i] = pos ? 1f : 0f
+      if (pos) agerPos++
+    }
+    double sigmaPx = DAMAGE_SIGMA / (pxUm * TISSUE_DS)
+    new GaussianBlur().blurGaussian(dfp, sigmaPx)
+
+    def dbp = new ByteProcessor(mw, mh)
+    byte[] dmask = (byte[]) dbp.getPixels()
+    long dCount = 0
+    for (int i = 0; i < dens.length; i++) {
+      if (((tmask[i] & 0xFF) > 127) && dens[i] < DAMAGE_CUTOFF) { dmask[i] = (byte) 255; dCount++ }
+    }
+    if (dCount > 0) {
+      def dsimple = Px.toSimpleImage(dbp, mw, mh)
+      gDamaged = ContourTracing.createTracedGeometry(dsimple, 0.5d, Double.POSITIVE_INFINITY, req)
+      gDamaged = GeometryTools.constrainToBounds(gDamaged, 0, 0, W, H)
+      gDamaged = polygonal(gDamaged)
+      if (gDamaged != null && !gDamaged.isEmpty()) {
+        gDamaged = polygonal(gDamaged.intersection(g))
+        damagedMm2 = gDamaged.getArea() * pxAreaUm2 / 1e6
+      }
+    }
+    logMsg(String.format(
+        "  damaged territory: AGERthr=%.0f (FIXED) sigma=%.0fum cutoff=%.2f -> " +
+        "AGER+=%.1f%% of tissue, damaged=%.2f mm2 (%.1f%% of tissue)  (%d ms)",
+        AGER_THRESHOLD, DAMAGE_SIGMA, DAMAGE_CUTOFF,
+        100.0 * agerPos / Math.max(1L, fgPx), damagedMm2,
+        tissueMm2 > 0 ? 100.0 * damagedMm2 / tissueMm2 : 0.0d,
+        System.currentTimeMillis() - tD))
+  }
+
   // ---- tile grid --------------------------------------------------------
   def slideOut = new File(outRoot, stem)
   def tilesDir = new File(slideOut, "tiles")
@@ -512,6 +643,7 @@ slides.each { slideFile ->
   def prep = new PreparedGeometryFactory().create(g)
 
   def manifestRows = []
+  def rasterAreaPx = [:]        // tileId -> [core:, damaged:] as RASTERISED pixels
   double coreTissueTotalPx = 0.0d
   int nWritten = 0, nSkipped = 0, nResumed = 0
   long tExport = System.currentTimeMillis()
@@ -524,10 +656,16 @@ slides.each { slideFile ->
       int chh = Math.min(CORE_PX, H - cy)
       def rect = GeometryTools.createRectangle(cx, cy, cw, chh)
       if (!prep.intersects(rect)) continue
-      Geometry gi = g.intersection(rect)
+      Geometry gi = polygonal(g.intersection(rect))
       if (gi == null || gi.isEmpty()) continue
       double coreTissuePx = gi.getArea()
       if (coreTissuePx * pxAreaUm2 < MIN_TISSUE_UM2) { nSkipped++; continue }
+      // Geometric damaged area for this core, used as the resume-path fallback.
+      double coreDamagedPx = 0.0d
+      if (PARTITION && gDamaged != null && !gDamaged.isEmpty()) {
+        def gd = polygonal(gi.intersection(gDamaged))
+        if (gd != null && !gd.isEmpty()) coreDamagedPx = gd.getArea()
+      }
 
       // export window = core grown by the halo, clipped to the slide
       int ex = Math.max(0, cx - HALO_PX)
@@ -549,42 +687,82 @@ slides.each { slideFile ->
       if (haveTile) {
         nResumed++
       } else if (!DRY_RUN) {
-        // --- ROI: core INTERSECT tissue, in coordinates local to the EXPORT
-        //     window (which is clipped at slide edges, so use ex/ey not cx-HALO)
-        Geometry local = AffineTransformation
-            .translationInstance((double) -ex, (double) -ey).transform(gi)
-        ROI roi = GeometryTools.geometryToROI(local, ImagePlane.getDefaultPlane())
-        def ijRoi = IJTools.convertToIJRoi(roi, new ij.measure.Calibration(), 1.0d)
-
-        // BOUNDS HARDENING. resolveTissueRois() rejects any ROI whose bounds
-        // fall outside the image, and geometric containment is NOT sufficient:
-        // java.awt.geom.Area.getBounds() rounds OUTWARD from getBounds2D(), so a
-        // curved boundary or sub-pixel float residue turns an in-bounds shape
-        // into Rectangle[x=-1, width=2305] on a 2304 px tile. That would make
-        // the engine fail this tile, dropping its tissue area AND its KRT5 pod
-        // area from run_summary.csv while the batch carries on.
-        def b = ijRoi.getBounds()
-        if (b.x < 0 || b.y < 0 || b.x + b.width > ew || b.y + b.height > eh) {
-          // Clamp in ImageJ space: AND with an integer rectangle yields integer bounds.
-          def clamped = new ij.gui.ShapeRoi(ijRoi).and(new ij.gui.ShapeRoi(new ij.gui.Roi(0, 0, ew, eh)))
-          def b2 = clamped.getBounds()
-          if (b2.x < 0 || b2.y < 0 || b2.x + b2.width > ew || b2.y + b2.height > eh) {
-            failRun("Tile " + tileBase + ": ROI bounds " + b2 + " still outside the " + ew + "x" + eh +
-                    " tile after clamping. Writing it would make Stage 2 reject the tile and " +
-                    "silently drop its tissue and pod area.")
-          }
-          logMsg("    bounds-clamped ROI for " + tileId + ": " + b + " -> " + b2)
-          ijRoi = clamped
+        // --- ROIs, in coordinates local to the EXPORT window (clipped at slide
+        //     edges, so use ex/ey rather than cx-HALO).
+        //
+        // RASTERISE rather than convert geometry directly. Two reasons:
+        //  1. java.awt.geom.Area.getBounds() rounds OUTWARD from getBounds2D(),
+        //     so a curved boundary turns an in-bounds shape into
+        //     Rectangle[x=-1, width=2305] on a 2304 px tile -- which the engine
+        //     rejects, silently dropping that tile's tissue AND pod area.
+        //     A mask is integer and in-bounds by construction.
+        //  2. When partitioning, damaged and intact share a boundary. Converting
+        //     each separately can assign a boundary pixel to BOTH, and the engine
+        //     hard-fails on ROIs that overlap by even one pixel. Painting them
+        //     into one label image makes them disjoint by construction.
+        def lab = new ByteProcessor(ew, eh)
+        def paint = { Geometry gm, int v ->
+          if (gm == null || gm.isEmpty()) return
+          def loc = AffineTransformation
+              .translationInstance((double) -ex, (double) -ey).transform(gm)
+          ROI r2 = GeometryTools.geometryToROI(loc, ImagePlane.getDefaultPlane())
+          if (r2 == null || r2.isEmpty()) return
+          def ir = IJTools.convertToIJRoi(r2, new ij.measure.Calibration(), 1.0d)
+          lab.setValue(v); lab.fill(ir)
         }
-        ijRoi.setName(ROI_NAME)
-        def bos = new ByteArrayOutputStream()
-        new RoiEncoder(bos).write(ijRoi)     // returns void; do not test its value
+        // Paint the whole core-tissue region first, then overwrite the intact
+        // part. Order makes the shared boundary deterministic and unambiguous.
+        paint(gi, 1)
+        if (PARTITION) {
+          Geometry giIntact = (gDamaged == null || gDamaged.isEmpty()) ? gi
+                              : polygonal(gi.difference(gDamaged))
+          paint(giIntact, 2)
+        }
+
+        def regions = []
+        if (PARTITION) {
+          regions << [name: ROI_DAMAGED, val: 1]
+          regions << [name: ROI_INTACT,  val: 2]
+        } else {
+          regions << [name: ROI_NAME, val: 1]
+        }
+
+        def entries = []
+        double coreRasterPx = 0.0d, damagedRasterPx = 0.0d
+        byte[] lp = (byte[]) lab.getPixels()
+        regions.each { reg ->
+          long cnt = 0
+          def m = new ByteProcessor(ew, eh)
+          byte[] mp = (byte[]) m.getPixels()
+          for (int i = 0; i < lp.length; i++) {
+            if ((lp[i] & 0xFF) == reg.val) { mp[i] = (byte) 255; cnt++ }
+          }
+          if (cnt <= 0) return              // omit empty regions; never write an empty zip
+          coreRasterPx += cnt
+          if (reg.val == 1 && PARTITION) damagedRasterPx = cnt
+          m.setThreshold(128, 255, ImageProcessor.NO_LUT_UPDATE)
+          def ir = new ThresholdToSelection().convert(m)
+          if (ir == null) return
+          ir.setName(reg.name)
+          def bb = ir.getBounds()
+          if (bb.x < 0 || bb.y < 0 || bb.x + bb.width > ew || bb.y + bb.height > eh)
+            failRun("Tile " + tileBase + " region '" + reg.name + "': bounds " + bb +
+                    " outside the " + ew + "x" + eh + " tile. Stage 2 would reject it.")
+          entries << [name: reg.name, roi: ir]
+        }
+        if (entries.isEmpty()) { nSkipped++; continue }
+
         def zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(roiFile)))
         try {
-          zos.putNextEntry(new ZipEntry(ROI_NAME + ".roi"))
-          zos.write(bos.toByteArray())
-          zos.closeEntry()
+          entries.each { en ->
+            def bos = new ByteArrayOutputStream()
+            new RoiEncoder(bos).write(en.roi)   // returns void; do not test its value
+            zos.putNextEntry(new ZipEntry(en.name + ".roi"))
+            zos.write(bos.toByteArray())
+            zos.closeEntry()
+          }
         } finally { zos.close() }
+        rasterAreaPx[tileId] = [core: coreRasterPx, damaged: damagedRasterPx]
 
         // --- tile: flat single-series OME-TIFF (multi-series is rejected by Stage 2)
         withRetry("writeTile(" + tileBase + ")", 3) {
@@ -615,8 +793,18 @@ slides.each { slideFile ->
         halo_right: ex2 - (cx + cw), halo_bottom: ey2 - (cy + chh),
         core_tissue_area_px: coreTissuePx,
         core_tissue_area_um2: coreTissuePx * pxAreaUm2,
+        // Rasterised areas are what Stage 2 actually measures (the engine counts
+        // ROI pixels), so Stage 3 reconciles against these, not the polygon area.
+        // A RESUMED tile was not rasterised in this run, so fall back to the
+        // geometric area rather than silently reporting zero.
+        core_raster_area_um2:
+            (rasterAreaPx[tileId] != null ? rasterAreaPx[tileId].core : coreTissuePx) * pxAreaUm2,
+        damaged_raster_area_um2:
+            (rasterAreaPx[tileId] != null ? rasterAreaPx[tileId].damaged : coreDamagedPx) * pxAreaUm2,
+        partitioned: PARTITION,
         mouse_id: md.mouse_id, genotype: md.genotype, condition: md.condition,
-        section_id: tileId, panel: PANEL, region_name: ROI_NAME
+        section_id: tileId, panel: PANEL,
+        region_name: (PARTITION ? (ROI_DAMAGED + "|" + ROI_INTACT) : ROI_NAME)
       ]
 
       if ((manifestRows.size() % 25) == 0)
