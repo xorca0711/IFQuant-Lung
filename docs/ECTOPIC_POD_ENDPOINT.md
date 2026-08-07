@@ -248,6 +248,112 @@ Validation against hand-drawn outlines on a subset is still required — the
 reference method is manual, so manual outlines are the only available ground
 truth.
 
+## 4d. The KRT5 numerator: co-negativity, not a bare threshold
+
+### What the reference actually measures
+
+Lin et al. Fig 1G quantifies "percentages of KRT5+ lung areas in total damaged
+alveolar areas (PDPN− and KRT5+)". Fig 2A–B quantifies "percentages of
+**KRT5+PDPN−** areas in PDPN− and KRT5+ areas" (n = 15 mice/group, two-tailed
+Mann-Whitney).
+
+So the numerator is **KRT5+ AND PDPN−**, not bare KRT5+ area. That co-negativity
+constraint is not cosmetic — it is what makes the measurement possible on this
+dataset.
+
+### Why a bare KRT5 threshold fails here
+
+Measured inside intact parenchyma of the uninfected controls (a compartment with
+no pods and no airway basal cells, so any KRT5 signal there is background):
+
+| KRT5 thr | bare KRT5+ false-positive area fraction |
+|---|---|
+| 200 | 1.20e-3 |
+| 400 | 6.0e-4 |
+| 500 | 4.5e-4 |
+
+No threshold reaches 1e-4. The background maxes at 3194–3894 (near the 12-bit
+ceiling of 4095), and the engine's 50 µm² component filter barely touches it
+(4.51e-4 → 4.40e-4), which rules out scattered noise — the false positives are
+large, bright, connected objects. That is the signature of autofluorescence,
+consistent with the KRT5/488 channel being exposed ~949 ms against ~0.5–2 ms for
+the other channels.
+
+Worse, above threshold ~200 the damaged compartment of control slides shows the
+*same or less* KRT5 than intact, and by 400 it reads zero: genuine airway basal
+cell signal dies before the background does.
+
+### Why co-negativity fixes it
+
+Autofluorescent structures are bright in **every** channel. Genuine dysplastic
+pods are KRT5-bright but PDPN-negative. Requiring PDPN− therefore rejects
+autofluorescence while retaining real signal.
+
+Enrichment ratio R = P(co-negative | KRT5 bright) / P(co-negative). R ≪ 1 means
+KRT5-bright pixels are preferentially co-bright, i.e. the constraint is doing
+real work; R ≈ 1 means it is only removing area indiscriminately.
+
+| ceiling t | R_PDPN m4-2 | R_PDPN m6 | R_AGER m4-2 | R_AGER m6 |
+|---|---|---|---|---|
+| 100 | 0.232 | 0.139 | 0.620 | 0.000 |
+| 150 | 0.405 | 0.319 | 0.806 | 2.160 |
+| 200 | 0.620 | 0.548 | 0.987 | 0.386 |
+| 300 | 0.833 | 0.895 | 1.049 | 0.463 |
+
+### RETRACTED: AGER must NOT be used for co-negativity
+
+An earlier analysis in this session reported that AGER− co-negativity performed
+*better* than PDPN−. **That was an artifact and is withdrawn.** "Intact" is
+*defined* as AGER-dense territory, so requiring AGER < t removes area by
+construction. The enrichment ratio proves it: R_AGER ≈ 1.0 (0.987, 1.049) on
+m4-2 and erratic on m6, versus R_PDPN = 0.14–0.62 consistently below 1.
+
+AGER co-negativity also destroys real signal — it discards **100%** of genuine
+KRT5+ airway pixels in m6 at every ceiling tested.
+
+Use **PDPN** for co-negativity. AGER stays as the *denominator* marker only.
+
+### The ceiling cannot be set by minimising false positives
+
+That objective is monotone: lower t always looks better, driving t → 0, which
+destroys real signal along with background. The controls do supply a positive
+control — conducting airway in the damaged compartment is genuinely KRT5+PDPN−:
+
+| ceiling t | airway KRT5 preserved (PDPN) |
+|---|---|
+| 100 | 0.150 / 0.286 |
+| 150 | 0.450 / 1.000 |
+| **200** | **0.900 / 1.000** |
+| 300 | 1.000 / 1.000 |
+
+At t = 100 — the best-looking value on specificity alone — PDPN− discards
+72–85% of genuine KRT5.
+
+**Two-sided rule, still control-only:** maximise specificity subject to
+preserving ≥ 90% of genuine airway KRT5.
+
+### PROPOSED (not yet locked): PDPN co-negativity ceiling t = 200
+
+R = 0.55–0.62 (real enrichment) while preserving 90–100% of genuine airway KRT5.
+
+**Not locked, because two checks are outstanding:**
+
+1. Everything above is measured at 2.76 µm/px. Partial-volume mixing at
+   pod/AT1 boundaries is worst at that scale, so the constraint may reject real
+   pods more than these numbers suggest. It must be re-measured at full tile
+   resolution (0.345 µm/px) before freezing.
+2. m6's airway positive control is only ~11.8k px, and its KRT5-bright subset is
+   a handful of pixels (0.286 ≈ 2/7). It is statistically unusable. The
+   recommendation rests on m4-2 alone.
+
+### Parameter count versus control count
+
+Five parameters are now derived from two control animals: AGER threshold, damage
+sigma, damage cutoff, KRT5 threshold, and the PDPN ceiling. That is a real
+overfitting risk and belongs in any methods section as a stated limitation, not
+buried. Additional control animals would do more for confidence here than any
+further tuning.
+
 ## 5. Stage 1 ROI naming
 
 Fixed. Stage 1 previously named every tile ROI `alveolar_core`, which asserts the
