@@ -14,6 +14,10 @@ stays in the Fiji engine so both routes share one validated decision model.
 
 ## Start here
 
+- [`PROJECT_STATE.md`](PROJECT_STATE.md): **living handoff** — where everything is,
+  what is validated versus not, what is in flight, and the decisions waiting on
+  the user. Read this first when resuming.
+
 - [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md): **why** the two
   tools are used together, the published pattern this follows
   (Chiaruttini et al. 2022), where we deliberately differ, and why the handoff
