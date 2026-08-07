@@ -1,15 +1,42 @@
 # Branch roles
 
+The repository was renamed to **`IFQuant-Lung`** on 2026-08-07 (previously
+`Fiji_ImageJ_Cell_Counting`). GitHub redirects the old URL, so existing clones
+keep working, but new remotes should use the new name.
+
 ## Active branches
 
 - `main`: current universal morphology-first pipeline, additive layer-aware
   Z-stack implementation, visualization-only intensity enhancement, ALI
   presets, Channel-4-primary ALI rules, cilia-specific AcTub filtering, and
   released launcher v1.7.2.
-- `codex/z-stack-analysis`: retained integration branch for the v1.6
-  Z-stack/display release. It has been promoted to `main`; new production work
-  should start from `main`.
+- `claude/qupath-wsi-stage1-tiling`: **current development branch.** The QuPath
+  whole-slide front end, the damaged-area partition, the endpoints module, and
+  the endpoint calibration. Open as a PR against `main`.
 - `codex/legacy-pre-reorganization`: historical pre-reorganization snapshot.
+
+## Review-only branches
+
+- `claude/module-drafts`: unreviewed drafts of the morphometry, spatial,
+  hierarchy-contract and injury-model-profile modules, under `_drafts/`.
+  **Never merge this branch.** It exists so the drafts can be read as a diff.
+  Integrate by copying reviewed pieces into a real branch.
+
+## Superseded — do not build on these
+
+- `claude/qupath-influenza-pipeline-d4jt28` (PR #9)
+- `claude/qupath-slidescanner-launcher-d4jt28` (PR #10)
+
+Both implement a **second, independent QuPath-side measurement engine**. That
+approach was evaluated and rejected: two measurement engines drift, and the
+morphology-first decision model has been validated exactly once. The adopted
+architecture keeps QuPath as a reader/tiler only and routes everything through
+the unchanged Fiji engine — see
+[`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md).
+
+These PRs are still open. Closing them is a maintainer decision, but nothing in
+the current architecture depends on them, and they are based on older commits
+that predate the marker registry.
 
 ## Already merged historical labels
 
@@ -19,11 +46,16 @@ unmerged work:
 - `claude/influenza-injury-fiji-pipeline-d4jt28`
 - `codex/incorporate-morphology-hierarchy`
 - `codex/universal-lung-marker-profiles`
+- `codex/z-stack-analysis` (promoted to `main`; start new work from `main`)
 
 They may remain as read-only history labels or be deleted from the remote after
 the corresponding tags/commits have been verified. Deleting them is not
 required for repository correctness and must not be confused with deleting the
 legacy snapshot.
+
+Note that some of these no longer exist on the remote even though they are
+listed here; verify with `git ls-remote --heads origin` before relying on any
+of them.
 
 ## Completed Z-stack merge gate
 

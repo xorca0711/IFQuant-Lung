@@ -24,6 +24,25 @@ test_runs/
 ref_images/
 *_TEST.groovy
 
+# Whole-slide (WSI) Stage 1/2/3 artefacts. Stage 1 emits ~300-400 OME-TIFF
+# tiles per slide (~9 GB) plus a companion ROI zip for every tile, and Stage 2
+# writes ~20 files per tile. None of it belongs in git.
+wsi_stage1*/
+wsi_tiles/
+tiles/
+*_RoiSet.zip
+RoiSet.zip
+tile_manifest.csv
+stage1_manifest.json
+slide_level_summary*.csv
+mouse_level_summary.csv
+group_level_summary.csv
+# Bare TIFFs anywhere (masks, label images, exported tiles). The reference-image
+# rules below are kept for provenance, but *.tif was previously only ignored
+# under ref_images/, which left exported tiles committable.
+*.tif
+*.tiff
+
 # Local legacy archives: indexed by legacy/README.md, binaries/results untracked.
 legacy/test_runs/
 legacy/pilot_output/

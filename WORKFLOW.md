@@ -1,7 +1,19 @@
 # Active Quantification and Marker Morphology Workflow
 
-This is the primary operational and interpretation reference for the current
-morphology-first Fiji/ImageJ pipeline. Final marker calls are determined by
+> **Scope.** This document covers the **field / confocal route** — small
+> calibrated images fed directly to the Fiji measurement engine — and the marker
+> interpretation model, which is shared by every route.
+>
+> For **whole-slide** input (Olympus `.vsi` slide scans), QuPath opens and tiles
+> the slide first and the tiles then enter the same engine described here. That
+> front end is documented in
+> [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
+>
+> For the KRT5⁺ ectopic pod endpoint and its denominator, see
+> [`docs/ECTOPIC_POD_ENDPOINT.md`](docs/ECTOPIC_POD_ENDPOINT.md).
+
+This is the primary operational and interpretation reference for the
+morphology-first measurement engine. Final marker calls are determined by
 role-appropriate spatial morphology. Mean intensity is retained for audit, but
 it does not authorize a positive or negative call.
 
@@ -79,6 +91,12 @@ Validation also identified and corrected two unsafe false-success paths:
 
 ## Active entry points
 
+Whole-slide entry points not covered by this document:
+`qupath_wsi_tile_export.groovy` (QuPath, Stage 1 tiling),
+`scripts/Invoke-Stage2Sharded.ps1` (parallel engine runs over tiles), and
+`aggregate_tiles_to_slide.py` (tile → slide, with coverage reconciliation).
+
+
 - [`IF_Quant_Pipeline.groovy`](IF_Quant_Pipeline.groovy): production
   Fiji/ImageJ analysis.
 - [`aggregate_to_mouse.py`](aggregate_to_mouse.py): region-to-mouse aggregation.
@@ -89,7 +107,7 @@ Validation also identified and corrected two unsafe false-success paths:
   morphology and literature notes.
 - [`docs/UNIVERSAL_MARKER_CONFIGURATION.md`](docs/UNIVERSAL_MARKER_CONFIGURATION.md):
   reusable marker, disease-context, panel, and ROI-tag hierarchy.
-- [`docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
+- [`docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](legacy/docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
   cross-marker context/evaluability audit and representative Fiji regressions.
 - [`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md):
   anatomical tag meanings, subcellular analytical roles, ROI naming, and
@@ -101,7 +119,7 @@ Validation also identified and corrected two unsafe false-success paths:
   aliases, localization, lineage/state notes, and analytical-role defaults.
 - [`config/custom_panels.example.json`](config/custom_panels.example.json):
   opt-in study panel templates; built-in panels remain unchanged.
-- [`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](docs/PILOT_G002_MORPHOLOGY_RESULTS.md):
+- [`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](legacy/docs/PILOT_G002_MORPHOLOGY_RESULTS.md):
   validated one-image pilots.
 
 ## Priority real-project antibody panels
@@ -702,7 +720,7 @@ The two final local pilots are under `test_runs/current/`:
 
 These outputs are intentionally ignored by Git because they contain generated
 images and tables. Their numerical results are preserved in
-[`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](docs/PILOT_G002_MORPHOLOGY_RESULTS.md).
+[`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](legacy/docs/PILOT_G002_MORPHOLOGY_RESULTS.md).
 All reported calls and areas remain exploratory because the pilot used
 image-specific Otsu thresholds.
 

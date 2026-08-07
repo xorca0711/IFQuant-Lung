@@ -1,7 +1,25 @@
-# Fiji/ImageJ Lung Immunofluorescence Quantification
+# Lung Immunofluorescence Quantification — QuPath + Fiji workflow
 
-A morphology-first Fiji/ImageJ pipeline for lung immunofluorescence across
-different image layouts and research questions. The validated built-in panels
+A morphology-first workflow for lung immunofluorescence across different image
+layouts and research questions. It uses **QuPath and Fiji selectively, each for
+what it is good at**:
+
+* **Fiji/ImageJ** runs the validated measurement engine — segmentation, the
+  morphology-first decision model, Z-stack handling, and display enhancement.
+  Everything that produces a number happens here.
+* **QuPath** is the whole-slide front end — it opens slide-scanner containers
+  that no single Fiji image can hold, picks the correct series, detects tissue
+  once globally, and cuts calibrated tiles. **It measures nothing.**
+
+Keeping all measurement in one engine means both acquisition routes share one
+validated decision model instead of drifting apart.
+
+| Route | Input | Path |
+|---|---|---|
+| **field / confocal** | small calibrated images (`.nd2`, `.czi`, `.oir`, `.tif`…) | straight to the Fiji engine |
+| **whole-slide** | slide-scanner container (`.vsi`) | QuPath tiles it → the same Fiji engine → tile/slide/mouse aggregation |
+
+The validated built-in panels
 retain the **IFN-γ knockout / PR8 influenza-injury** workflow and KRT5 pod
 readout. An opt-in marker registry and study-owned JSON panel map extend the
 same engine to acute injury/regeneration, IPF/fibrosis, stromal, vascular,
@@ -11,11 +29,32 @@ antibody combination.
 - **[`IFQuantLauncher-v1.7.2.exe`](IFQuantLauncher-v1.7.2.exe)** — portable Windows
   launcher for ARM64 and x64; choose input, Fiji, output, and analysis settings
   without manually preparing environment variables.
-- **`IF_Quant_Pipeline.groovy`** — the analysis pipeline (run inside Fiji).
+- **`IF_Quant_Pipeline.groovy`** — the measurement engine (runs in Fiji). Both
+  routes end here; it is validated and changes to it are deliberately rare.
 - **`aggregate_to_mouse.py`** — rolls per-region results up to the **mouse**
   (biological replicate) level and produces a stats-ready group summary.
+- **`qupath_wsi_tile_export.groovy`** — whole-slide front end. Opens an Olympus
+  `.vsi` slide scan in QuPath, picks the true 20x series, detects tissue once
+  globally, and exports calibrated OME-TIFF tiles for the **unchanged** engine
+  above. It measures nothing. See
+  [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
+- **`aggregate_tiles_to_slide.py`** — rolls per-tile results up to the slide
+  level and refuses to emit a summary when tiles are missing.
+- **`endpoints/evaluate_endpoints.groovy`** — evaluates **relational** endpoints
+  (e.g. "KRT5⁺ **and** PDPN⁻ area") by boolean algebra on the per-marker masks
+  the engine already saves. The engine is marker-wise and cannot express a
+  relation between two markers; this closes that gap without modifying it.
+  Endpoints are declared as data in [`config/endpoints/`](config/endpoints/).
 - **`samplesheet_template.csv`** — per-image metadata template.
-- **[`WORKFLOW.md`](WORKFLOW.md)** — current end-to-end operational sequence.
+- **[`WORKFLOW.md`](WORKFLOW.md)** — operational sequence for the **field /
+  confocal route**. For whole-slide input see
+  [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
+- **[`docs/QUPATH_FIJI_INTEGRATION.md`](docs/QUPATH_FIJI_INTEGRATION.md)** — why
+  QuPath and Fiji are used together, the published pattern this follows, and why
+  the handoff is file-based.
+- **[`docs/ECTOPIC_POD_ENDPOINT.md`](docs/ECTOPIC_POD_ENDPOINT.md)** — the KRT5⁺
+  pod endpoint, its denominator, the co-negativity numerator, and every
+  calibration result with its validation status. Read before batching.
 - **[`docs/`](docs/README.md)** — marker morphology and validated pilot results.
 - **[`config/`](config/README.md)** — universal marker registry and custom-panel
   examples.
@@ -241,6 +280,12 @@ Every requested feature maps to the pipeline:
 ## 4. Requirements
 
 - **[Fiji](https://fiji.sc/)** (ImageJ distribution). Bio-Formats is bundled.
+  Required for **both** routes — it hosts the measurement engine.
+- **[QuPath](https://qupath.github.io/) 0.7+** — required **only for the
+  whole-slide route**, where it opens and tiles the slide scan. Not needed if
+  you only analyse field/confocal images.
+  Note: QuPath bundles the JPEG-2000 codec (`ome-jai`) that Fiji's Bio-Formats
+  lacks, so Fiji alone cannot read Olympus `.vsi` pixel data at all.
 - **StarDist + CSBDeep** update sites (recommended, for robust nuclei):
   `Help ▸ Update… ▸ Manage update sites` → tick **CSBDeep** and **StarDist** →
   apply → restart. If you cannot install them, set `SEGMENTER = "classic"` and
@@ -375,6 +420,11 @@ groups are compared; the example values above are not validated cutoffs.
 
 - **Formats:** anything Bio-Formats reads (`.czi`, `.lif`, `.nd2`, `.oir`, `.oib`,
   `.oif`, `.ics`, `.tif/.tiff`). Adjust `FILE_GLOB` to widen/narrow.
+  Slide-scanner containers (`.vsi`) are **not** in this list on purpose — the
+  engine never opens them directly. QuPath tiles them into `.ome.tif` first; see
+  [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md). Never point
+  anything at a `.ets` file: those are the internal pyramid tiles inside the
+  hidden `_<name>_` folder and reading one directly gives a partial image.
 - **Calibration:** must provide positive square-pixel dimensions in micrometres.
   The pipeline stops instead of silently treating pixels as micrometres.
 - **Metadata resolution order** for each file:

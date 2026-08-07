@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "endpoint_id": "ectopic_pod_over_damaged",
+  "title": "Ectopic KRT5+ pod area over damaged alveolar area",
+  "panel": "LEFT",
+
+  "rationale": [
+    "The engine is marker-wise: positiveAreaInRoi() takes ONE marker's mask, and",
+    "every recomputed fraction divides by region_area_um2. It therefore cannot",
+    "express a numerator that is a RELATION between two markers, which is what",
+    "the reference endpoint is.",
+    "Lin et al. J Clin Invest 2024;134(19):e176828 Fig 2A-B quantify",
+    "'KRT5+PDPN- areas', not bare KRT5+ area. The co-negativity is what rejects",
+    "autofluorescence: autofluorescent structures are bright in EVERY channel,",
+    "genuine dysplastic pods are KRT5-bright and PDPN-negative.",
+    "This spec declares the relation as DATA so it is reviewable and diffable,",
+    "and evaluates it downstream by mask algebra on the masks the engine already",
+    "saves. IF_Quant_Pipeline.groovy is not modified."
+  ],
+
+  "numerator": {
+    "op": "AND",
+    "terms": [
+      { "mask": "KRT5_pod_mask",
+        "negate": false,
+        "note": "KRT5+ area after the engine's 50 um2 component filter" },
+      { "mask": "T1A_membrane_positive_mask",
+        "negate": true,
+        "note": "PDPN/T1alpha NEGATIVE -- the discriminator" }
+    ]
+  },
+
+  "denominator": {
+    "source": "region_area_um2",
+    "note": [
+      "The region ROI is supplied by Stage 1. When it partitions parenchyma,",
+      "the damaged region's area IS the denominator, so no second denominator",
+      "is needed here. Do NOT use AGER- as a per-pixel numerator constraint:",
+      "'intact' is DEFINED by AGER density, so that is circular. See",
+      "docs/ECTOPIC_POD_ENDPOINT.md section 4d."
+    ]
+  },
+
+  "output": {
+    "area_column": "KRT5ectopic_pod_area_um2",
+    "aggregation": "SUM",
+    "naming_note": [
+      "Ends in _pod_area_um2 so aggregate_to_mouse.classify_columns() places it",
+      "in sum_cols and recomputes KRT5ectopic_pod_area_frac against pooled",
+      "region_area_um2. A name outside that whitelist is SILENTLY DROPPED at",
+      "mouse level -- see docs/ECTOPIC_POD_ENDPOINT.md section 9."
+    ]
+  },
+
+  "parameters": {
+    "krt5_threshold":  { "value": null, "status": "NOT_CALIBRATED",
+                         "env": "IFQ_KRT5_THRESHOLD",
+                         "note": "Must be frozen from blinded controls before any batch run." },
+    "t1a_threshold":   { "value": 200, "status": "PROPOSED_NOT_LOCKED",
+                         "env": "IFQ_T1A_THRESHOLD",
+                         "note": [
+                           "Co-negativity ceiling. Derived control-only by a two-sided rule:",
+                           "maximise specificity subject to preserving >=90% of genuine airway",
+                           "KRT5. Enrichment ratio R = 0.55-0.62 at this value.",
+                           "OUTSTANDING: measured at 2.76 um/px; must be re-measured at full",
+                           "tile resolution (0.345 um/px) where partial-volume mixing at",
+                           "pod/AT1 boundaries is worst. m6's positive control is a handful of",
+                           "pixels, so this rests on m4-2 alone."
+                         ] }
+  },
+
+  "validation_status": "PROPOSED_NOT_VALIDATED",
+  "known_limitations": [
+    "Conducting airways are excluded from neither numerator nor denominator.",
+    "Airway basal cells are KRT5+ in every animal including uninfected controls.",
+    "Nothing in the 4-channel panel separates airway from injured alveolus.",
+    "Five parameters are now derived from two control animals.",
+    "The reference method measured these areas BY HAND (Axiovision outline",
+    "spline), so validation against manual outlines is still required."
+  ],
+
+  "reference": {
+    "citation": "Lin X. et al., J Clin Invest 2024;134(19):e176828",
+    "doi": "10.1172/JCI176828",
+    "figure": "Fig 1G, Fig 2A-B"
+  }
+}
