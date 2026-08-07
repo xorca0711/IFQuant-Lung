@@ -1,0 +1,67 @@
+﻿Fail-closed rule matrix (v1.8.0)
+panels parsed from the engine: 18;  markers the engine thresholds: 22
+LEFT analysis channels: 3, of which area endpoints: 3
+
+  PASS  R3  route 3 is listed in the picker                               index 2
+  PASS  R3  route 3 is not available and carries a reason (flag off)      Available=False
+  PASS  R3  gate blocks route 3 with an otherwise valid request (flag off)BLOCK  ROUTE_NOT_AVAILABLE
+  PASS  R3  environment builder emits nothing for route 3                 InvalidOperationException
+  PASS  R3  pre-start assertion refuses route 3 even with a valid env (flag off)InvalidOperationException
+  PASS  R3  availability, reason and stage list all follow the build flag flag=False Available=False stages=0
+  PASS  R3  stage 1 builder emits nothing for route 3                     InvalidOperationException
+  PASS  R3  stage 1 builder emits nothing for a route with no stage 1     InvalidOperationException
+  PASS  R3  one flag decides it, and no builder honours it either way     LauncherBuild.BrightfieldRouteEnabled=False
+  PASS  R?  an undefined route id is not available and says why           Available=False stages=0
+  PASS  R?  gate blocks an undefined route id                             BLOCK  ROUTE_NOT_AVAILABLE
+  PASS  R?  environment builder emits nothing for an undefined route id   InvalidOperationException
+  PASS  R?  pre-start assertion refuses an undefined route id             InvalidOperationException
+  PASS  H1  no panel selected                                             BLOCK  H1_PANEL_UNSET
+  PASS  H1  panel T while pilot panels are locked                         BLOCK  H1_PILOT_PANEL_LOCKED
+  PASS  H1  panel T after explicit unlock                                 CONFIRM "NOT INTERPRETABLE" + "EXPLORATORY" H1_PILOT_PANEL
+  PASS  H1  panel name the engine does not declare                        BLOCK  H1_PANEL_UNKNOWN
+  PASS  H1  IFQ_PANEL is always written                                   IFQ_PANEL=LEFT
+  PASS  H1  pre-start assertion catches a missing IFQ_PANEL               InvalidOperationException
+  PASS  H2  blank thresholds on route 1                                   CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+  PASS  H2  blank thresholds on route 2 (whole slide)                     BLOCK  H2_ADAPTIVE_ON_WHOLE_SLIDE
+  PASS  H2  blank thresholds at confirmatory tier                         BLOCK  H2_ADAPTIVE_IN_CONFIRMATORY
+  PASS  H2  every channel frozen clears the flag                          allow
+  PASS  H2  threshold of 0 (every pixel a candidate)                      BLOCK  H2_THRESHOLD_INVALID
+  PASS  H2  non-numeric threshold                                         BLOCK  H2_THRESHOLD_INVALID
+  PASS  H2  the engine's own token names are emitted                      IFQ_AGER_THRESHOLD,IFQ_KRT5_THRESHOLD,IFQ_T1A_THRESHOLD
+  PASS  H2  IFQ_PDPN_THRESHOLD on panel LEFT (silent no-op in v1.7.2)     BLOCK  ADV_UNKNOWN_MARKER
+  PASS  H2  custom panel key with no channel list is NOT frozen           CONFIRM "EXPLORATORY" H2_PANEL_UNRESOLVED
+  PASS  H2  its run record says EXPLORATORY, not THRESHOLDS_FROZEN        thresholds_frozen=false
+  PASS  H2  no channel list at confirmatory tier                          BLOCK  H2_PANEL_UNRESOLVED_IN_CONFIRMATORY
+  PASS  H2  no channel list on the whole-slide route                      BLOCK  H2_PANEL_UNRESOLVED_ON_WHOLE_SLIDE
+  PASS  H2  an unreadable custom panel JSON is a hard block               BLOCK  H1_PANEL_CONFIG_INVALID
+  PASS  H2  a valid custom panel JSON yields a real channel list          2 analysis channels, 1 area endpoint(s)
+  PASS  H2  freezing every custom channel clears the flag                 allow
+  PASS  H2  blank thresholds on a custom panel are exploratory            CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+  PASS  H2  a malformed custom panel JSON never yields a partial list     every malformed shape refused
+  PASS  H2  a channel whose role cannot be resolved is refused            no role, and an unsupported role, both refused
+  PASS  H2  a custom key may not replace a built-in panel                 refused, as IF_Quant_Pipeline.groovy:710-712 does
+  PASS  H2  route 4 without Advanced thresholds is EXPLORATORY            CONFIRM "EXPLORATORY" H2_LEGACY_ADAPTIVE
+  PASS  H2  route 4 record never contradicts its threshold_policy         thresholds_frozen=false
+  PASS  H2  route 4 frozen through Advanced IS thresholds_frozen          allow
+  PASS  H2  route 4 with SOME channels frozen is still exploratory        CONFIRM "EXPLORATORY" H2_LEGACY_ADAPTIVE
+  PASS  H3  IFQ_MIN_INCLUDED_NUCLEI always written on routes 1/2          IFQ_MIN_INCLUDED_NUCLEI=0
+  PASS  H3  never written on route 4 (v1.7.2 never wrote it)              absent
+  PASS  H3  non-zero floor on a panel with an area endpoint               BLOCK  H3_FLOOR_WITH_AREA_ENDPOINT
+  PASS  H3  non-zero floor on the whole-slide route                       BLOCK  H2_ADAPTIVE_ON_WHOLE_SLIDE
+  PASS  H3  the Advanced box cannot set it behind the UI's back           BLOCK  ADV_PROTECTED
+  PASS  H3  route 4 accepts the v1.7.2 Advanced nuclei floor              CONFIRM "EXPLORATORY" H2_LEGACY_ADAPTIVE
+  PASS  H3  and the run record names the floor that will apply            3 (from the Advanced box, as in v1.7.2)
+  PASS  H3  route 4 floor is legal from Advanced, illegal from the launchertyped=allowed launcher=InvalidOperationException
+  PASS  H4  IFQ_ALLOW_NONEMPTY_OUTPUT hardcoded false                     false
+  PASS  H4  gate blocks a non-empty output folder                         BLOCK  H4_OUTPUT_NOT_EMPTY
+  PASS  H4  pre-start assertion refuses a non-empty folder on disk        InvalidOperationException
+  PASS  H4  no output parent chosen                                       BLOCK  H4_OUTPUT_BASE_UNSET
+  PASS  H4  the Advanced box cannot turn the guard off                    BLOCK  ADV_PROTECTED
+  PASS  H5  run record carries run_classification                         run_classification=EXPLORATORY_DO_NOT_AGGREGATE
+  PASS  H5  run record carries thresholds_frozen=false                    thresholds_frozen=false
+  PASS  H5  run record carries a per-channel threshold source             KRT5=adaptive_otsu_exploratory AGER=adaptive_otsu_exploratory T1A=adaptive_otsu_exploratory
+  PASS  H5  folder name is stamped                                        _EXPLORATORY
+  PASS  H5  marker file text names the consequence                        EXPLORATORY_DO_NOT_AGGREGATE.txt
+  PASS  H5  a fully frozen run is NOT marked exploratory                  run_classification=THRESHOLDS_FROZEN
+
+checks: 61   failures: 0

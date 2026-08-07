@@ -1,0 +1,116 @@
+================ MUTANT D1a_no_unresolved_rule ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H2  custom panel key with no channel list is NOT frozen           allow
+  FAIL  H2  its run record says EXPLORATORY, not THRESHOLDS_FROZEN        thresholds_frozen=TRUE
+  FAIL  H2  no channel list at confirmatory tier                          allow
+  FAIL  H2  no channel list on the whole-slide route                      allow
+checks: 61   failures: 4
+checks: 77   failures: 0
+================ MUTANT D1b_thresholdmarkers_only ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H2  freezing every custom channel clears the flag                 BLOCK  H2_THRESHOLD_NOT_READ
+checks: 61   failures: 1
+checks: 77   failures: 0
+================ MUTANT D1c_ui_returns_null ================
+GATEMATRIX_EXIT=0
+LEGACY_EXIT=0
+checks: 61   failures: 0
+checks: 79   failures: 0
+================ MUTANT D2_route4_never_exploratory ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H2  route 4 without Advanced thresholds is EXPLORATORY            CONFIRM "EXPLORATORY" H2_LEGACY_ADAPTIVE
+  FAIL  H2  route 4 record never contradicts its threshold_policy         thresholds_frozen=TRUE beside an adaptive policy block
+  FAIL  H2  route 4 with SOME channels frozen is still exploratory        CONFIRM "EXPLORATORY" H2_LEGACY_ADAPTIVE
+checks: 61   failures: 3
+checks: 79   failures: 0
+================ MUTANT D3_route4_adv_blocked ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=41
+  FAIL  H3  route 4 accepts the v1.7.2 Advanced nuclei floor              BLOCK  ADV_PROTECTED
+  FAIL  H3  route 4 floor is legal from Advanced, illegal from the launchertyped=InvalidOperationException launcher=InvalidOperationException
+  FAIL  PreStartAssertions allows a nuclei floor that came from the Advanced box
+  FAIL  advanced line 'IFQ_MIN_INCLUDED_NUCLEI=3': v1.7.2 accepted, route 4 refuses
+  FAIL  advanced line 'IFQ_WSI_PANEL=LEFT': v1.7.2 accepted, route 4 refuses
+  FAIL  advanced line 'IFQ_WSI_INPUT=C:\slides': v1.7.2 accepted, route 4 refuses
+  FAIL  advanced line 'IFQ_WSI_OUTPUT=C:\tiles': v1.7.2 accepted, route 4 refuses
+  FAIL  advanced line 'IFQ_TOTALLY_UNKNOWN_KEY=1': v1.7.2 accepted, route 4 refuses
+  FAIL  advanced line 'IFQ_KRT_5_THRESHOLD=400': v1.7.2 accepted, route 4 refuses
+  FAIL  advanced line 'IFQ_PDPN_THRESHOLD=400': v1.7.2 accepted, route 4 refuses
+  FAIL  advanced line 'IFQ_WSI_HALO_PX=64': v1.7.2 accepted, route 4 refuses
+checks: 61   failures: 2
+checks: 79   failures: 9
+================ MUTANT D4_flag_on ================
+GATEMATRIX_EXIT=0
+LEGACY_EXIT=0
+checks: 61   failures: 0
+checks: 79   failures: 0
+================ MUTANT D4_flag_on_with_guard ================
+GATEMATRIX_EXIT=0
+LEGACY_EXIT=41
+  FAIL  no check in the launcher fails merely because the brightfield flag is on
+checks: 61   failures: 0
+checks: 79   failures: 1
+================ MUTANT D4_second_switch ================
+GATEMATRIX_EXIT=0
+LEGACY_EXIT=41
+  FAIL  no check in the launcher fails merely because the brightfield flag is on
+checks: 61   failures: 0
+checks: 79   failures: 1
+================ MUTANT D5a_describe_fails_open ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  R?  an undefined route id is not available and says why           Available=True stages=0
+  FAIL  R?  gate blocks an undefined route id                             allow
+  FAIL  R?  environment builder emits nothing for an undefined route id   RETURNED AN ENVIRONMENT
+  FAIL  R?  pre-start assertion refuses an undefined route id             ALLOWED THE RUN
+checks: 61   failures: 4
+checks: 79   failures: 0
+================ MUTANT D5b_stage1_unguarded ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  R3  stage 1 builder emits nothing for route 3                     RETURNED AN ENVIRONMENT
+  FAIL  R3  stage 1 builder emits nothing for a route with no stage 1     RETURNED AN ENVIRONMENT
+  FAIL  R3  one flag decides it, and no builder honours it either way     LauncherBuild.BrightfieldRouteEnabled=False
+checks: 61   failures: 3
+checks: 79   failures: 0
+================ MUTANT H1_pilot_unlocked ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H1  panel T while pilot panels are locked                         CONFIRM "NOT INTERPRETABLE" + "EXPLORATORY" H1_PILOT_PANEL
+checks: 61   failures: 1
+checks: 79   failures: 0
+================ MUTANT H2_slide_block_off ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H2  blank thresholds on route 2 (whole slide)                     CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+checks: 61   failures: 1
+checks: 79   failures: 0
+================ MUTANT H3_area_floor_off ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H3  non-zero floor on a panel with an area endpoint               CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+checks: 61   failures: 1
+checks: 79   failures: 0
+================ MUTANT H4_output_check_off ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H4  gate blocks a non-empty output folder                         CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+checks: 61   failures: 1
+checks: 79   failures: 0
+================ MUTANT H5_never_exploratory ================
+GATEMATRIX_EXIT=42
+LEGACY_EXIT=0
+  FAIL  H2  blank thresholds on route 1                                   CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+  FAIL  H2  custom panel key with no channel list is NOT frozen           CONFIRM "EXPLORATORY" H2_PANEL_UNRESOLVED
+  FAIL  H2  its run record says EXPLORATORY, not THRESHOLDS_FROZEN        thresholds_frozen=TRUE
+  FAIL  H2  blank thresholds on a custom panel are exploratory            CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+  FAIL  H2  route 4 without Advanced thresholds is EXPLORATORY            CONFIRM "EXPLORATORY" H2_LEGACY_ADAPTIVE
+  FAIL  H2  route 4 record never contradicts its threshold_policy         thresholds_frozen=TRUE beside an adaptive policy block
+  FAIL  H2  route 4 with SOME channels frozen is still exploratory        CONFIRM "EXPLORATORY" H2_LEGACY_ADAPTIVE
+  FAIL  H5  run record carries run_classification                         run_classification=EXPLORATORY_DO_NOT_AGGREGATE
+  FAIL  H5  run record carries thresholds_frozen=false                    thresholds_frozen=false
+checks: 61   failures: 9
+checks: 79   failures: 0

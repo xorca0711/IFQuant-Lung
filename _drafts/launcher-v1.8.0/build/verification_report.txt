@@ -1,0 +1,114 @@
+﻿c:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\verifyrun\staging\launcher\IFQuantLauncher.cs(2391,56): warning CS0162: 접근할 수 없는 코드가 있습니다.
+c:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\verifyrun\staging\launcher\IFQuantLauncher.Routing.cs(535,25): warning CS0162: 접근할 수 없는 코드가 있습니다.
+Route 4 legacy (v1.7.2) equivalence -- executed, not asserted
+  v1.7.2 source : C:\Users\dream\Documents\GitHub\IFQuant-Lung\launcher\IFQuantLauncher.cs
+  v1.8.0 source : C:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\launcher\IFQuantLauncher.cs
+  env probe     : C:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\verifyrun\build\EnvProbe.exe
+
+[a] Oracle transcription of v1.7.2 vs route 4, canonical diff
+  PASS  case 1 recommended defaults, panel LEFT: 17 keys, byte-identical
+  PASS  case 2 every non-default, preview mode, panel E: 17 keys, byte-identical
+  PASS  case 3 AUTO panel map present (conditional key 1): 18 keys, byte-identical
+  PASS  case 4 custom panel JSON present (conditional key 2): 18 keys, byte-identical
+  PASS  case 5 BOTH conditional keys present at once: 19 keys, byte-identical
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: 20 keys, byte-identical
+  PASS  case 7 values containing spaces, quotes and non-ASCII: 17 keys, byte-identical
+      fixture fingerprint: f95cecdbd22e809980979a83b41a3d610635f49a569af43cad39cad7c7e73940
+
+[b] Source drift guard against the real v1.7.2 file
+  PASS  the reference source really is 1.7.2.0 (found 1.7.2.0)
+      env[] assignments found: 19
+  PASS  every key LegacyProfile claims is really assigned by v1.7.2
+  PASS  v1.7.2 assigns no key LegacyProfile is unaware of
+  PASS  assignment ORDER matches LegacyProfile.KeyOrder
+  PASS  v1.7.2 hardcodes IFQ_ALLOW_NONEMPTY_OUTPUT=false
+  PASS  v1.7.2 hardcodes IFQ_MORPHOLOGY_PRIMARY=true
+  PASS  v1.7.2 never mentions IFQ_MIN_INCLUDED_NUCLEI
+  PASS  v1.7.2 never writes an IFQ_*_THRESHOLD
+  PASS  v1.7.2's Fiji command line is the one LegacyProfile.CommandLine reproduces
+  PASS  v1.7.2 contains no QuPath / .vsi / IFQ_WSI_ / brightfield reference
+
+[c] The v1.8.0 source cannot quietly stop being legacy
+  PASS  v1.8.0 source declares AssemblyFileVersion 1.8.0.0
+  PASS  route 4 is built by LegacyProfile.BuildEnvironment
+  PASS  route 4 uses LegacyProfile.CommandLine
+  PASS  the v1.8.0 launcher assigns IFQ_MIN_INCLUDED_NUCLEI nowhere (only RunEnvironment.BuildStage2 does, and route 4 does not go through it)
+  PASS  the launcher applies the environment through the code this harness runs
+  PASS  RunEnvironment.BuildStage2 refuses route 4 outright
+  PASS  PreStartAssertions refuses a legacy environment carrying the nuclei floor
+
+[d] Process-level diff: what the child process actually receives
+  PASS  case 1 recommended defaults, panel LEFT: child process environment identical
+  PASS  case 1 recommended defaults, panel LEFT: inherited IFQ_* were stripped from the child
+  PASS  case 1 recommended defaults, panel LEFT: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 2 every non-default, preview mode, panel E: child process environment identical
+  PASS  case 2 every non-default, preview mode, panel E: inherited IFQ_* were stripped from the child
+  PASS  case 2 every non-default, preview mode, panel E: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 3 AUTO panel map present (conditional key 1): child process environment identical
+  PASS  case 3 AUTO panel map present (conditional key 1): inherited IFQ_* were stripped from the child
+  PASS  case 3 AUTO panel map present (conditional key 1): the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 4 custom panel JSON present (conditional key 2): child process environment identical
+  PASS  case 4 custom panel JSON present (conditional key 2): inherited IFQ_* were stripped from the child
+  PASS  case 4 custom panel JSON present (conditional key 2): the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 5 BOTH conditional keys present at once: child process environment identical
+  PASS  case 5 BOTH conditional keys present at once: inherited IFQ_* were stripped from the child
+  PASS  case 5 BOTH conditional keys present at once: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: child process environment identical
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: inherited IFQ_* were stripped from the child
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 7 values containing spaces, quotes and non-ASCII: child process environment identical
+  PASS  case 7 values containing spaces, quotes and non-ASCII: inherited IFQ_* were stripped from the child
+  PASS  case 7 values containing spaces, quotes and non-ASCII: the child received no IFQ_MIN_INCLUDED_NUCLEI
+
+[d2] Command line
+  PASS  route 4 command line == v1.7.2's: --headless --console --run "C:\fixture\runtime\IF_Quant_Pipeline.groovy"
+  PASS  the shared builder produces the same string
+
+[e] Embedded analysis artefacts
+      pipeline defffe6703e6da10ef7810977cb16473c0f36bf81ffa75fbbf6b81066de140ec
+      registry 20c6859d8b7d1114b5476eefc90d8c92affa78d9a59d1be11d2449ba98460b37
+  PASS  the artefacts this build embeds are the ones v1.7.2 shipped
+
+checks: 48   failures: 0
+Fail-closed rule matrix (v1.8.0)
+panels parsed from the engine: 18;  markers the engine thresholds: 22
+LEFT analysis channels: 3, of which area endpoints: 3
+
+  PASS  R3  route 3 is listed in the picker                               index 2
+  PASS  R3  route 3 is not available and carries a reason                 Available=False
+  PASS  R3  gate blocks route 3 with an otherwise valid request           BLOCK  ROUTE_NOT_AVAILABLE
+  PASS  R3  environment builder emits nothing for route 3                 InvalidOperationException
+  PASS  R3  pre-start assertion refuses route 3 even with a valid env     InvalidOperationException
+  PASS  R3  one named constant re-enables it                              LauncherBuild.BrightfieldRouteEnabled=false
+  PASS  H1  no panel selected                                             BLOCK  H1_PANEL_UNSET
+  PASS  H1  panel T while pilot panels are locked                         BLOCK  H1_PILOT_PANEL_LOCKED
+  PASS  H1  panel T after explicit unlock                                 CONFIRM "NOT INTERPRETABLE" + "EXPLORATORY" H1_PILOT_PANEL
+  PASS  H1  panel name the engine does not declare                        BLOCK  H1_PANEL_UNKNOWN
+  PASS  H1  IFQ_PANEL is always written                                   IFQ_PANEL=LEFT
+  PASS  H1  pre-start assertion catches a missing IFQ_PANEL               InvalidOperationException
+  PASS  H2  blank thresholds on route 1                                   CONFIRM "EXPLORATORY" H2_ADAPTIVE_EXPLORATORY
+  PASS  H2  blank thresholds on route 2 (whole slide)                     BLOCK  H2_ADAPTIVE_ON_WHOLE_SLIDE
+  PASS  H2  blank thresholds at confirmatory tier                         BLOCK  H2_ADAPTIVE_IN_CONFIRMATORY
+  PASS  H2  every channel frozen clears the flag                          allow
+  PASS  H2  threshold of 0 (every pixel a candidate)                      BLOCK  H2_THRESHOLD_INVALID
+  PASS  H2  non-numeric threshold                                         BLOCK  H2_THRESHOLD_INVALID
+  PASS  H2  the engine's own token names are emitted                      IFQ_AGER_THRESHOLD,IFQ_KRT5_THRESHOLD,IFQ_T1A_THRESHOLD
+  PASS  H2  IFQ_PDPN_THRESHOLD on panel LEFT (silent no-op in v1.7.2)     BLOCK  ADV_UNKNOWN_MARKER
+  PASS  H3  IFQ_MIN_INCLUDED_NUCLEI always written on routes 1/2          IFQ_MIN_INCLUDED_NUCLEI=0
+  PASS  H3  never written on route 4 (v1.7.2 never wrote it)              absent
+  PASS  H3  non-zero floor on a panel with an area endpoint               BLOCK  H3_FLOOR_WITH_AREA_ENDPOINT
+  PASS  H3  non-zero floor on the whole-slide route                       BLOCK  H2_ADAPTIVE_ON_WHOLE_SLIDE
+  PASS  H3  the Advanced box cannot set it behind the UI's back           BLOCK  ADV_PROTECTED
+  PASS  H4  IFQ_ALLOW_NONEMPTY_OUTPUT hardcoded false                     false
+  PASS  H4  gate blocks a non-empty output folder                         BLOCK  H4_OUTPUT_NOT_EMPTY
+  PASS  H4  pre-start assertion refuses a non-empty folder on disk        InvalidOperationException
+  PASS  H4  no output parent chosen                                       BLOCK  H4_OUTPUT_BASE_UNSET
+  PASS  H4  the Advanced box cannot turn the guard off                    BLOCK  ADV_PROTECTED
+  PASS  H5  run record carries run_classification                         run_classification=EXPLORATORY_DO_NOT_AGGREGATE
+  PASS  H5  run record carries thresholds_frozen=false                    thresholds_frozen=false
+  PASS  H5  run record carries a per-channel threshold source             KRT5=adaptive_otsu_exploratory AGER=adaptive_otsu_exploratory T1A=adaptive_otsu_exploratory
+  PASS  H5  folder name is stamped                                        _EXPLORATORY
+  PASS  H5  marker file text names the consequence                        EXPLORATORY_DO_NOT_AGGREGATE.txt
+  PASS  H5  a fully frozen run is NOT marked exploratory                  run_classification=THRESHOLDS_FROZEN
+
+checks: 36   failures: 0

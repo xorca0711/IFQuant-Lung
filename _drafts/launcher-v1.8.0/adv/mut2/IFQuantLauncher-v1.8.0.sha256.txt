@@ -1,0 +1,1 @@
+40285d52ba0e762b9bd4aa7d7482bca87facda4e0bbac245f505d2f227953d97  IFQuantLauncher-v1.8.0.exe

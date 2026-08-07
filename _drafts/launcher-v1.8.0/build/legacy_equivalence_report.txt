@@ -1,0 +1,104 @@
+﻿Route 4 legacy (v1.7.2) equivalence -- executed, not asserted
+  v1.7.2 source : C:\Users\dream\Documents\GitHub\IFQuant-Lung\launcher\IFQuantLauncher.cs
+  v1.8.0 source : C:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\launcher\IFQuantLauncher.cs
+  env probe     : C:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\build\EnvProbe.exe
+
+[a] Oracle transcription of v1.7.2 vs route 4, canonical diff
+  PASS  case 1 recommended defaults, panel LEFT: 17 keys, byte-identical
+  PASS  case 2 every non-default, preview mode, panel E: 17 keys, byte-identical
+  PASS  case 3 AUTO panel map present (conditional key 1): 18 keys, byte-identical
+  PASS  case 4 custom panel JSON present (conditional key 2): 18 keys, byte-identical
+  PASS  case 5 BOTH conditional keys present at once: 19 keys, byte-identical
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: 20 keys, byte-identical
+  PASS  case 7 values containing spaces, quotes and non-ASCII: 17 keys, byte-identical
+      fixture fingerprint: f95cecdbd22e809980979a83b41a3d610635f49a569af43cad39cad7c7e73940
+
+[b] Source drift guard against the real v1.7.2 file
+  PASS  the reference source really is 1.7.2.0 (found 1.7.2.0)
+      env[] assignments found: 19
+  PASS  every key LegacyProfile claims is really assigned by v1.7.2
+  PASS  v1.7.2 assigns no key LegacyProfile is unaware of
+  PASS  assignment ORDER matches LegacyProfile.KeyOrder
+  PASS  v1.7.2 hardcodes IFQ_ALLOW_NONEMPTY_OUTPUT=false
+  PASS  v1.7.2 hardcodes IFQ_MORPHOLOGY_PRIMARY=true
+  PASS  v1.7.2 never mentions IFQ_MIN_INCLUDED_NUCLEI
+  PASS  v1.7.2 never writes an IFQ_*_THRESHOLD
+  PASS  v1.7.2's Fiji command line is the one LegacyProfile.CommandLine reproduces
+  PASS  v1.7.2 contains no QuPath / .vsi / IFQ_WSI_ / brightfield reference
+
+[c] The v1.8.0 source cannot quietly stop being legacy
+  PASS  v1.8.0 source declares AssemblyFileVersion 1.8.0.0
+  PASS  route 4 is built by LegacyProfile.BuildEnvironment
+  PASS  route 4 uses LegacyProfile.CommandLine
+  PASS  the v1.8.0 launcher assigns IFQ_MIN_INCLUDED_NUCLEI nowhere (only RunEnvironment.BuildStage2 does, and route 4 does not go through it)
+  PASS  the launcher applies the environment through the code this harness runs
+  PASS  RunEnvironment.BuildStage2 refuses route 4 outright
+  PASS  PreStartAssertions refuses a legacy environment carrying the nuclei floor
+  PASS  PreStartAssertions allows a nuclei floor that came from the Advanced box
+  PASS  no check in the launcher fails merely because the brightfield flag is on
+  PASS  BrightfieldRouteEnabled is a static readonly field, not a const
+  PASS  ...and is not declared const anywhere
+  PASS  the user-visible reason still makes the one-line claim it now honours
+
+[d] Process-level diff: what the child process actually receives
+  PASS  case 1 recommended defaults, panel LEFT: child process environment identical
+  PASS  case 1 recommended defaults, panel LEFT: inherited IFQ_* were stripped from the child
+  PASS  case 1 recommended defaults, panel LEFT: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 2 every non-default, preview mode, panel E: child process environment identical
+  PASS  case 2 every non-default, preview mode, panel E: inherited IFQ_* were stripped from the child
+  PASS  case 2 every non-default, preview mode, panel E: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 3 AUTO panel map present (conditional key 1): child process environment identical
+  PASS  case 3 AUTO panel map present (conditional key 1): inherited IFQ_* were stripped from the child
+  PASS  case 3 AUTO panel map present (conditional key 1): the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 4 custom panel JSON present (conditional key 2): child process environment identical
+  PASS  case 4 custom panel JSON present (conditional key 2): inherited IFQ_* were stripped from the child
+  PASS  case 4 custom panel JSON present (conditional key 2): the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 5 BOTH conditional keys present at once: child process environment identical
+  PASS  case 5 BOTH conditional keys present at once: inherited IFQ_* were stripped from the child
+  PASS  case 5 BOTH conditional keys present at once: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: child process environment identical
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: inherited IFQ_* were stripped from the child
+  PASS  case 6 Advanced overlay, including one key that shadows a base key: the child received no IFQ_MIN_INCLUDED_NUCLEI
+  PASS  case 7 values containing spaces, quotes and non-ASCII: child process environment identical
+  PASS  case 7 values containing spaces, quotes and non-ASCII: inherited IFQ_* were stripped from the child
+  PASS  case 7 values containing spaces, quotes and non-ASCII: the child received no IFQ_MIN_INCLUDED_NUCLEI
+
+[d2] Command line
+  PASS  route 4 command line == v1.7.2's: --headless --console --run "C:\fixture\runtime\IF_Quant_Pipeline.groovy"
+  PASS  the shared builder produces the same string
+
+[f] Route 4 Advanced box == v1.7.2's Advanced box
+  PASS  advanced line 'IFQ_MIN_INCLUDED_NUCLEI=3': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_WSI_PANEL=LEFT': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_WSI_INPUT=C:\slides': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_WSI_OUTPUT=C:\tiles': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_TOTALLY_UNKNOWN_KEY=1': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_KRT_5_THRESHOLD=400': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_PDPN_THRESHOLD=400': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_WSI_HALO_PX=64': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_RING_EXPAND_UM=3.5': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_KRT5_THRESHOLD=480': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_KRT5_THRESHOLD=high': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_AGER_THRESHOLD=0': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_DAPI_METHOD=global_otsu': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line 'IFQ_PANEL=T': v1.7.2 refused, route 4 refuses
+  PASS  advanced line 'IFQ_OUTPUT_DIR=C:\elsewhere': v1.7.2 refused, route 4 refuses
+  PASS  advanced line 'IFQ_ALLOW_NONEMPTY_OUTPUT=true': v1.7.2 refused, route 4 refuses
+  PASS  advanced line 'IFQ_MORPHOLOGY_PRIMARY=false': v1.7.2 refused, route 4 refuses
+  PASS  advanced line 'IFQ_RING_EXPAND_UM=': v1.7.2 refused, route 4 refuses
+  PASS  advanced line 'NOT_AN_IFQ_KEY=1': v1.7.2 refused, route 4 refuses
+  PASS  advanced line 'no equals sign at all': v1.7.2 refused, route 4 refuses
+  PASS  advanced line 'ifq_ring_expand_um=4.0': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line '# a comment': v1.7.2 accepted, route 4 accepts
+  PASS  advanced line <empty>: v1.7.2 accepted, route 4 accepts
+      23/23 lines decided identically
+  PASS  v1.7.2 emits 20 variables for Advanced IFQ_MIN_INCLUDED_NUCLEI=3 (got 20)
+  PASS  the child process receives the same 20 variables from route 4
+  PASS  and the nuclei floor the operator typed is one of them
+
+[e] Embedded analysis artefacts
+      pipeline defffe6703e6da10ef7810977cb16473c0f36bf81ffa75fbbf6b81066de140ec
+      registry 20c6859d8b7d1114b5476eefc90d8c92affa78d9a59d1be11d2449ba98460b37
+  PASS  the artefacts this build embeds are the ones v1.7.2 shipped
+
+checks: 79   failures: 0
