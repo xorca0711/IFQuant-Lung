@@ -400,6 +400,54 @@ Consequence of the neutral default: AGER and T1A declare
 
 ---
 
+## Morphometry cross-check — partial support, and one actionable finding
+
+Run 2026-08-08 entirely from the channel cache while D: was offline.
+`scripts/morphometry_crosscheck.groovy`. Ratios are damaged / intact.
+
+| slide | condition | damaged mm2 | solid | MLI | boundary |
+|---|---|---|---|---|---|
+| het m4-1 | PR8 | 3.92 | **0.851** | 1.027 | **0.907** |
+| hom m2 | PR8 | 3.28 | **0.576** | 0.963 | **0.701** |
+| het m4-2 | uninfected | 0.51 | 1.132 | 0.506 | 1.090 |
+| hom m6 | uninfected | 0.09 | 0.895 | 0.317 | 1.185 |
+
+### Supports the denominator, partially
+
+In **infected** slides the damaged compartment has materially less solid tissue
+(0.85, 0.58) and lower boundary density (0.91, 0.70) than the intact
+compartment. That is consistent with real tissue destruction, and it is measured
+from DAPI only — AGER defines the compartments but never measures them, so the
+comparison is not circular.
+
+### The controls point somewhere useful
+
+In **uninfected** slides the pattern inverts: the tiny "damaged" areas have MORE
+solid tissue (1.13, 0.90), HIGHER boundary density (1.09, 1.19) and much SMALLER
+MLI (0.51, 0.32). Dense, nucleus-rich structures with small lumens.
+
+That is what a conducting airway or a vessel looks like — not injured
+parenchyma. So the residual 0.93% / 0.18% control false-positive rate is
+probably **not** threshold noise; it is anatomy the detector cannot exclude.
+This is independent evidence that airway exclusion is the missing piece, and it
+suggests the false-positive rate would largely disappear once airways are
+annotated out rather than needing a stricter threshold.
+
+### What this run does NOT establish
+
+- **MLI as implemented is not the classical quantity.** Intact MLI is ~17 um on
+  every slide, whereas mouse alveolar chord lengths are typically 40-80 um. DAPI
+  marks nuclei, not septal walls, so chords terminate at every nucleus and this
+  measures inter-nuclear spacing. Directionally usable, absolutely not
+  publishable. A tissue-marking channel independent of AGER would fix it; none
+  exists in this panel.
+- **MLI shows no damaged/intact difference in infected slides** (1.03, 0.96).
+  Given the above, that is more likely a limitation of the proxy than evidence
+  of no architectural change.
+- n = 1 per group. These are directional observations, not a result.
+
+---
+
 ## 9. KNOWN BUG: partition QC columns do not reach mouse level
 
 Found 2026-08-07 by a design audit, then confirmed empirically.
