@@ -1,0 +1,46 @@
+﻿21:27:46.329 [main] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting default Locale to en_US
+21:27:46.334 [main] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting Locale for FORMAT to en_US
+21:27:46.335 [main] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting Locale for DISPLAY to en_US
+21:27:46.481 [main] [INFO ] qupath.lib.common.ThreadTools - Setting parallelism to 7
+21:27:46.510 [main] [INFO ] qupath.ScriptCommand - Setting tile cache size to 1998.00 MB (25.0% max memory)
+21:27:46.988 [main] [INFO ] qupath.lib.scripting.QP - Initializing type adapters
+[IFQ_MORPH] ================ SELF-TEST (synthetic phantoms) ================
+[IFQ_MORPH]  Crofton perimeter, disk R=200 px                           got= 1255.8757  want= 1256.6371  PASS
+[IFQ_MORPH]    (naive 4-connected boundary count would give 1600.0 = +27.3%)
+[IFQ_MORPH]  Crofton perimeter, disk R=400 px                           got= 2512.8622  want= 2513.2741  PASS
+[IFQ_MORPH]    (naive 4-connected boundary count would give 3200.0 = +27.3%)
+[IFQ_MORPH]  Crofton perimeter, axis-aligned square a=300               got= 1136.5606  want= 1200.0000  PASS
+[IFQ_MORPH]  stripes T=4 G=40: airspace fraction                        got=    0.9091  want=    0.9091  PASS
+[IFQ_MORPH]  stripes T=4 G=40: direct MLI (h) um                        got=   40.0000  want=   40.0000  PASS
+[IFQ_MORPH]  stripes T=4 G=40: indirect MLI 2L/N um                     got=   44.5570  want=   44.0000  PASS
+[IFQ_MORPH]  stripes T=4 G=40: septal thickness EDM um                  got=    4.1000  want=    4.0000  PASS
+[IFQ_MORPH]  stripes T=4 G=40: septal thickness 2A/B um                 got=    4.2767  want=    4.0000  PASS
+[IFQ_MORPH]  stripes T=6 G=60: airspace fraction                        got=    0.9091  want=    0.9091  PASS
+[IFQ_MORPH]  stripes T=6 G=60: direct MLI (h) um                        got=   60.0000  want=   60.0000  PASS
+[IFQ_MORPH]  stripes T=6 G=60: indirect MLI 2L/N um                     got=   66.8354  want=   66.0000  PASS
+[IFQ_MORPH]  stripes T=6 G=60: septal thickness EDM um                  got=    6.1500  want=    6.0000  PASS
+[IFQ_MORPH]  stripes T=6 G=60: septal thickness 2A/B um                 got=    6.4151  want=    6.0000  PASS
+[IFQ_MORPH]  stripes T=3 G=30: airspace fraction                        got=    0.9091  want=    0.9091  PASS
+[IFQ_MORPH]  stripes T=3 G=30: direct MLI (h) um                        got=   30.0000  want=   30.0000  PASS
+[IFQ_MORPH]  stripes T=3 G=30: indirect MLI 2L/N um                     got=   33.4177  want=   33.0000  PASS
+[IFQ_MORPH]  stripes T=3 G=30: septal thickness EDM um                  got=    3.4000  want=    3.0000  PASS
+[IFQ_MORPH]  stripes T=3 G=30: septal thickness 2A/B um                 got=    3.2075  want=    3.0000  PASS
+[IFQ_MORPH]  stripes T=8 G=80: airspace fraction                        got=    0.9091  want=    0.9091  PASS
+[IFQ_MORPH]  stripes T=8 G=80: direct MLI (h) um                        got=   80.0000  want=   80.0000  PASS
+[IFQ_MORPH]  stripes T=8 G=80: indirect MLI 2L/N um                     got=   89.1139  want=   88.0000  PASS
+[IFQ_MORPH]  stripes T=8 G=80: septal thickness EDM um                  got=    8.2000  want=    8.0000  PASS
+[IFQ_MORPH]  stripes T=8 G=80: septal thickness 2A/B um                 got=    8.5535  want=    8.0000  PASS
+[IFQ_MORPH]  disks D=30: direct MLI vs pi*D/4                           got=   23.6659  want=   23.5619  PASS
+[IFQ_MORPH]    truncated chords: 1350 of 130965 (1.03%)
+[IFQ_MORPH]  disks D=30: airspace component count                       got=  900.0000  want=  900.0000  PASS
+[IFQ_MORPH]  disks D=30: mean component area px                         got=  710.0333  want=  706.8583  PASS
+[IFQ_MORPH]  disks D=60: direct MLI vs pi*D/4                           got=   47.0596  want=   47.1239  PASS
+[IFQ_MORPH]    truncated chords: 2700 of 260160 (1.04%)
+[IFQ_MORPH]  disks D=60: airspace component count                       got=  900.0000  want=  900.0000  PASS
+[IFQ_MORPH]  disks D=60: mean component area px                         got= 2804.4333  want= 2827.4334  PASS
+[IFQ_MORPH]  additivity: chord length sum (9 cores vs whole)            got=733774.0000  want=733774.0000  PASS
+[IFQ_MORPH]  additivity: chord count      (9 cores vs whole)            got=40677.0000  want=40677.0000  PASS
+[IFQ_MORPH]  additivity: test-line length (9 cores vs whole)            got=810000.0000  want=810000.0000  PASS
+[IFQ_MORPH]  additivity: Crofton crossings (9 cores vs whole)           got=331853.0000  want=331853.0000  PASS
+[IFQ_MORPH] ================ SELF-TEST: 33 passed, 0 failed ================
+[IFQ_MORPH] self-test only; exiting.

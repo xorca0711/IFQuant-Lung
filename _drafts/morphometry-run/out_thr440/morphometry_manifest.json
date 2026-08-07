@@ -1,0 +1,59 @@
+{
+  "schema_version": "0.2",
+  "stage": "morphometry",
+  "generated_utc": "2026-08-07T13:45:24.377163Z",
+  "slides": [
+    {
+      "slide": "IFNg KO(het) 26.03.25 m4-1 pr8 infection",
+      "ds_fine": 4.0,
+      "series": 2,
+      "width": 57165,
+      "height": 42154,
+      "px_um": 0.3449973537372698,
+      "roi_mm2": 58.47374305224767,
+      "damaged_frac_of_tissue": 0.0670836234596167,
+      "ager_pos_frac_of_tissue": 0.830615189307807,
+      "roi_otsu": 305.6912415747549,
+      "tissue_threshold": 440.0,
+      "threshold_locked": true,
+      "channels": [
+        0
+      ],
+      "n_blocks": 29,
+      "coverage_complete": true,
+      "scope_area_mm2": {
+        "damaged": 1.364915864257746,
+        "damaged_core": 2.5577146969336155,
+        "intact": 1.8067298864639343,
+        "intact_core": 52.74438260459238
+      },
+      "mouse_id": "m4-1"
+    },
+    {
+      "slide": "IFNg KO(het) 26.03.25 m4-2 pr8 no infection",
+      "ds_fine": 4.0,
+      "series": 2,
+      "width": 52230,
+      "height": 40894,
+      "px_um": 0.34499735373726975,
+      "roi_mm2": 54.82713961017119,
+      "damaged_frac_of_tissue": 0.009332910966802546,
+      "ager_pos_frac_of_tissue": 0.9147901922045588,
+      "roi_otsu": 264.51614104626225,
+      "tissue_threshold": 440.0,
+      "threshold_locked": true,
+      "channels": [
+        0
+      ],
+      "n_blocks": 26,
+      "coverage_complete": true,
+      "scope_area_mm2": {
+        "damaged": 0.306451346781982,
+        "damaged_core": 0.20524546576419891,
+        "intact": 0.6885366836757786,
+        "intact_core": 53.626906113949225
+      },
+      "mouse_id": "m4-2"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+﻿
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(het) 26.03.25 m4-2 pr8 no infection.vsi
+[IFQ_MORPH]   series 2  52230x40894  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 6529x5112 (33.4 Mpx) in 80590 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=264.5, close r=4): 54.827 mm2 = 21.56% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=91.48% of tissue, DAMAGED=0.93% of tissue (0
+.5117 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=66772 dmg_core=402 int_edge=6632227 int_core=498139  (erode 40.0 um = 
+14.49 px)
+[IFQ_MORPH]   CALIBRATION -- run this on CONTROL slides only.
+[IFQ_MORPH]     coarse tissue signal (ch 0) p1.0   inside ROI =       94.7
+[IFQ_MORPH]     coarse tissue signal (ch 0) p5.0   inside ROI =      155.1
+[IFQ_MORPH]     coarse tissue signal (ch 0) p10.0  inside ROI =      200.9
+[IFQ_MORPH]     coarse tissue signal (ch 0) p25.0  inside ROI =      283.9
+[IFQ_MORPH]     coarse tissue signal (ch 0) p50.0  inside ROI =      391.8
+[IFQ_MORPH]     coarse tissue signal (ch 0) p75.0  inside ROI =      546.1
+[IFQ_MORPH]     coarse tissue signal (ch 0) p90.0  inside ROI =      723.6
+[IFQ_MORPH]     coarse tissue signal (ch 0) p95.0  inside ROI =      848.7
+[IFQ_MORPH]     coarse tissue signal (ch 0) p99.0  inside ROI =     1124.0
+[IFQ_MORPH]     ds 1.0  (0.345 um/px) n=8 blocks: in-ROI Otsu=820.0  p05=28 p25=57 p50=231 p75=693 p95=1710
+[IFQ_MORPH]     ds 2.0  (0.690 um/px) n=8 blocks: in-ROI Otsu=814.3  p05=28 p25=59 p50=234 p75=695 p95=1700
+[IFQ_MORPH]     ds 4.0  (1.380 um/px) n=8 blocks: in-ROI Otsu=796.9  p05=23 p25=64 p50=245 p75=701 p95=1667
+[IFQ_MORPH] no rows emitted
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(hom) 26.03.25 m6 pr8 no infection.vsi
+[IFQ_MORPH]   series 2  54410x37599  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 6801x4700 (32.0 Mpx) in 23876 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=291.2, close r=4): 50.381 mm2 = 20.69% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=99.82% of tissue, DAMAGED=0.18% of tissue (0
+.0900 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=11811 dmg_core=0 int_edge=5826984 int_core=775020  (erode 40.0 um = 14
+.49 px)
+[IFQ_MORPH]   CALIBRATION -- run this on CONTROL slides only.
+[IFQ_MORPH]     coarse tissue signal (ch 0) p1.0   inside ROI =      111.2
+[IFQ_MORPH]     coarse tissue signal (ch 0) p5.0   inside ROI =      182.6
+[IFQ_MORPH]     coarse tissue signal (ch 0) p10.0  inside ROI =      234.1
+[IFQ_MORPH]     coarse tissue signal (ch 0) p25.0  inside ROI =      324.2
+[IFQ_MORPH]     coarse tissue signal (ch 0) p50.0  inside ROI =      451.1
+[IFQ_MORPH]     coarse tissue signal (ch 0) p75.0  inside ROI =      627.4
+[IFQ_MORPH]     coarse tissue signal (ch 0) p90.0  inside ROI =      830.7
+[IFQ_MORPH]     coarse tissue signal (ch 0) p95.0  inside ROI =      973.5
+[IFQ_MORPH]     coarse tissue signal (ch 0) p99.0  inside ROI =     1295.5
+[IFQ_MORPH]     ds 1.0  (0.345 um/px) n=8 blocks: in-ROI Otsu=948.8  p05=32 p25=68 p50=278 p75=867 p95=2027
+[IFQ_MORPH]     ds 2.0  (0.690 um/px) n=8 blocks: in-ROI Otsu=939.6  p05=31 p25=70 p50=282 p75=869 p95=2014
+[IFQ_MORPH]     ds 4.0  (1.380 um/px) n=8 blocks: in-ROI Otsu=924.4  p05=28 p25=75 p50=295 p75=874 p95=1976
+[IFQ_MORPH] no rows emitted
+
+

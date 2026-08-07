@@ -1,0 +1,75 @@
+﻿21:38:22.733 [main] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting default Locale to en_US
+21:38:22.740 [main] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting Locale for FORMAT to en_US
+21:38:22.740 [main] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting Locale for DISPLAY to en_US
+21:38:22.812 [main] [INFO ] qupath.lib.common.ThreadTools - Setting parallelism to 7
+21:38:22.868 [main] [INFO ] qupath.ScriptCommand - Setting tile cache size to 1998.00 MB (25.0% max memory)
+21:38:23.552 [main] [INFO ] qupath.lib.scripting.QP - Initializing type adapters
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(het) 26.03.25 m4-1 pr8 infection.vsi
+21:39:07.551 [main] [INFO ] q.l.i.s.b.BioFormatsServerOptions - Setting max Bio-Formats readers to 8
+[IFQ_MORPH]   series 2  57165x42154  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 7146x5269 (37.7 Mpx) in 45137 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=305.7, close r=4): 58.474 mm2 = 20.39% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=83.06% of tissue, DAMAGED=6.71% of tissue (3.9226 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=475414 dmg_core=39537 int_edge=6517460 int_core=643844  (erode 40.0 um = 14.49 px)
+[IFQ_MORPH]   fine ds 4.0 (1.3800 um/px): 109 of 154 blocks intersect the ROI
+[IFQ_MORPH]     ... 20/109 blocks (38486 ms)
+[IFQ_MORPH]     ... 40/109 blocks (47851 ms)
+[IFQ_MORPH]     ... 60/109 blocks (69588 ms)
+[IFQ_MORPH]     ... 80/109 blocks (111855 ms)
+[IFQ_MORPH]     ... 100/109 blocks (136466 ms)
+[IFQ_MORPH]   fine pass done: 109 blocks in 145258 ms
+[IFQ_MORPH]   topology: 59089 airspace components, 85.7% of airspace area in components > 10000 um2 (1138 ms)
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(het) 26.03.25 m4-2 pr8 no infection.vsi
+[IFQ_MORPH]   series 2  52230x40894  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 6529x5112 (33.4 Mpx) in 38549 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=264.5, close r=4): 54.827 mm2 = 21.56% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=91.48% of tissue, DAMAGED=0.93% of tissue (0.5117 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=66772 dmg_core=402 int_edge=6632227 int_core=498139  (erode 40.0 um = 14.49 px)
+[IFQ_MORPH]   fine ds 4.0 (1.3800 um/px): 101 of 130 blocks intersect the ROI
+[IFQ_MORPH]     ... 20/101 blocks (62566 ms)
+[IFQ_MORPH]     ... 40/101 blocks (92714 ms)
+[IFQ_MORPH]     ... 60/101 blocks (124350 ms)
+[IFQ_MORPH]     ... 80/101 blocks (171804 ms)
+[IFQ_MORPH]     ... 100/101 blocks (209803 ms)
+[IFQ_MORPH]   fine pass done: 101 blocks in 209827 ms
+[IFQ_MORPH]   topology: 36652 airspace components, 91.8% of airspace area in components > 10000 um2 (803 ms)
+[IFQ_MORPH]   *** >90% of airspace is in 'confluent' components. The segmented phase is not a continuous barrier, so EVERY connectivity column (components, confluence) is UNINTERPRETABLE. The area/length columns -- airspace fraction, MLI, perimeter, thickness -- never use connectivity and are unaffected. With a marker panel and no counterstain this is expected, not fixable by resolution. ***
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(hom) 26.03.25 m2 pr8 infection.vsi
+[IFQ_MORPH]   series 2  59465x41119  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 7433x5140 (38.2 Mpx) in 31511 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=286.5, close r=4): 70.196 mm2 = 24.12% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=84.31% of tissue, DAMAGED=4.68% of tissue (3.2836 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=427163 dmg_core=3898 int_edge=7850938 int_core=933171  (erode 40.0 um = 14.49 px)
+[IFQ_MORPH]   fine ds 4.0 (1.3800 um/px): 119 of 165 blocks intersect the ROI
+[IFQ_MORPH]     ... 20/119 blocks (57347 ms)
+[IFQ_MORPH]     ... 40/119 blocks (126773 ms)
+[IFQ_MORPH]     ... 60/119 blocks (191801 ms)
+[IFQ_MORPH]     ... 80/119 blocks (253956 ms)
+[IFQ_MORPH]     ... 100/119 blocks (322607 ms)
+[IFQ_MORPH]   fine pass done: 119 blocks in 375961 ms
+[IFQ_MORPH]   topology: 55391 airspace components, 90.9% of airspace area in components > 10000 um2 (1821 ms)
+[IFQ_MORPH]   *** >90% of airspace is in 'confluent' components. The segmented phase is not a continuous barrier, so EVERY connectivity column (components, confluence) is UNINTERPRETABLE. The area/length columns -- airspace fraction, MLI, perimeter, thickness -- never use connectivity and are unaffected. With a marker panel and no counterstain this is expected, not fixable by resolution. ***
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(hom) 26.03.25 m6 pr8 no infection.vsi
+[IFQ_MORPH]   series 2  54410x37599  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 6801x4700 (32.0 Mpx) in 60121 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=291.2, close r=4): 50.381 mm2 = 20.69% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=99.82% of tissue, DAMAGED=0.18% of tissue (0.0900 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=11811 dmg_core=0 int_edge=5826984 int_core=775020  (erode 40.0 um = 14.49 px)
+[IFQ_MORPH]   fine ds 4.0 (1.3800 um/px): 94 of 140 blocks intersect the ROI
+[IFQ_MORPH]     ... 20/94 blocks (36081 ms)
+[IFQ_MORPH]     ... 40/94 blocks (66022 ms)
+[IFQ_MORPH]     ... 60/94 blocks (104931 ms)
+[IFQ_MORPH]     ... 80/94 blocks (181445 ms)
+[IFQ_MORPH]   fine pass done: 94 blocks in 231375 ms
+[IFQ_MORPH]   topology: 38862 airspace components, 91.4% of airspace area in components > 10000 um2 (1381 ms)
+[IFQ_MORPH]   *** >90% of airspace is in 'confluent' components. The segmented phase is not a continuous barrier, so EVERY connectivity column (components, confluence) is UNINTERPRETABLE. The area/length columns -- airspace fraction, MLI, perimeter, thickness -- never use connectivity and are unaffected. With a marker panel and no counterstain this is expected, not fixable by resolution. ***
+[IFQ_MORPH] Wrote 16 row(s) -> C:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\build2\morphometry\out_ds4\morphometry_slide_summary_ds4.csv
+[IFQ_MORPH] NEXT: python aggregate_to_mouse.py <csv> --outdir <stats>  then  python morphometry_derive.py <stats>/mouse_level_summary.csv

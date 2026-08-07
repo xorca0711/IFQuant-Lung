@@ -1,0 +1,49 @@
+﻿
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(het) 26.03.25 m4-1 pr8 infection.vsi
+[IFQ_MORPH]   series 2  57165x42154  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 7146x5269 (37.7 Mpx) in 38688 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=305.7, close r=4): 58.474 mm2 = 20.39% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=83.06% of tissue, DAMAGED=6.71% of tissue (3
+.9226 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=475414 dmg_core=39537 int_edge=6517460 int_core=643844  (erode 40.0 um
+ = 14.49 px)
+[IFQ_MORPH]   SWEEP window 'damaged' at (40960,4096) 4096 px, 42.1% of it is that compartment
+[IFQ_MORPH]      ds    um/px  tissFrac    MLIdir    MLIind    airEDM  thickEDM  thick2AB   SvPerUm   trunc%
+[IFQ_MORPH]     1.0   0.3450    0.2106     10.94     16.63      9.72     3.500     2.215   0.24215    25.17
+[IFQ_MORPH]     2.0   0.6900    0.2100     13.79     20.72     10.44     3.892     2.760   0.19377    29.69
+[IFQ_MORPH]     4.0   1.3800    0.2076     16.52     24.98     11.75     4.597     3.286   0.16085    33.40
+[IFQ_MORPH]     8.0   2.7600    0.1961     22.16     34.73     15.03     6.658     4.296   0.11620    40.30
+[IFQ_MORPH]   SWEEP window 'intact' at (28672,12288) 4096 px, 61.5% of it is that compartment
+[IFQ_MORPH]      ds    um/px  tissFrac    MLIdir    MLIind    airEDM  thickEDM  thick2AB   SvPerUm   trunc%
+[IFQ_MORPH]     1.0   0.3450    0.1986     14.08     21.73     11.03     3.712     2.735   0.18489    39.23
+[IFQ_MORPH]     2.0   0.6900    0.1988     16.28     24.67     11.32     3.934     3.116   0.16244    42.44
+[IFQ_MORPH]     4.0   1.3800    0.1987     17.75     26.99     11.79     4.411     3.403   0.14864    43.89
+[IFQ_MORPH]     8.0   2.7600    0.1972     20.99     32.80     13.41     6.186     4.087   0.12284    47.26
+[IFQ_MORPH] no rows emitted
+[IFQ_MORPH] 
+[IFQ_MORPH] =========================================================
+[IFQ_MORPH] SLIDE: IFNg KO(het) 26.03.25 m4-2 pr8 no infection.vsi
+[IFQ_MORPH]   series 2  52230x40894  0.34500 um/px  coarse=2.7600 um/px
+[IFQ_MORPH]   coarse read 6529x5112 (33.4 Mpx) in 49753 ms
+[IFQ_MORPH]   ROI (damage-detector tissue mask, DAPI Otsu=264.5, close r=4): 54.827 mm2 = 21.56% of frame
+[IFQ_MORPH]   LOCKED detector (AGER>=150, sigma=40 um, cutoff=0.14): AGER+=91.48% of tissue, DAMAGED=0.93% of tissue (0
+.5117 mm2)
+[IFQ_MORPH]   compartments (coarse px): dmg_edge=66772 dmg_core=402 int_edge=6632227 int_core=498139  (erode 40.0 um = 
+14.49 px)
+[IFQ_MORPH]   SWEEP window 'damaged' at (4096,8192) 4096 px, 1.6% of it is that compartment
+[IFQ_MORPH]      ds    um/px  tissFrac    MLIdir    MLIind    airEDM  thickEDM  thick2AB   SvPerUm   trunc%
+[IFQ_MORPH]     1.0   0.3450    0.1698     15.02     24.06     12.66     3.741     2.586   0.16722    42.52
+[IFQ_MORPH]     2.0   0.6900    0.1698     18.16     28.32     13.13     4.034     3.055   0.14157    47.11
+[IFQ_MORPH]     4.0   1.3800    0.1694     20.00     31.35     13.72     4.551     3.371   0.12798    49.09
+[IFQ_MORPH]     8.0   2.7600    0.1662     24.11     39.10     15.78     6.412     4.105   0.10308    53.53
+[IFQ_MORPH]   SWEEP window 'intact' at (20480,8192) 4096 px, 67.7% of it is that compartment
+[IFQ_MORPH]      ds    um/px  tissFrac    MLIdir    MLIind    airEDM  thickEDM  thick2AB   SvPerUm   trunc%
+[IFQ_MORPH]     1.0   0.3450    0.1421     17.82     24.81     12.84     3.136     2.231   0.16212    33.50
+[IFQ_MORPH]     2.0   0.6900    0.1416     21.23     29.06     13.32     3.396     2.615   0.13795    37.29
+[IFQ_MORPH]     4.0   1.3800    0.1402     23.61     32.56     14.04     3.939     2.897   0.12326    39.36
+[IFQ_MORPH]     8.0   2.7600    0.1324     29.71     42.60     16.63     5.902     3.559   0.09472    44.78
+[IFQ_MORPH] no rows emitted
+
+

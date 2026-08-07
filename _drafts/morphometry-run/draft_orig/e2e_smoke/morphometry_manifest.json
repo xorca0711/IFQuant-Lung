@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.1-draft",
+  "stage": "morphometry",
+  "generated_utc": "2026-08-07T05:11:39.426034600Z",
+  "slides": [
+    {
+      "slide": "IFNg KO(het) 26.03.25 m4-2 pr8 no infection",
+      "series": 2,
+      "width": 52230,
+      "height": 40894,
+      "px_um": 0.34499735373726975,
+      "ds_fine": 2.0,
+      "ds_coarse": 8.0,
+      "roi_geom_mm2": 73.89111679216177,
+      "tissue_threshold": 700.0,
+      "threshold_locked": true,
+      "channels": [
+        0,
+        3
+      ],
+      "mode": "fluor",
+      "n_blocks": 12,
+      "coverage_complete": false,
+      "partitioned": false,
+      "compare_ager": true,
+      "consolidation_cutoff": 0.3,
+      "mouse_id": "m4-2"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": "0.2",
+  "stage": "morphometry",
+  "generated_utc": "2026-08-07T13:15:48.062047800Z",
+  "slides": [
+    {
+      "slide": "IFNg KO(het) 26.03.25 m4-1 pr8 infection",
+      "ds_fine": 4.0,
+      "series": 2,
+      "width": 57165,
+      "height": 42154,
+      "px_um": 0.3449973537372698,
+      "roi_mm2": 58.47374305224767,
+      "damaged_frac_of_tissue": 0.0670836234596167,
+      "ager_pos_frac_of_tissue": 0.830615189307807,
+      "roi_otsu": 305.6912415747549,
+      "tissue_threshold": 880.0,
+      "threshold_locked": true,
+      "channels": [
+        0
+      ],
+      "n_blocks": 109,
+      "coverage_complete": true,
+      "scope_area_mm2": {
+        "damaged": 3.6214581302264293,
+        "damaged_core": 0.3011724309649323,
+        "intact": 49.6466416753094,
+        "intact_core": 4.904470815746917
+      },
+      "mouse_id": "m4-1"
+    },
+    {
+      "slide": "IFNg KO(het) 26.03.25 m4-2 pr8 no infection",
+      "ds_fine": 4.0,
+      "series": 2,
+      "width": 52230,
+      "height": 40894,
+      "px_um": 0.34499735373726975,
+      "roi_mm2": 54.82713961017119,
+      "damaged_frac_of_tissue": 0.009332910966802546,
+      "ager_pos_frac_of_tissue": 0.9147901922045588,
+      "roi_otsu": 264.51614104626225,
+      "tissue_threshold": 880.0,
+      "threshold_locked": true,
+      "channels": [
+        0
+      ],
+      "n_blocks": 101,
+      "coverage_complete": true,
+      "scope_area_mm2": {
+        "damaged": 0.5086345843233036,
+        "damaged_core": 0.0030622282228773743,
+        "intact": 50.5208773630083,
+        "intact_core": 3.794565434616697
+      },
+      "mouse_id": "m4-2"
+    },
+    {
+      "slide": "IFNg KO(hom) 26.03.25 m2 pr8 infection",
+      "ds_fine": 4.0,
+      "series": 2,
+      "width": 59465,
+      "height": 41119,
+      "px_um": 0.34499735373726975,
+      "roi_mm2": 70.19640212092759,
+      "damaged_frac_of_tissue": 0.046777324780769104,
+      "ager_pos_frac_of_tissue": 0.8430776643295783,
+      "roi_otsu": 286.4572179457721,
+      "tissue_threshold": 880.0,
+      "threshold_locked": true,
+      "channels": [
+        0
+      ],
+      "n_blocks": 119,
+      "coverage_complete": true,
+      "scope_area_mm2": {
+        "damaged": 3.2539069511665866,
+        "damaged_core": 0.029692949285512447,
+        "intact": 59.80438785985185,
+        "intact_core": 7.108414360623637
+      },
+      "mouse_id": "m2"
+    },
+    {
+      "slide": "IFNg KO(hom) 26.03.25 m6 pr8 no infection",
+      "ds_fine": 4.0,
+      "series": 2,
+      "width": 54410,
+      "height": 37599,
+      "px_um": 0.3449973537372698,
+      "roi_mm2": 50.380624263407285,
+      "damaged_frac_of_tissue": 0.0017858074348919648,
+      "ager_pos_frac_of_tissue": 0.9982482122647821,
+      "roi_otsu": 291.2497127757353,
+      "tissue_threshold": 880.0,
+      "threshold_locked": true,
+      "channels": [
+        0
+      ],
+      "n_blocks": 94,
+      "coverage_complete": true,
+      "scope_area_mm2": {
+        "damaged": 0.08997009338409123,
+        "damaged_core": 0.0,
+        "intact": 44.3869523857087,
+        "intact_core": 5.903701784314486
+      },
+      "mouse_id": "m6"
+    }
+  ]
+}
