@@ -107,7 +107,7 @@ Whole-slide entry points not covered by this document:
   morphology and literature notes.
 - [`docs/UNIVERSAL_MARKER_CONFIGURATION.md`](docs/UNIVERSAL_MARKER_CONFIGURATION.md):
   reusable marker, disease-context, panel, and ROI-tag hierarchy.
-- [`docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
+- [`docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](legacy/docs/UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
   cross-marker context/evaluability audit and representative Fiji regressions.
 - [`docs/COMPARTMENT_TAGS_AND_PROGRESSION.md`](docs/COMPARTMENT_TAGS_AND_PROGRESSION.md):
   anatomical tag meanings, subcellular analytical roles, ROI naming, and
@@ -119,7 +119,7 @@ Whole-slide entry points not covered by this document:
   aliases, localization, lineage/state notes, and analytical-role defaults.
 - [`config/custom_panels.example.json`](config/custom_panels.example.json):
   opt-in study panel templates; built-in panels remain unchanged.
-- [`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](docs/PILOT_G002_MORPHOLOGY_RESULTS.md):
+- [`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](legacy/docs/PILOT_G002_MORPHOLOGY_RESULTS.md):
   validated one-image pilots.
 
 ## Priority real-project antibody panels
@@ -720,7 +720,7 @@ The two final local pilots are under `test_runs/current/`:
 
 These outputs are intentionally ignored by Git because they contain generated
 images and tables. Their numerical results are preserved in
-[`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](docs/PILOT_G002_MORPHOLOGY_RESULTS.md).
+[`docs/PILOT_G002_MORPHOLOGY_RESULTS.md`](legacy/docs/PILOT_G002_MORPHOLOGY_RESULTS.md).
 All reported calls and areas remain exploratory because the pilot used
 image-specific Otsu thresholds.
 

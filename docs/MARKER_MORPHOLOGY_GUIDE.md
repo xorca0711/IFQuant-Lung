@@ -383,7 +383,7 @@ regional area. All calls and areas are exploratory because the pilot used
 image-specific Otsu thresholds. The mixed panel-E field was not forced to
 `airway`, so all AcTub per-cell calls were indeterminate. The inspected panel-R field was homogeneous
 alveolar parenchyma and used a provenance-recorded whole-field `alveolar`
-assignment. See [`PILOT_G002_MORPHOLOGY_RESULTS.md`](PILOT_G002_MORPHOLOGY_RESULTS.md)
+assignment. See [`PILOT_G002_MORPHOLOGY_RESULTS.md`](../legacy/docs/PILOT_G002_MORPHOLOGY_RESULTS.md)
 for full results.
 
 ## 8. QC and control acceptance

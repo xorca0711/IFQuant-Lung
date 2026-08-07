@@ -12,11 +12,19 @@ validated Fiji engine:
 QuPath never measures anything; it is a reader and tiler. All quantification
 stays in the Fiji engine so both routes share one validated decision model.
 
+## Start here
+
+- [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md): **why** the two
+  tools are used together, the published pattern this follows
+  (Chiaruttini et al. 2022), where we deliberately differ, and why the handoff
+  is file-based rather than in-process.
+
 ## Study endpoint
 
 - [`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md): the KRT5⁺ ectopic pod
-  endpoint, its damaged-area denominator, the AGER-as-airway-detector hazard,
-  and the threshold-calibration evidence. **Read before running any batch.**
+  endpoint — its damaged-area denominator, the PDPN co-negativity numerator, the
+  AGER-as-airway-detector hazard, every calibration result with its validation
+  status, and the known aggregation bug. **Read before running any batch.**
 
 ## Routes
 
@@ -26,38 +34,39 @@ stays in the Fiji engine so both routes share one validated decision model.
 
 ## Interpretation and configuration
 
-- [`MARKER_MORPHOLOGY_GUIDE.md`](MARKER_MORPHOLOGY_GUIDE.md): marker roles, decision hierarchy, sectioning,
-  control policy, and literature basis.
+- [`MARKER_MORPHOLOGY_GUIDE.md`](MARKER_MORPHOLOGY_GUIDE.md): the authoritative
+  interpretation guide — marker roles, the morphology-first decision hierarchy,
+  sectioning, control policy, and literature basis.
 - [`UNIVERSAL_MARKER_CONFIGURATION.md`](UNIVERSAL_MARKER_CONFIGURATION.md):
-  reusable marker/panel schema, ROI context vocabulary, and research profiles
-  for acute injury, IPF/fibrosis, and lung-adenocarcinoma lineage studies.
-- [`PILOT_G002_MORPHOLOGY_RESULTS.md`](PILOT_G002_MORPHOLOGY_RESULTS.md): validated one-image results for panel E
-  and panel R, including post-run improvements and caveats.
-- [`SCRIPT_SELF_REVIEW_20260723.md`](SCRIPT_SELF_REVIEW_20260723.md): software-defect audit,
-  corrections, verification evidence, and unresolved validation limits.
-- [`UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md`](UNIVERSAL_FALSE_NEGATIVE_AUDIT_20260728.md):
-  marker-wide context/evaluability audit, corrected decision matrix, and Fiji
-  regression results.
+  the reusable marker/panel schema, ROI context vocabulary, and research
+  profiles for acute injury, IPF/fibrosis, and lung-adenocarcinoma studies.
 - [`COMPARTMENT_TAGS_AND_PROGRESSION.md`](COMPARTMENT_TAGS_AND_PROGRESSION.md):
-  descriptions of every anatomical tag and subcellular analytical role,
-  multi-tag precedence, naming examples, and the complete call progression.
+  every anatomical tag and subcellular analytical role, multi-tag precedence,
+  naming examples, and the complete call progression.
 - [`Z_STACK_ANALYSIS.md`](Z_STACK_ANALYSIS.md): marker-specific Z policies,
-  automatic/fixed slab selection, per-plane QC, and true-3D escalation criteria.
-- [`BRANCHING.md`](BRANCHING.md): stable-main, Z-stack feature, legacy snapshot,
-  and merge-gate responsibilities.
+  automatic and fixed slab selection, per-plane QC, and true-3D escalation
+  criteria. A preserved capability of the Fiji engine, not legacy.
 
-## Audits and validation records
+## Project
 
-- [`TEST_RUN_ERROR_RATE_AUDIT.md`](TEST_RUN_ERROR_RATE_AUDIT.md): observed
-  per-image failure modes and their rates across recorded test runs.
+- [`BRANCHING.md`](BRANCHING.md): branch roles, what is superseded, and the
+  merge-gate responsibilities.
 
 ## Entry points
 
 - [`../WORKFLOW.md`](../WORKFLOW.md): operational sequence for the
-  **field / confocal route**. It does not cover the whole-slide route.
+  **field / confocal route**, plus the shared interpretation model.
 - [`../README.md`](../README.md): installation, configuration, output schema,
   and statistics.
 
-Historical diagrams are not kept here because their intensity-centered logic no
-longer matches the production pipeline. They are archived in
-[`../legacy/figures/`](../legacy/figures/README.md).
+## Archived
+
+Point-in-time audits and pilot records that no longer describe the current
+pipeline have moved to [`../legacy/docs/`](../legacy/docs/README.md). They are
+kept because they are the only record of the validation they document — but
+**none of their numbers are current**, and thresholds quoted there are pilot
+placeholders. The only calibrated parameters are in `ECTOPIC_POD_ENDPOINT.md`.
+
+Historical diagrams are archived in
+[`../legacy/figures/`](../legacy/figures/README.md); their intensity-centered
+logic no longer matches the morphology-first engine.

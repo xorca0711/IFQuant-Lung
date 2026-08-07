@@ -40,12 +40,21 @@ antibody combination.
   [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
 - **`aggregate_tiles_to_slide.py`** — rolls per-tile results up to the slide
   level and refuses to emit a summary when tiles are missing.
+- **`endpoints/evaluate_endpoints.groovy`** — evaluates **relational** endpoints
+  (e.g. "KRT5⁺ **and** PDPN⁻ area") by boolean algebra on the per-marker masks
+  the engine already saves. The engine is marker-wise and cannot express a
+  relation between two markers; this closes that gap without modifying it.
+  Endpoints are declared as data in [`config/endpoints/`](config/endpoints/).
 - **`samplesheet_template.csv`** — per-image metadata template.
 - **[`WORKFLOW.md`](WORKFLOW.md)** — operational sequence for the **field /
   confocal route**. For whole-slide input see
   [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
+- **[`docs/QUPATH_FIJI_INTEGRATION.md`](docs/QUPATH_FIJI_INTEGRATION.md)** — why
+  QuPath and Fiji are used together, the published pattern this follows, and why
+  the handoff is file-based.
 - **[`docs/ECTOPIC_POD_ENDPOINT.md`](docs/ECTOPIC_POD_ENDPOINT.md)** — the KRT5⁺
-  pod endpoint, its denominator, and threshold calibration. Read before batching.
+  pod endpoint, its denominator, the co-negativity numerator, and every
+  calibration result with its validation status. Read before batching.
 - **[`docs/`](docs/README.md)** — marker morphology and validated pilot results.
 - **[`config/`](config/README.md)** — universal marker registry and custom-panel
   examples.
