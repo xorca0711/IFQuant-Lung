@@ -1,0 +1,271 @@
+{
+  "profile_schema": "injury_model_profile/1.0.0",
+  "model_id": "treg_depletion",
+  "profile_version": "0.0.1",
+  "title": "UNVALIDATED TEMPLATE - Foxp3+ regulatory T cell depletion during lung repair (mouse)",
+  "species": "mus_musculus",
+
+  "authored": {
+    "author": "IFQuant-Lung config track (D)",
+    "date": "2026-08-07",
+    "lab": "Lung immunology / regeneration group",
+    "notes": "*** UNVALIDATED TEMPLATE. NOT AN ESTABLISHED PROFILE. *** This model is layered ON TOP of another injury model (usually influenza_pr8 or bleomycin), which makes it the awkward case the profile system has to handle: two model profiles apply to one animal. The rule declared here is that the INJURY model owns the endpoint and its denominator, and the depletion model contributes an additional arm plus its own controls and confounds. It does NOT get to redefine 'damaged area'. See base_model_ref."
+  },
+
+  "profile_validation": {"status": "unset", "evidence": "none", "notes": "TEMPLATE. 'unset' is the only honest value: no endpoint-critical parameter has a measured value, so the profile cannot claim any rung of the ladder. The generator recomputes this and would reject anything stronger."},
+
+  "registry_requirement": {
+    "path_hint": "config/lung_marker_registry.json",
+    "min_schema_version": "1.3.0",
+    "markers_required": ["DAPI", "FOXP3", "IL2RA", "GATA3", "KRT5", "AGER", "SFTPC", "KRT8"],
+    "research_profile_refs": ["acute_injury_regeneration"]
+  },
+
+  "panels": [
+    {
+      "panel_key": "TREG_NICHE_TEMPLATE",
+      "source": "custom_panel_config",
+      "panel_config_path_hint": "<study-owned panels.json, OUTSIDE the repo - NO built-in or example panel covers FOXP3>",
+      "role_in_model": "primary_endpoint",
+      "measures_states": ["treg"],
+      "validation": {
+        "status": "unset",
+        "evidence": "config/custom_panels.example.json contains no FOXP3 panel; the registry has FOXP3, IL2RA and GATA3 as markers but no panel uses them. A new custom panel must be written and its channel idx values matched to the acquisition.",
+        "notes": "FOXP3 default_role in the registry is a nuclear role; a nuclear transcription-factor call needs minNuclearEnrichment, and the engine's generic nuc_marker template (minFraction 0.40, minLargestShare 0.60, minNuclearEnrichment 1.25, IF_Quant_Pipeline.groovy:250) is a PILOT default, not a validated FOXP3 rule."
+      }
+    },
+    {
+      "panel_key": "LEFT",
+      "source": "builtin",
+      "role_in_model": "orthogonal_control",
+      "measures_states": [],
+      "validation": {"status": "unset", "evidence": "Carried so the injury endpoint from the base model is measured on the SAME animals with the SAME frozen parameters."}
+    }
+  ],
+
+  "insult": {
+    "agent": "Diphtheria toxin in a Foxp3-DTR line (or equivalent depleting antibody)",
+    "route": "TEMPLATE - intraperitoneal",
+    "dose": {"value": null, "units": "ug_per_kg", "validation": {"status": "unset", "evidence": "none"}},
+    "vehicle": "TEMPLATE - PBS, same schedule, delivered to DTR-negative littermates as the control",
+    "severity_readout": {
+      "assay": "TEMPLATE - depletion efficiency itself: FOXP3+ cells per mm2 in lung and in a lymphoid organ, at the timepoint the endpoint is read.",
+      "required": true,
+      "status": {"status": "unset", "evidence": "none", "notes": "Depletion is transient and partial. An endpoint difference in an incompletely depleted animal is not a Treg-null phenotype. Depletion efficiency must be measured PER ANIMAL, not assumed from the protocol."}
+    },
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "timepoints": [
+    {"label": "pre_depletion", "days_post_insult": 0, "condition_token": "predepletion", "expected": ["TEMPLATE - baseline FOXP3+ density; this is the denominator of depletion efficiency"], "endpoint_evaluable": false, "validation": {"status": "unset", "evidence": "none"}},
+    {"label": "depleted_repair_phase", "days_post_insult": 14, "condition_token": "DT_d14", "expected": ["TEMPLATE - FOXP3+ density reduced; the repair phenotype of the BASE injury model is what is actually read out"], "endpoint_evaluable": true, "validation": {"status": "unset", "evidence": "none"}},
+    {"label": "recovery", "days_post_insult": 28, "condition_token": "DT_d28", "expected": ["TEMPLATE - Treg compartment partially reconstituted; distinguishes a transient requirement from a permanent one"], "endpoint_evaluable": true, "validation": {"status": "unset", "evidence": "none"}}
+  ],
+
+  "cell_states": [
+    {
+      "state_id": "treg",
+      "description": "TEMPLATE - FOXP3+ regulatory T cell.",
+      "markers": {"required_positive": ["FOXP3"], "supporting": ["IL2RA"], "excluded_by": []},
+      "measured_as": "per_nucleus_call",
+      "panel_key": "TREG_NICHE_TEMPLATE",
+      "morphology_expectation": "TEMPLATE - small round nucleus, scant cytoplasm, nuclear FOXP3 with clear nuclear enrichment over a cytoplasmic reference. FOXP3 is the classic case where a weak cytoplasmic haze passes an intensity threshold and fails a morphology gate; the morphology-primary engine is doing real work here.",
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "state_id": "activated_treg",
+      "description": "TEMPLATE - FOXP3+ IL2RA+ .",
+      "markers": {"required_positive": ["FOXP3", "IL2RA"]},
+      "measured_as": "classification_rule",
+      "panel_key": "TREG_NICHE_TEMPLATE",
+      "morphology_expectation": "TEMPLATE - membranous IL2RA around a FOXP3+ nucleus; IL2RA is also on activated conventional T cells, so the combination matters, not IL2RA alone.",
+      "validation": {"status": "unset", "evidence": "none"}
+    }
+  ],
+
+  "morphology_signature": {
+    "architecture_expectations": [
+      {"feature": "treg_distance_to_damaged_boundary", "expected_direction": "unknown", "scale_um": 50.0, "brightfield_capable": false, "validation": {"status": "unset", "evidence": "none", "notes": "This is a SPATIAL endpoint, not a morphological one, and belongs to the spatial/ module. It is recorded here so the spatial module inherits the model's denominator instead of inventing one."}},
+      {"feature": "lymphoid_aggregate_area", "expected_direction": "increase", "scale_um": 200.0, "brightfield_capable": true, "validation": {"status": "unset", "evidence": "none"}}
+    ],
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "primary_endpoint": {
+    "endpoint_id": "treg_density_in_damaged_parenchyma",
+    "statement": "TEMPLATE - FOXP3+ cells per mm2 of DAMAGED alveolar area. The denominator is inherited unchanged from the base injury model (influenza_pr8 or bleomycin); this profile does not define damage and must not.",
+    "reference": "TEMPLATE - none selected.",
+    "reference_method": "TEMPLATE - most Treg quantification in lung is by flow cytometry on digested tissue, which has no spatial denominator at all. An in-situ density is a different quantity and the two will not agree numerically.",
+    "numerator": {"engine_column": "FOXP3_pos_count", "description": "TEMPLATE - morphology-authoritative per-nucleus positive count. aggregate_to_mouse.py sums <marker>_pos_count and recomputes <marker>_density_per_mm2 (aggregate_to_mouse.py:256-260).", "aggregation": "SUM"},
+    "denominator": {"engine_column": "region_area_um2", "description": "TEMPLATE - scoped to the damaged partition by the base model's Stage 1/Stage 3 configuration.", "aggregation": "SUM", "why_not_total_tissue": "TEMPLATE - Tregs accumulate where there is injury, so a total-tissue denominator makes Treg density a proxy for injury extent."},
+    "region_scope": {"mode": "partitioned_damaged", "endpoint_roi_name": "parenchyma_damaged", "contrast_roi_name": "parenchyma_intact", "substring_contract": "damaged"},
+    "mouse_level_column": "FOXP3_density_per_mm2",
+    "aggregation": {"recompute_from_pooled": true, "path": "TEMPLATE - identical to influenza_pr8: tile rows -> aggregate_tiles_to_slide.py (damaged rows) -> slide row -> aggregate_to_mouse.py -> mouse row. The whole point of inheriting the base model is that this path is byte-for-byte the same."},
+    "depends_on_parameters": ["foxp3_pos_threshold", "foxp3_min_nuclear_enrichment", "panel_key"],
+    "interpretation_limits": [
+      "TEMPLATE - FOXP3 is nuclear and dim; a per-nucleus count is only as good as DAPI segmentation in a dense inflammatory infiltrate, which is where segmentation is worst.",
+      "TEMPLATE - depletion is partial and transient; report per-animal depletion efficiency alongside every endpoint value."
+    ],
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "secondary_endpoints": [],
+
+  "qc_endpoints": [
+    {
+      "endpoint_id": "depletion_efficiency",
+      "statement": "TEMPLATE - FOXP3+ density in DT-treated animals as a fraction of vehicle-treated littermates, per animal. If this is not strongly reduced, the animal is not a depleted animal and must be excluded by a rule declared before unblinding.",
+      "numerator": {"engine_column": "FOXP3_pos_count", "description": "TEMPLATE", "aggregation": "SUM"},
+      "denominator": {"engine_column": "region_area_um2", "description": "TEMPLATE - whole parenchyma, not damaged only, because depletion is systemic.", "aggregation": "SUM", "why_not_total_tissue": "TEMPLATE - total parenchyma IS the right denominator for a systemic depletion check."},
+      "region_scope": {"mode": "whole_region", "endpoint_roi_name": "parenchyma_core", "substring_contract": "none"},
+      "mouse_level_column": "FOXP3_density_per_mm2",
+      "aggregation": {"recompute_from_pooled": true, "path": "TEMPLATE - NOTE: this QC endpoint and the primary endpoint share the SAME mouse-level column name but different region scopes. They therefore cannot come from one aggregate_to_mouse run. Run the aggregator twice on two row-scoped inputs, or partition and read the damaged/intact slide columns; do NOT invent a second column name for the same quantity."},
+      "depends_on_parameters": ["foxp3_pos_threshold"],
+      "interpretation_limits": ["TEMPLATE"],
+      "validation": {"status": "unset", "evidence": "none"}
+    }
+  ],
+
+  "controls": [
+    {
+      "control_id": "dtr_negative_littermate_dt",
+      "kind": "genotype_control",
+      "description": "TEMPLATE - DTR-negative littermates given the identical diphtheria toxin schedule.",
+      "required": true,
+      "genotype_token": "DTR_neg",
+      "condition_token": "DT_d14",
+      "controls_for": ["toxicity of diphtheria toxin itself, which is not negligible and is not a Treg effect"],
+      "does_not_control_for": ["off-target depletion of other Foxp3-expressing cells", "the DTR transgene's own effects in the absence of toxin"],
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "control_id": "dtr_positive_vehicle",
+      "kind": "vehicle",
+      "description": "TEMPLATE - DTR-positive animals given vehicle on the same schedule.",
+      "required": true,
+      "genotype_token": "DTR_pos",
+      "condition_token": "vehicle_d14",
+      "controls_for": ["baseline effects of carrying the DTR transgene", "the FOXP3+ density denominator for depletion efficiency"],
+      "does_not_control_for": ["diphtheria toxin toxicity"],
+      "validation": {"status": "unset", "evidence": "none", "notes": "The two controls above are complementary and BOTH are required. Either alone leaves an uncontrolled arm; this is the standard DTR design error."}
+    },
+    {
+      "control_id": "uninjured_depleted",
+      "kind": "biological_negative",
+      "description": "TEMPLATE - depletion without the base injury.",
+      "required": true,
+      "condition_token": "DT_uninjured",
+      "controls_for": ["whether depletion alone produces the endpoint, independent of injury"],
+      "does_not_control_for": ["interaction between depletion and injury, which is the actual hypothesis"],
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "control_id": "foxp3_secondary_only",
+      "kind": "secondary_only",
+      "description": "TEMPLATE - secondary without primary at identical exposure.",
+      "required": true,
+      "controls_for": ["nuclear-channel background, which is what a dim nuclear TF call is most vulnerable to"],
+      "does_not_control_for": ["primary cross-reactivity with other nuclear antigens"],
+      "validation": {"status": "unset", "evidence": "none"}
+    }
+  ],
+
+  "confounds": [
+    {
+      "confound_id": "depletion_changes_injury_severity",
+      "mechanism": "TEMPLATE - Tregs restrain inflammation, so depletion can worsen the underlying injury. A change in the repair endpoint may be a change in how much injury occurred, exactly as IFN-gamma KO may change viral clearance in influenza_pr8. This is the SAME confound shape and should be recognised as such.",
+      "direction_of_bias": "either",
+      "severity": "interpretation_ending",
+      "orthogonal_assay_required": "The base model's own severity readout (NP staining/qPCR for influenza; Ashcroft/hydroxyproline for bleomycin), measured in every arm.",
+      "blocking": true,
+      "status": "open"
+    },
+    {
+      "confound_id": "partial_transient_depletion",
+      "mechanism": "TEMPLATE - depletion is incomplete and reverses. Animals in the 'depleted' group are a mixture.",
+      "direction_of_bias": "toward_null",
+      "severity": "major",
+      "orthogonal_assay_required": "Per-animal FOXP3+ density with a pre-declared inclusion threshold.",
+      "blocking": true,
+      "status": "open"
+    },
+    {
+      "confound_id": "dim_nuclear_tf_segmentation",
+      "mechanism": "TEMPLATE - FOXP3 is a dim nuclear TF counted per nucleus. In dense inflammatory infiltrate, DAPI segmentation merges and splits nuclei, and the depleted and control arms differ in infiltrate density, so the segmentation error is not the same in the two arms.",
+      "direction_of_bias": "either",
+      "severity": "major",
+      "orthogonal_assay_required": "Manual counts on a blinded subset from BOTH arms, plus reporting the engine's nucleus-candidate acceptance and rejection fractions per arm (aggregate_to_mouse.py:236-254 already pools these).",
+      "blocking": false,
+      "status": "open"
+    }
+  ],
+
+  "compartment_tags": {
+    "meaningful": ["alveolar", "airway", "immune", "stromal"],
+    "not_meaningful": ["tumor"],
+    "forbidden_uses": [
+      "TEMPLATE - do NOT tag a region 'immune' from FOXP3 or IL2RA and then measure Treg density inside it. Circular.",
+      "TEMPLATE - do NOT redefine 'damaged' here. The base injury model owns that definition and its frozen parameters; this profile inherits them unchanged or the two arms are not comparable."
+    ],
+    "roi_naming": {"whole": "parenchyma_core", "endpoint_region": "parenchyma_damaged", "contrast_region": "parenchyma_intact"}
+  },
+
+  "calibration_requirements": [
+    {
+      "requirement_id": "foxp3_call_freeze",
+      "parameter_refs": ["foxp3_pos_threshold", "foxp3_min_nuclear_enrichment", "foxp3_min_positive_fraction"],
+      "must_be_frozen_before": "stage2_batch",
+      "control_set": ["foxp3_secondary_only", "dtr_positive_vehicle"],
+      "selection_rule": "TEMPLATE - declare BEFORE looking. A nuclear TF needs BOTH an intensity threshold and a nuclear-enrichment gate; freezing only the threshold leaves the morphology gate at a pilot default and the call is then half-calibrated. Depleted animals must not be opened during selection - if they were, the threshold would be tuned on the outcome, which is the exact failure this repository has already documented for KRT5 and AGER.",
+      "alpha": null,
+      "procedure_script": "not_written",
+      "held_out": ["every DT-treated DTR-positive animal"],
+      "status": "not_started"
+    },
+    {
+      "requirement_id": "inherit_base_model_damage_freeze",
+      "parameter_refs": ["base_model_ref"],
+      "must_be_frozen_before": "stage1_partition",
+      "control_set": ["dtr_positive_vehicle", "uninjured_depleted"],
+      "selection_rule": "TEMPLATE - do NOT re-derive. Import the base model's frozen damage parameters by profile_version and record that version in provenance. Re-deriving them on this cohort would create a second definition of 'damaged' and the two studies would stop being comparable.",
+      "procedure_script": "tools/model_profile_to_run.py --base-model <id>@<version>",
+      "status": "not_started"
+    }
+  ],
+
+  "parameters": {
+    "base_model_ref": {
+      "value": "influenza_pr8@1.0.0",
+      "units": "none",
+      "consumed_by": {"kind": "downstream", "note": "Resolved by the generator: every parameter of the base model marked endpoint_critical is imported UNCHANGED and its validation record is copied into this run's provenance. A conflicting value in this profile is an error, not an override."},
+      "endpoint_critical": true,
+      "validation": {"status": "placeholder", "evidence": "none", "notes": "This is the mechanism that stops a layered model from forking the endpoint definition. It is the single most important field in this template."}
+    },
+    "panel_key": {"value": "TREG_NICHE_TEMPLATE", "units": "none", "consumed_by": {"kind": "env", "env": "IFQ_PANEL", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "Panel does not exist yet."}},
+    "panel_config_path": {"value": null, "units": "none", "consumed_by": {"kind": "env", "env": "IFQ_PANEL_CONFIG", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "config/README.md:12-14."}},
+    "foxp3_pos_threshold": {"value": null, "units": "raw_uint16_intensity", "consumed_by": {"kind": "env", "env": "IFQ_FOXP3_THRESHOLD", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "none"}},
+    "foxp3_min_nuclear_enrichment": {"value": null, "units": "ratio", "consumed_by": {"kind": "env", "env": "IFQ_FOXP3_MIN_NUCLEAR_ENRICHMENT", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "Only takes effect if FOXP3's resolved morphology rule carries a minNuclearEnrichment key, i.e. if the panel gives it role nuc_marker. With any other role the engine skips this override silently (IF_Quant_Pipeline.groovy:906-908). The generator warns about this."}},
+    "foxp3_min_positive_fraction": {"value": null, "units": "fraction", "consumed_by": {"kind": "env", "env": "IFQ_FOXP3_MIN_POSITIVE_FRACTION", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "Engine nuc_marker pilot default is 0.40 (IF_Quant_Pipeline.groovy:250)."}},
+    "min_included_nuclei": {"value": 0, "units": "count", "consumed_by": {"kind": "env", "env": "IFQ_MIN_INCLUDED_NUCLEI", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "not_applicable", "evidence": "Same mechanical reason as influenza_pr8."}},
+    "genotype_tokens": {"value": "DTR_neg|DTR_pos", "units": "none", "consumed_by": {"kind": "samplesheet", "column": "genotype"}, "endpoint_critical": false, "validation": {"status": "placeholder", "evidence": "none"}},
+    "condition_tokens": {"value": "predepletion|vehicle_d14|DT_d14|DT_d28|DT_uninjured", "units": "none", "consumed_by": {"kind": "samplesheet", "column": "condition"}, "endpoint_critical": false, "validation": {"status": "placeholder", "evidence": "Timepoint AND treatment folded into one condition token, because condition is the only KEY_COL available for either."}}
+  },
+
+  "aggregation_contract": {
+    "statistical_n": "mouse",
+    "key_cols": ["mouse_id", "genotype", "condition", "panel"],
+    "row_id_cols": ["image", "region", "section_id"],
+    "path": ["stage1_wsi_tiles", "stage2_engine", "stage3_tiles_to_slide", "stage4_to_mouse"],
+    "forbidden": [
+      "No model-specific aggregation script.",
+      "No new KEY_COL - both treatment and timepoint live in the condition token.",
+      "No re-derivation of the base model's damage parameters.",
+      "No averaging of region-level fractions or densities."
+    ]
+  },
+
+  "run_plan_hints": {
+    "template_banner": "UNVALIDATED TEMPLATE. Do not run for analysis.",
+    "layering_note": "This is a LAYERED model. Resolve base_model_ref first; the base model owns the denominator and its frozen parameters, and this profile owns only the added arm, its controls, and its confounds."
+  }
+}

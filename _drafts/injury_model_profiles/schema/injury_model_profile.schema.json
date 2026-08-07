@@ -1,0 +1,529 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/xorca0711/IFQuant-Lung/config/injury_model_profile.schema.json",
+  "title": "IFQuant-Lung injury-model profile",
+  "profile_schema_version": "1.0.0",
+  "description": "One experimental model = one contract, agreed BEFORE data collection. A model profile is a SIBLING of lung_marker_registry.json#/research_profiles (disease-area vocabulary) and a WRAPPER over panels (acquisition channel maps). It never redefines a marker and never redefines aggregation. It is consumed by tools/model_profile_to_run.py, which turns it into IFQ_* environment variables, a samplesheet contract, and a run plan. IF_Quant_Pipeline.groovy is not modified and never reads this file.",
+
+  "$comment": "HARD INVARIANTS this schema exists to enforce: (1) aggregate_to_mouse.py KEY_COLS = mouse_id, genotype, condition, panel and ROW_ID_COLS = image, region, section_id (aggregate_to_mouse.py:43-44). A profile MUST NOT introduce a new grouping column; timepoint is encoded inside the `condition` token. (2) aggregate_tiles_to_slide.py:222-228 selects endpoint rows by the literal substring 'damaged' in the `region` column, so a partitioned denominator MUST use ROI names containing 'damaged' / 'intact'. (3) IF_Quant_Pipeline.groovy:2102-2109 derives compartment tags by substring on the ROI name ('alveol', 'airway'|'bronch', 'tumor'|'tumour'|'luad', 'fibrot'|'honeycomb'|'uip', 'strom'|'mesench', 'vascul'|'vessel'|'capillar', 'immune'|'inflamm'|'lymph', 'ambig'). (4) The engine silently ignores an unknown IFQ_* name (envOr falls back, IF_Quant_Pipeline.groovy:114-117), so every emitted variable must be checked against the engine surface by the generator.",
+
+  "type": "object",
+  "required": [
+    "profile_schema", "model_id", "profile_version", "title", "species",
+    "authored", "registry_requirement", "panels", "insult", "timepoints",
+    "cell_states", "morphology_signature", "primary_endpoint", "controls",
+    "confounds", "compartment_tags", "calibration_requirements", "parameters",
+    "aggregation_contract"
+  ],
+  "additionalProperties": false,
+
+  "properties": {
+    "profile_schema": {
+      "const": "injury_model_profile/1.0.0",
+      "description": "Pin. The generator refuses any other value."
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,47}$",
+      "description": "Stable lower_snake identity of the EXPERIMENTAL MODEL, not of a study. e.g. influenza_pr8, bleomycin, kras_mosaic, treg_depletion. Two labs running the same model share this id and therefore share the endpoint definition."
+    },
+    "profile_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "SemVer of THIS profile. MAJOR bump whenever a frozen parameter value, the primary endpoint, or the denominator changes; such a bump invalidates cross-version pooling."
+    },
+    "supersedes": {
+      "type": "array", "items": {"type": "string"},
+      "description": "profile_version strings this replaces, with the reason in `authored.notes`."
+    },
+    "title": {"type": "string", "minLength": 8},
+    "species": {"enum": ["mus_musculus", "homo_sapiens", "rattus_norvegicus", "in_vitro_organoid", "in_vitro_ali"]},
+
+    "authored": {
+      "type": "object",
+      "required": ["author", "date", "lab", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "author": {"type": "string"},
+        "date": {"type": "string", "format": "date"},
+        "lab": {"type": "string"},
+        "reviewers": {"type": "array", "items": {"type": "string"}},
+        "notes": {"type": "string"}
+      }
+    },
+
+    "profile_validation": {
+      "$ref": "#/$defs/validation",
+      "description": "AUTHORED claim about the profile as a whole. The generator RECOMPUTES this as the weakest link over every parameter the primary endpoint depends on and FAILS if the authored status is stronger than the computed one. This is the structural defence against 'pilot placeholder' being read as 'frozen'."
+    },
+
+    "registry_requirement": {
+      "type": "object",
+      "required": ["path_hint", "min_schema_version", "markers_required"],
+      "additionalProperties": false,
+      "properties": {
+        "path_hint": {"type": "string", "description": "Default config/lung_marker_registry.json. Overridable at run time by IFQ_MARKER_REGISTRY."},
+        "min_schema_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+        "markers_required": {
+          "type": "array", "minItems": 1, "items": {"type": "string"},
+          "description": "Canonical registry keys or registry aliases. The generator resolves each through the same normalisation the engine uses (upper-case, strip non-alphanumerics; IF_Quant_Pipeline.groovy:657-683) and fails on any that does not resolve. A profile MUST NOT define a marker; add it to the registry first."
+        },
+        "research_profile_refs": {
+          "type": "array",
+          "items": {"enum": ["acute_injury_regeneration", "ipf_fibrosis", "lung_adenocarcinoma_lineage"]},
+          "description": "Which lung_marker_registry.json#/research_profiles disease areas this model belongs to. Reference only: the engine loads research_profiles but never consumes them (they appear only in the default map at IF_Quant_Pipeline.groovy:661). They give the model its vocabulary; they do not give it parameters."
+        }
+      }
+    },
+
+    "panels": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["panel_key", "source", "role_in_model", "measures_states", "validation"],
+        "additionalProperties": false,
+        "properties": {
+          "panel_key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$", "description": "Must match a built-in key (LEFT, RIGHT, ALI1-3, ALI1_MAP, T, S2, ...) or a key inside the custom panel file. Custom keys cannot shadow built-ins (IF_Quant_Pipeline.groovy:707-709)."},
+          "source": {"enum": ["builtin", "custom_panel_config"]},
+          "panel_config_path_hint": {"type": "string", "description": "Only for source=custom_panel_config. Becomes IFQ_PANEL_CONFIG. Keep the file OUTSIDE the repo (config/README.md:12-14)."},
+          "role_in_model": {"enum": ["primary_endpoint", "companion", "orthogonal_control", "exploratory"]},
+          "measures_states": {"type": "array", "items": {"type": "string"}, "description": "cell_states[].state_id measurable on this panel."},
+          "validation": {"$ref": "#/$defs/validation"}
+        }
+      }
+    },
+
+    "insult": {
+      "type": "object",
+      "required": ["agent", "route", "dose", "vehicle", "validation"],
+      "additionalProperties": false,
+      "properties": {
+        "agent": {"type": "string"},
+        "route": {"type": "string"},
+        "dose": {"$ref": "#/$defs/parameter_value"},
+        "vehicle": {"type": "string"},
+        "severity_readout": {
+          "type": "object",
+          "description": "How infection/injury SEVERITY is measured independently of the imaging endpoint. Required whenever a genotype could alter severity itself; see confounds.",
+          "properties": {
+            "assay": {"type": "string"},
+            "required": {"type": "boolean"},
+            "status": {"$ref": "#/$defs/validation"}
+          }
+        },
+        "validation": {"$ref": "#/$defs/validation"}
+      }
+    },
+
+    "timepoints": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["label", "days_post_insult", "condition_token", "expected", "endpoint_evaluable", "validation"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {"type": "string"},
+          "days_post_insult": {"type": "number", "minimum": 0},
+          "condition_token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_+-]*$",
+            "description": "THE VALUE THAT GOES IN samplesheet.csv `condition`. Timepoint MUST be folded into this token (e.g. PR8_d28), because `condition` is an aggregate_to_mouse.py KEY_COL (aggregate_to_mouse.py:43) and adding a separate timepoint column would fork the grouping. samplesheet_template.csv already documents this convention."
+          },
+          "expected": {"type": "array", "items": {"type": "string"}, "description": "What this timepoint is expected to show, in plain language, written before data."},
+          "endpoint_evaluable": {"type": "boolean", "description": "false = collected but the primary endpoint is not defined there (e.g. pods have not formed yet)."},
+          "validation": {"$ref": "#/$defs/validation"}
+        }
+      }
+    },
+
+    "cell_states": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["state_id", "description", "markers", "measured_as", "validation"],
+        "additionalProperties": false,
+        "properties": {
+          "state_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "description": {"type": "string"},
+          "markers": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "required_positive": {"type": "array", "items": {"type": "string"}},
+              "required_negative": {"type": "array", "items": {"type": "string"}},
+              "supporting": {"type": "array", "items": {"type": "string"}},
+              "excluded_by": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "measured_as": {
+            "enum": ["regional_area", "per_nucleus_call", "classification_rule", "not_measurable_on_current_panels"],
+            "description": "Which engine output family carries this state. regional_area -> <marker>_positive_area_um2 / <marker>_pod_area_um2 (IF_Quant_Pipeline.groovy:2714,2743). per_nucleus_call -> <marker>_pos_count. classification_rule -> class_<...>_count."
+          },
+          "panel_key": {"type": "string"},
+          "morphology_expectation": {"type": "string", "description": "One sentence, feeds the morphometry module and the human reviewer."},
+          "validation": {"$ref": "#/$defs/validation"}
+        }
+      }
+    },
+
+    "morphology_signature": {
+      "type": "object",
+      "description": "Architecture-level expectations for this model. Consumed by the morphometry module (B/A tracks) and by human QC; NOT consumed by the frozen engine.",
+      "required": ["architecture_expectations", "validation"],
+      "additionalProperties": false,
+      "properties": {
+        "architecture_expectations": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["feature", "expected_direction", "scale_um", "validation"],
+            "additionalProperties": false,
+            "properties": {
+              "feature": {"type": "string", "description": "e.g. alveolar_septal_thickness, airspace_mean_linear_intercept, pod_compactness, collagen_band_width"},
+              "expected_direction": {"enum": ["increase", "decrease", "unchanged", "unknown"]},
+              "scale_um": {"type": "number", "exclusiveMinimum": 0, "description": "Characteristic length scale at which the feature is defined; also the scale a morphometry filter must operate at."},
+              "brightfield_capable": {"type": "boolean"},
+              "validation": {"$ref": "#/$defs/validation"}
+            }
+          }
+        },
+        "validation": {"$ref": "#/$defs/validation"}
+      }
+    },
+
+    "primary_endpoint": {"$ref": "#/$defs/endpoint"},
+    "secondary_endpoints": {"type": "array", "items": {"$ref": "#/$defs/endpoint"}},
+    "qc_endpoints": {
+      "type": "array",
+      "description": "Readouts that must be inspected before the primary endpoint is believed. They are NOT hypotheses.",
+      "items": {"$ref": "#/$defs/endpoint"}
+    },
+
+    "controls": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["control_id", "kind", "required", "controls_for", "does_not_control_for", "validation"],
+        "additionalProperties": false,
+        "properties": {
+          "control_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "kind": {"enum": ["biological_negative", "biological_positive", "genotype_control", "vehicle", "secondary_only", "isotype", "unstained_autofluorescence", "internal_tissue", "technical_replicate"]},
+          "description": {"type": "string"},
+          "required": {"type": "boolean"},
+          "condition_token": {"type": "string", "description": "samplesheet `condition` value for this control arm, if it is an animal arm."},
+          "genotype_token": {"type": "string", "description": "samplesheet `genotype` value for this control arm, if it is an animal arm."},
+          "controls_for": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "does_not_control_for": {
+            "type": "array", "minItems": 1, "items": {"type": "string"},
+            "description": "MANDATORY and non-empty. Every control has a blind spot; writing it down before data is the point of this field."
+          },
+          "validation": {"$ref": "#/$defs/validation"}
+        }
+      }
+    },
+
+    "confounds": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["confound_id", "mechanism", "direction_of_bias", "severity", "orthogonal_assay_required", "blocking", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "confound_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "mechanism": {"type": "string"},
+          "direction_of_bias": {"enum": ["toward_hypothesis", "toward_null", "either", "unknown"]},
+          "severity": {"enum": ["interpretation_ending", "major", "moderate", "minor"]},
+          "orthogonal_assay_required": {"type": "string", "description": "The non-imaging measurement that resolves it. 'none' only if genuinely none is needed."},
+          "blocking": {"type": "boolean", "description": "true = the primary endpoint may not be reported as a group comparison until the orthogonal assay exists. The generator prints this in the run plan and stamps it into provenance."},
+          "status": {"enum": ["open", "assay_planned", "assay_done_unresolved", "resolved", "not_applicable"]},
+          "resolution_evidence": {"type": "string"}
+        }
+      }
+    },
+
+    "compartment_tags": {
+      "type": "object",
+      "required": ["meaningful", "not_meaningful", "forbidden_uses"],
+      "additionalProperties": false,
+      "properties": {
+        "meaningful": {
+          "type": "array", "minItems": 1,
+          "items": {"enum": ["airway", "alveolar", "tumor", "fibrotic", "stromal", "vascular", "immune", "ambiguous", "unassigned"]},
+          "description": "Tags the engine can derive by ROI-name substring (IF_Quant_Pipeline.groovy:2102-2109) that carry meaning in THIS model."
+        },
+        "not_meaningful": {"type": "array", "items": {"type": "string"}},
+        "forbidden_uses": {
+          "type": "array", "minItems": 1,
+          "items": {"type": "string"},
+          "description": "Named analysis mistakes specific to this model. E.g. for influenza: 'do not use AGER-negativity to detect airway' (docs/ECTOPIC_POD_ENDPOINT.md:59-74)."
+        },
+        "roi_naming": {
+          "type": "object",
+          "description": "The literal ROI names Stage 1 must write. These strings are load-bearing twice over: the engine tags compartments by substring, and aggregate_tiles_to_slide.py:225-228 selects endpoint rows by the substring 'damaged'.",
+          "properties": {
+            "whole": {"type": "string"},
+            "endpoint_region": {"type": "string"},
+            "contrast_region": {"type": "string"}
+          }
+        }
+      }
+    },
+
+    "calibration_requirements": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["requirement_id", "parameter_refs", "must_be_frozen_before", "control_set", "selection_rule", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "requirement_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "parameter_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}, "description": "Keys in /parameters that this requirement freezes."},
+          "must_be_frozen_before": {"enum": ["stage1_partition", "stage2_batch", "any_confirmatory_run", "unblinding"]},
+          "control_set": {"type": "array", "minItems": 1, "items": {"type": "string"}, "description": "control_id values, or explicit specimen ids, that the procedure is allowed to open. Anything not listed here must never be read during selection."},
+          "selection_rule": {"type": "string", "description": "Declared BEFORE any number is read. Objective + constraint + tie-break."},
+          "alpha": {"type": ["number", "null"], "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "null = the specificity target has not been declared yet. Declaring it is part of writing the selection_rule, and it must be declared BEFORE any number is read."},
+          "procedure_script": {"type": "string", "description": "Repo path of the script that performs it, so the freeze is reproducible."},
+          "held_out": {"type": "array", "items": {"type": "string"}, "description": "Specimens the procedure must NOT open. Reading them turns a freeze into a tuning."},
+          "status": {"enum": ["not_started", "in_progress", "frozen", "superseded"]},
+          "frozen_on": {"type": "string", "format": "date"}
+        }
+      }
+    },
+
+    "parameters": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "The single source of truth for every number in a run. Nobody hand-types a threshold; the generator reads only this block.",
+      "additionalProperties": {"$ref": "#/$defs/parameter"}
+    },
+
+    "aggregation_contract": {
+      "type": "object",
+      "required": ["statistical_n", "key_cols", "row_id_cols", "path", "forbidden"],
+      "additionalProperties": false,
+      "properties": {
+        "statistical_n": {"const": "mouse", "description": "Fixed. aggregate_to_mouse.py is the only path to group statistics."},
+        "key_cols": {
+          "type": "array",
+          "items": {"enum": ["mouse_id", "genotype", "condition", "panel"]},
+          "minItems": 4, "maxItems": 4,
+          "description": "Must equal aggregate_to_mouse.py KEY_COLS exactly (line 43). Listed here so a profile that wants a fifth grouping axis fails schema validation instead of forking the aggregator."
+        },
+        "row_id_cols": {
+          "type": "array",
+          "items": {"enum": ["image", "region", "section_id"]},
+          "minItems": 3, "maxItems": 3
+        },
+        "path": {
+          "type": "array", "minItems": 1,
+          "items": {"enum": ["stage1_wsi_tiles", "stage2_engine", "stage3_tiles_to_slide", "stage4_to_mouse", "field_direct_to_mouse"]},
+          "description": "Which stages this model traverses. Every path must terminate in stage4_to_mouse."
+        },
+        "forbidden": {
+          "type": "array", "minItems": 1, "items": {"type": "string"},
+          "description": "Explicit list of things this model promises not to do, e.g. 'no model-specific aggregation script', 'no averaging of region-level fractions'."
+        }
+      }
+    },
+
+    "run_plan_hints": {
+      "type": "object",
+      "description": "Non-parameter run guidance the generator copies into run_plan.md verbatim.",
+      "additionalProperties": {"type": "string"}
+    }
+  },
+
+  "$defs": {
+
+    "validation_status": {
+      "type": "string",
+      "enum": [
+        "unset",
+        "placeholder",
+        "literature",
+        "pilot_tuned",
+        "control_derived",
+        "frozen_blinded_controls",
+        "held_out_readout",
+        "not_applicable"
+      ],
+      "description": "ORDERED ladder. unset(0) < placeholder(0) < literature(1) < pilot_tuned(1) < control_derived(2) < frozen_blinded_controls(3). held_out_readout and not_applicable sit outside the ladder: held_out_readout labels a RESULT produced by frozen parameters (never a parameter itself); not_applicable labels a field with no empirical content. Only frozen_blinded_controls is admissible for a confirmatory run. pilot_tuned explicitly means 'chosen by looking at the outcome' - it is weaker than control_derived, not stronger, no matter how much data went into it."
+    },
+
+    "validation": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"$ref": "#/$defs/validation_status"},
+        "evidence": {"type": "string", "minLength": 3, "description": "Where the claim comes from: repo path + section, script name, DOI, or the literal word 'none' for a placeholder. 'none' is legal and honest; an empty string is not."},
+        "derived_from": {"type": "array", "items": {"type": "string"}, "description": "Specimen / control ids actually opened."},
+        "never_opened": {"type": "array", "items": {"type": "string"}, "description": "Specimens deliberately held out. Populating this is what distinguishes control_derived from pilot_tuned."},
+        "date": {"type": "string", "format": "date"},
+        "procedure": {"type": "string"},
+        "blinded": {"type": "boolean"},
+        "expires_after": {"type": "string", "description": "Condition that invalidates the value, e.g. 'new antibody lot', 'exposure change', 'objective change'."},
+        "superseded_value": {"description": "The previous value, kept so a silent re-tune is visible in diff."},
+        "notes": {"type": "string"}
+      }
+    },
+
+    "parameter_value": {
+      "type": "object",
+      "required": ["value", "units", "validation"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {"type": ["number", "string", "boolean", "null"]},
+        "units": {"type": "string", "description": "Use 'dimensionless', 'count', or 'none' rather than omitting."},
+        "validation": {"$ref": "#/$defs/validation"},
+        "notes": {"type": "string"}
+      }
+    },
+
+    "parameter": {
+      "type": "object",
+      "required": ["value", "units", "consumed_by", "validation"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {"type": ["number", "string", "boolean", "null"], "description": "null = deliberately unset; the generator then refuses to emit the variable at all rather than emitting an empty string (an empty IFQ_* is treated as absent by envOr, which would silently fall back to a pilot default)."},
+        "units": {"type": "string"},
+        "consumed_by": {
+          "type": "object",
+          "required": ["kind"],
+          "description": "How this parameter reaches the software. THIS is the whole no-hand-typing mechanism.",
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {"const": "env"},
+                "env": {"type": "string", "pattern": "^IFQ_[A-Z0-9_]+$"},
+                "stage": {"enum": ["stage1", "stage2"]}
+              },
+              "required": ["kind", "env", "stage"],
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "kind": {"const": "samplesheet"},
+                "column": {"enum": ["mouse_id", "section_id", "genotype", "condition", "panel", "relative_path", "filename"]}
+              },
+              "required": ["kind", "column"],
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "kind": {"const": "panel_config"},
+                "panel_key": {"type": "string"},
+                "marker": {"type": "string"},
+                "field": {"type": "string"}
+              },
+              "required": ["kind", "panel_key", "marker", "field"],
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "kind": {"const": "wetlab"},
+                "note": {"type": "string"}
+              },
+              "required": ["kind"],
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "kind": {"const": "downstream"},
+                "note": {"type": "string"}
+              },
+              "required": ["kind"],
+              "additionalProperties": false,
+              "description": "Used by a post-engine module (morphometry / spatial / registration) or by the human, not by the engine."
+            }
+          ]
+        },
+        "endpoint_critical": {
+          "type": "boolean",
+          "default": false,
+          "description": "true = the primary endpoint's value changes if this parameter changes. The generator computes the profile's effective status as the WEAKEST status among endpoint_critical parameters, and blocks a confirmatory run unless every one of them is frozen_blinded_controls."
+        },
+        "shared_definition": {
+          "type": "boolean",
+          "default": false,
+          "description": "true = this parameter is part of the DENOMINATOR DEFINITION that other models may inherit through base_model_ref. Only mark parameters whose meaning is panel-independent and endpoint-independent (e.g. the damage-detector operating point and the load-bearing ROI names) - never a numerator threshold or a panel key, which belong to one specific endpoint. A layered profile imports exactly the shared_definition set and MAY NOT override any of it; a differing value is an error, not a preference. This is what stops a layered model from growing a second definition of 'damaged'."
+        },
+        "not_yet_implemented": {
+          "type": "object",
+          "required": ["reason", "tracked_by_confound"],
+          "additionalProperties": false,
+          "description": "ESCAPE HATCH, deliberately expensive. Declares that this parameter is part of the endpoint AS DEFINED but no code path currently applies it, so it cannot hold a real value yet. Such a parameter is skipped in the weakest-link computation for tier dry/exploratory (otherwise no pilot could ever run) but is an unconditional BLOCKER for tier confirmatory. The escape hatch is not free: it must name a confound that carries the resulting risk, and the generator verifies that the confound exists, has blocking=true, and is not marked resolved. You cannot mute a parameter without leaving a visible, blocking record of why.",
+          "properties": {
+            "reason": {"type": "string", "minLength": 10},
+            "tracked_by_confound": {"type": "string", "description": "confound_id in /confounds. Must have blocking=true and status != 'resolved'."}
+          }
+        },
+        "validation": {"$ref": "#/$defs/validation"},
+        "notes": {"type": "string"}
+      }
+    },
+
+    "endpoint": {
+      "type": "object",
+      "required": ["endpoint_id", "statement", "numerator", "denominator", "region_scope", "mouse_level_column", "aggregation", "validation"],
+      "additionalProperties": false,
+      "properties": {
+        "endpoint_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+        "statement": {"type": "string", "minLength": 10, "description": "Plain-English definition INCLUDING the denominator. If you cannot state the denominator you do not have an endpoint."},
+        "reference": {"type": "string", "description": "Citation for the endpoint definition, if it has one."},
+        "reference_method": {"type": "string", "description": "How the reference measured it, e.g. 'manual outline spline'. Determines what ground truth an automated version must be validated against."},
+        "numerator": {
+          "type": "object",
+          "required": ["engine_column", "description"],
+          "additionalProperties": false,
+          "properties": {
+            "engine_column": {"type": "string", "description": "Exact run_summary.csv column, e.g. KRT5_pod_area_um2 (IF_Quant_Pipeline.groovy:2743). Must be a column aggregate_to_mouse.py SUMS."},
+            "description": {"type": "string"},
+            "aggregation": {"enum": ["SUM"], "default": "SUM"}
+          }
+        },
+        "denominator": {
+          "type": "object",
+          "required": ["engine_column", "description"],
+          "additionalProperties": false,
+          "properties": {
+            "engine_column": {"type": "string", "description": "Exact run_summary.csv column, normally region_area_um2, whose SCOPE is set by region_scope below."},
+            "description": {"type": "string"},
+            "aggregation": {"enum": ["SUM"], "default": "SUM"},
+            "why_not_total_tissue": {"type": "string", "description": "Required in spirit for any injury model: a total-tissue denominator usually measures insult severity rather than the biology of interest."}
+          }
+        },
+        "region_scope": {
+          "type": "object",
+          "required": ["mode"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": ["whole_region", "partitioned_damaged", "partitioned_named"],
+              "description": "whole_region = one ROI per tile, denominator is all of it. partitioned_damaged = Stage 1 writes two ROIs and aggregate_tiles_to_slide.py:225-228 keeps the 'damaged' rows as the endpoint rows. partitioned_named = same mechanism, other names - REQUIRES a Stage 3 generalisation and MUST NOT be implemented as a model-specific branch."
+            },
+            "endpoint_roi_name": {"type": "string"},
+            "contrast_roi_name": {"type": "string"},
+            "substring_contract": {"type": "string", "description": "The literal substring Stage 3 matches on. For partitioned_damaged this must be 'damaged'."}
+          }
+        },
+        "mouse_level_column": {
+          "type": "string",
+          "description": "The column aggregate_to_mouse.py will emit and that group statistics are run on, e.g. KRT5_pod_area_frac (aggregate_to_mouse.py:330). If the endpoint cannot be named as an existing aggregate_to_mouse output column, the endpoint is not yet expressible and must not be run."
+        },
+        "aggregation": {
+          "type": "object",
+          "required": ["recompute_from_pooled", "path"],
+          "additionalProperties": false,
+          "properties": {
+            "recompute_from_pooled": {"const": true, "description": "Fixed. Fractions are recomputed from pooled numerators and denominators; region-level fractions are never averaged."},
+            "path": {"type": "string", "description": "Human-readable chain, e.g. 'tile rows -> aggregate_tiles_to_slide.py (damaged rows only) -> slide row -> aggregate_to_mouse.py -> mouse row'."}
+          }
+        },
+        "depends_on_parameters": {"type": "array", "items": {"type": "string"}, "description": "Keys in /parameters. Used by the generator to compute the endpoint's effective validation status."},
+        "interpretation_limits": {"type": "array", "items": {"type": "string"}},
+        "validation": {"$ref": "#/$defs/validation"}
+      }
+    }
+  }
+}

@@ -1,0 +1,258 @@
+{
+  "profile_schema": "injury_model_profile/1.0.0",
+  "model_id": "kras_mosaic",
+  "profile_version": "0.0.1",
+  "title": "UNVALIDATED TEMPLATE - Mosaic KrasG12D lineage-reporter lung adenocarcinoma initiation (mouse)",
+  "species": "mus_musculus",
+
+  "authored": {
+    "author": "IFQuant-Lung config track (D)",
+    "date": "2026-08-07",
+    "lab": "Lung stem cell / tumour group",
+    "notes": "*** UNVALIDATED TEMPLATE. NOT AN ESTABLISHED PROFILE. *** Every numeric parameter is null or an explicit placeholder. The one thing this file is FOR is fixing the denominator argument before anyone images: in a mosaic model the natural denominator is the RECOMBINED (reporter+) compartment, not total tissue, because recombination efficiency varies between animals and total-tissue normalisation turns a tamoxifen-dose difference into a phenotype."
+  },
+
+  "profile_validation": {"status": "unset", "evidence": "none", "notes": "TEMPLATE. 'unset' is the only honest value: no endpoint-critical parameter has a measured value, so the profile cannot claim any rung of the ladder. The generator recomputes this and would reject anything stronger."},
+
+  "registry_requirement": {
+    "path_hint": "config/lung_marker_registry.json",
+    "min_schema_version": "1.3.0",
+    "markers_required": ["DAPI", "RED2_KRAS_G12D_RFP", "MKI67", "SOX9", "NKX2-1", "NAPSA", "EPCAM", "SFTPC", "KRT8", "TDTOMATO"],
+    "research_profile_refs": ["lung_adenocarcinoma_lineage"]
+  },
+
+  "panels": [
+    {
+      "panel_key": "RED2KRAS_PROLIFERATION",
+      "source": "custom_panel_config",
+      "panel_config_path_hint": "<study-owned copy of config/custom_panels.example.json, OUTSIDE the repo>",
+      "role_in_model": "primary_endpoint",
+      "measures_states": ["mutant_clone", "proliferating_mutant_cell"],
+      "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json:90-103. Its own notes say 'The Red2Kras and MUC5AC areaMinAreaUm2 values are placeholder examples and must be validated for the acquisition resolution, section thickness, and biological endpoint.'"}
+    },
+    {
+      "panel_key": "LUAD_LINEAGE",
+      "source": "custom_panel_config",
+      "panel_config_path_hint": "<study-owned copy>",
+      "role_in_model": "companion",
+      "measures_states": ["luad_lineage_support"],
+      "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json:104-116."}
+    }
+  ],
+
+  "insult": {
+    "agent": "Cre-mediated mosaic activation of KrasG12D with a lineage reporter (e.g. Red2 multicolour reporter)",
+    "route": "TEMPLATE - intratracheal or intranasal Cre-adenovirus/lentivirus, or tamoxifen for a CreERT2 allele. These are NOT the same model: viral Cre targets whichever cells the virus reaches, tamoxifen targets whichever cells carry the driver.",
+    "dose": {"value": null, "units": "PFU_or_mg_per_kg", "validation": {"status": "unset", "evidence": "none"}},
+    "vehicle": "TEMPLATE",
+    "severity_readout": {
+      "assay": "TEMPLATE - recombination efficiency itself: reporter+ area or reporter+ cell count per mm2 in a NON-tumour region, measured on the same section.",
+      "required": true,
+      "status": {"status": "unset", "evidence": "none", "notes": "In a mosaic model this is the equivalent of the influenza NP assay. Without it, an animal that recombined twice as many cells looks like an animal with twice the tumour propensity."}
+    },
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "timepoints": [
+    {"label": "d0_uninduced", "days_post_insult": 0, "condition_token": "uninduced", "expected": ["TEMPLATE - reporter-negative or leaky-only; this is where reporter leakiness is quantified"], "endpoint_evaluable": false, "validation": {"status": "unset", "evidence": "none"}},
+    {"label": "wk4_hyperplasia", "days_post_insult": 28, "condition_token": "KRAS_wk04", "expected": ["TEMPLATE - scattered reporter+ clones, atypical adenomatous hyperplasia, few discrete lesions"], "endpoint_evaluable": true, "validation": {"status": "unset", "evidence": "none"}},
+    {"label": "wk12_adenoma", "days_post_insult": 84, "condition_token": "KRAS_wk12", "expected": ["TEMPLATE - discrete adenomas; SOX9 and proliferation heterogeneity between clones is usually the question"], "endpoint_evaluable": true, "validation": {"status": "unset", "evidence": "none"}}
+  ],
+
+  "cell_states": [
+    {
+      "state_id": "mutant_clone",
+      "description": "TEMPLATE - reporter+ recombined epithelium carrying the activated Kras allele.",
+      "markers": {"required_positive": ["RED2_KRAS_G12D_RFP"], "supporting": ["EPCAM", "NKX2-1"]},
+      "measured_as": "regional_area",
+      "panel_key": "RED2KRAS_PROLIFERATION",
+      "morphology_expectation": "TEMPLATE - clonal patches, contiguous, with a size distribution that is the actual readout of clonal expansion.",
+      "validation": {"status": "unset", "evidence": "lung_marker_registry.json markers.KRAS caveat (via docs/UNIVERSAL_MARKER_CONFIGURATION.md:77): pan-KRAS staining cannot establish a mutation or an allele; mutant-specific claims require allele-specific validation against genotyping. The REPORTER, not the KRAS stain, is what marks recombination."}
+    },
+    {
+      "state_id": "proliferating_mutant_cell",
+      "description": "TEMPLATE - reporter+ MKI67+ nucleus.",
+      "markers": {"required_positive": ["RED2_KRAS_G12D_RFP", "MKI67"]},
+      "measured_as": "classification_rule",
+      "panel_key": "RED2KRAS_PROLIFERATION",
+      "morphology_expectation": "TEMPLATE - nuclear MKI67 with nuclear enrichment; the engine's MKI67 rule uses minFraction 0.10, minLargestShare 0.30, minNuclearEnrichment 1.25 (IF_Quant_Pipeline.groovy:268) as PILOT defaults, not validated values.",
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "state_id": "luad_lineage_support",
+      "description": "TEMPLATE - NKX2-1+/NAPSA+ pulmonary glandular lineage pattern.",
+      "markers": {"required_positive": ["NKX2-1", "NAPSA"], "supporting": ["EPCAM", "KRT7"]},
+      "measured_as": "classification_rule",
+      "panel_key": "LUAD_LINEAGE",
+      "morphology_expectation": "TEMPLATE - glandular/papillary architecture; architecture is what distinguishes adenoma from adenocarcinoma and no marker does it.",
+      "validation": {"status": "unset", "evidence": "lung_marker_registry.json research_profiles.lung_adenocarcinoma_lineage.caveat: the pipeline quantifies marker patterns; it does not diagnose malignancy or determine tumour origin."}
+    }
+  ],
+
+  "morphology_signature": {
+    "architecture_expectations": [
+      {"feature": "clone_area_size_distribution", "expected_direction": "increase", "scale_um": 100.0, "brightfield_capable": false, "validation": {"status": "placeholder", "evidence": "none", "notes": "The DISTRIBUTION is the endpoint, not the mean. A model that doubles the number of small clones and a model that doubles the size of a few clones give the same mean area and mean different biology."}},
+      {"feature": "lesion_boundary_sharpness", "expected_direction": "unknown", "scale_um": 20.0, "brightfield_capable": true, "validation": {"status": "unset", "evidence": "none"}},
+      {"feature": "alveolar_architecture_effacement", "expected_direction": "increase", "scale_um": 40.0, "brightfield_capable": true, "validation": {"status": "unset", "evidence": "none"}}
+    ],
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "primary_endpoint": {
+    "endpoint_id": "mutant_clone_area_fraction_of_recombined",
+    "statement": "TEMPLATE - reporter+ lesion area divided by TOTAL RECOMBINED (reporter+) area on the same section. The denominator is deliberately the recombined compartment, not total tissue: recombination efficiency varies severalfold between animals, so a total-tissue denominator makes a tamoxifen or titre difference look like a tumour-propensity difference. This is the same logical move as normalising influenza pods to damaged rather than total area.",
+    "reference": "TEMPLATE - none selected.",
+    "reference_method": "TEMPLATE - most published mosaic-Kras quantification is lesion COUNT per section or lesion burden by H&E area; an IF reporter-area fraction is a different quantity.",
+    "numerator": {"engine_column": "RED2_KRAS_G12D_RFP_pod_area_um2", "description": "TEMPLATE - requires areaMode 'pod' (or a lesion-size filter) rather than the example's areaMode 'reporter'; the distinction between 'any recombined pixel' and 'a lesion' IS the endpoint and must be a declared size/shape rule, not an accident of areaMinAreaUm2.", "aggregation": "SUM"},
+    "denominator": {"engine_column": "RED2_KRAS_G12D_RFP_positive_area_um2", "description": "TEMPLATE - all reporter+ area, lesion or not.", "aggregation": "SUM", "why_not_total_tissue": "Total tissue normalisation confounds tumour propensity with recombination efficiency."},
+    "region_scope": {"mode": "whole_region", "endpoint_roi_name": "parenchyma_core", "substring_contract": "none"},
+    "mouse_level_column": "TEMPLATE_NOT_YET_EXPRESSIBLE",
+    "aggregation": {"recompute_from_pooled": true, "path": "TEMPLATE - PROBLEM TO SOLVE BEFORE RUNNING: aggregate_to_mouse.py recomputes <marker>_positive_area_fraction against region_area_um2 and <marker>_pod_area_frac against region_area_um2 (aggregate_to_mouse.py:320,330). It does NOT compute a marker-over-marker ratio. Two legitimate options: (a) report BOTH pooled totals per mouse and form the ratio in the stats step from mouse_level_summary.csv columns RED2_KRAS_G12D_RFP_pod_area_um2_total and RED2_KRAS_G12D_RFP_positive_area_um2_total - both already exist and are SUMS, so no aggregator change is needed and no forking occurs; or (b) add ONE generic marker-over-marker ratio rule to aggregate_to_mouse.py that every model can use. Option (a) requires no change and is the default. Option (b) must be a single generic rule, never a kras-specific branch."},
+    "depends_on_parameters": ["reporter_pos_threshold", "lesion_min_area_um2", "panel_key"],
+    "interpretation_limits": [
+      "TEMPLATE - reporter+ does not prove the Kras allele recombined; reporter and allele recombine independently at some rate. State the assumed concordance or measure it.",
+      "TEMPLATE - a marker pattern is not a diagnosis of malignancy."
+    ],
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "secondary_endpoints": [],
+
+  "qc_endpoints": [
+    {
+      "endpoint_id": "reporter_leakiness",
+      "statement": "TEMPLATE - reporter+ area fraction in UNINDUCED animals. This is the false-positive floor of the entire model.",
+      "numerator": {"engine_column": "RED2_KRAS_G12D_RFP_positive_area_um2", "description": "TEMPLATE", "aggregation": "SUM"},
+      "denominator": {"engine_column": "region_area_um2", "description": "TEMPLATE", "aggregation": "SUM", "why_not_total_tissue": "TEMPLATE - total tissue IS correct here; leakiness is per unit lung."},
+      "region_scope": {"mode": "whole_region", "endpoint_roi_name": "parenchyma_core", "substring_contract": "none"},
+      "mouse_level_column": "RED2_KRAS_G12D_RFP_positive_area_fraction",
+      "aggregation": {"recompute_from_pooled": true, "path": "TEMPLATE"},
+      "depends_on_parameters": ["reporter_pos_threshold"],
+      "interpretation_limits": ["TEMPLATE - a bright reporter with a low threshold reads leaky; this endpoint is the threshold's own specificity test."],
+      "validation": {"status": "unset", "evidence": "none"}
+    }
+  ],
+
+  "controls": [
+    {
+      "control_id": "uninduced_reporter",
+      "kind": "biological_negative",
+      "description": "TEMPLATE - reporter allele present, no Cre induction.",
+      "required": true,
+      "condition_token": "uninduced",
+      "controls_for": ["reporter leakiness", "the reporter-channel threshold's false-positive rate"],
+      "does_not_control_for": ["antibody-independent autofluorescence in the reporter band from an induced, inflamed lung", "whether reporter+ implies Kras-recombined"],
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "control_id": "cre_only_no_kras",
+      "kind": "genotype_control",
+      "description": "TEMPLATE - Cre and reporter without the KrasG12D allele.",
+      "required": true,
+      "genotype_token": "reporter_only",
+      "controls_for": ["everything the recombination itself does, separated from what the oncogene does"],
+      "does_not_control_for": ["differences in recombination efficiency between the two lines"],
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "control_id": "unstained_autofluorescence",
+      "kind": "unstained_autofluorescence",
+      "description": "TEMPLATE - unstained section imaged at identical exposures.",
+      "required": true,
+      "controls_for": ["the autofluorescence floor in the reporter band, which is a genetically encoded fluorophore with no antibody amplification and therefore often close to that floor"],
+      "does_not_control_for": ["reporter photobleaching during storage"],
+      "validation": {"status": "unset", "evidence": "none"}
+    }
+  ],
+
+  "confounds": [
+    {
+      "confound_id": "recombination_efficiency_varies",
+      "mechanism": "TEMPLATE - tamoxifen dose, viral titre, and delivery all change how many cells recombine. Tumour burden per lung scales with that, independent of any genotype effect on tumour biology.",
+      "direction_of_bias": "either",
+      "severity": "interpretation_ending",
+      "orthogonal_assay_required": "Reporter+ area in non-lesional tissue on the same section, as the denominator.",
+      "blocking": true,
+      "status": "open"
+    },
+    {
+      "confound_id": "reporter_does_not_equal_allele",
+      "mechanism": "TEMPLATE - reporter and KrasG12D recombine independently; reporter+ cells are not all Kras-mutant, and Kras-mutant cells are not all reporter+.",
+      "direction_of_bias": "toward_null",
+      "severity": "major",
+      "orthogonal_assay_required": "Allele-specific genotyping or a mutant-specific stain on sorted or microdissected material.",
+      "blocking": false,
+      "status": "open"
+    },
+    {
+      "confound_id": "endogenous_reporter_band_autofluorescence",
+      "mechanism": "TEMPLATE - a genetically encoded fluorophore has no antibody amplification, so its signal-to-autofluorescence margin is much smaller than an immunostained marker's. custom_panels.example.json already applies thresholdSensitivity 0.60 to tdTOM channels as an acknowledgement of this.",
+      "direction_of_bias": "toward_hypothesis",
+      "severity": "major",
+      "orthogonal_assay_required": "Unstained control at identical exposure.",
+      "blocking": false,
+      "status": "open"
+    }
+  ],
+
+  "compartment_tags": {
+    "meaningful": ["alveolar", "airway", "tumor", "stromal"],
+    "not_meaningful": ["fibrotic"],
+    "forbidden_uses": [
+      "TEMPLATE - do NOT tag a region 'tumor' using the reporter channel and then measure reporter area inside that tag. Circular. Tumour geography must come from architecture (DAPI density, brightfield H&E via the registration module) or from a human.",
+      "TEMPLATE - do NOT treat NKX2-1/NAPSA positivity as a malignancy call."
+    ],
+    "roi_naming": {"whole": "parenchyma_core", "endpoint_region": "parenchyma_core", "contrast_region": ""}
+  },
+
+  "calibration_requirements": [
+    {
+      "requirement_id": "reporter_threshold_freeze",
+      "parameter_refs": ["reporter_pos_threshold"],
+      "must_be_frozen_before": "stage2_batch",
+      "control_set": ["uninduced_reporter", "unstained_autofluorescence"],
+      "selection_rule": "TEMPLATE - declare BEFORE looking. Suggested: smallest threshold whose reporter+ area fraction in UNINDUCED lung is <= alpha, worst-of-all-control-animals. Induced animals must not be opened.",
+      "alpha": null,
+      "procedure_script": "not_written",
+      "held_out": ["every induced animal"],
+      "status": "not_started"
+    },
+    {
+      "requirement_id": "lesion_size_rule",
+      "parameter_refs": ["lesion_min_area_um2"],
+      "must_be_frozen_before": "any_confirmatory_run",
+      "control_set": ["cre_only_no_kras"],
+      "selection_rule": "TEMPLATE - what size makes a reporter+ patch a LESION rather than a recombined single cell? Fix on the Cre-only arm, where by definition no lesions exist, then apply unchanged.",
+      "procedure_script": "not_written",
+      "status": "not_started"
+    }
+  ],
+
+  "parameters": {
+    "panel_key": {"value": "RED2KRAS_PROLIFERATION", "units": "none", "consumed_by": {"kind": "env", "env": "IFQ_PANEL", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json is an EXAMPLE panel; idx values must match acquisition."}},
+    "panel_config_path": {"value": null, "units": "none", "consumed_by": {"kind": "env", "env": "IFQ_PANEL_CONFIG", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "config/README.md:12-14."}},
+    "reporter_pos_threshold": {"value": null, "units": "raw_uint16_intensity", "consumed_by": {"kind": "env", "env": "IFQ_RED2KRASG12DRFP_THRESHOLD", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "The env name is the engine's normalised token for RED2_KRAS_G12D_RFP: upper-case and strip every non-alphanumeric (IF_Quant_Pipeline.groovy:194, 877-880). Getting this string wrong is silent - envOr just falls back and the run goes adaptive."}},
+    "mki67_pos_threshold": {"value": null, "units": "raw_uint16_intensity", "consumed_by": {"kind": "env", "env": "IFQ_MKI67_THRESHOLD", "stage": "stage2"}, "endpoint_critical": false, "validation": {"status": "unset", "evidence": "Applies to the alias 'Ki-67' as well: a canonical threshold propagates to registry aliases (IF_Quant_Pipeline.groovy:881-886)."}},
+    "mki67_min_nuclear_enrichment": {"value": null, "units": "ratio", "consumed_by": {"kind": "env", "env": "IFQ_MKI67_MIN_NUCLEAR_ENRICHMENT", "stage": "stage2"}, "endpoint_critical": false, "validation": {"status": "placeholder", "evidence": "Engine pilot default 1.25 (IF_Quant_Pipeline.groovy:268). Only settable because the MKI67 rule already carries a minNuclearEnrichment key; the env override is skipped for rules that do not (IF_Quant_Pipeline.groovy:906-911)."}},
+    "lesion_min_area_um2": {"value": null, "units": "um2", "consumed_by": {"kind": "panel_config", "panel_key": "RED2KRAS_PROLIFERATION", "marker": "Red2Kras", "field": "areaMinAreaUm2"}, "endpoint_critical": true, "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json uses 8.0 as an explicitly flagged placeholder."}},
+    "min_included_nuclei": {"value": 0, "units": "count", "consumed_by": {"kind": "env", "env": "IFQ_MIN_INCLUDED_NUCLEI", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "not_applicable", "evidence": "Same mechanical reason as influenza_pr8."}},
+    "genotype_tokens": {"value": "reporter_only|kras_reporter", "units": "none", "consumed_by": {"kind": "samplesheet", "column": "genotype"}, "endpoint_critical": false, "validation": {"status": "placeholder", "evidence": "none"}},
+    "condition_tokens": {"value": "uninduced|KRAS_wk04|KRAS_wk12", "units": "none", "consumed_by": {"kind": "samplesheet", "column": "condition"}, "endpoint_critical": false, "validation": {"status": "placeholder", "evidence": "Timepoint folded into the condition token."}}
+  },
+
+  "aggregation_contract": {
+    "statistical_n": "mouse",
+    "key_cols": ["mouse_id", "genotype", "condition", "panel"],
+    "row_id_cols": ["image", "region", "section_id"],
+    "path": ["stage2_engine", "stage4_to_mouse"],
+    "forbidden": [
+      "No model-specific aggregation script.",
+      "No new KEY_COL.",
+      "No kras-specific branch inside aggregate_to_mouse.py - if a marker-over-marker ratio is added it must be one generic rule available to every model."
+    ]
+  },
+
+  "run_plan_hints": {
+    "template_banner": "UNVALIDATED TEMPLATE. Do not run for analysis. The primary endpoint is also NOT YET EXPRESSIBLE as a single aggregate_to_mouse column; resolve that (option (a) in primary_endpoint.aggregation.path) before use."
+  }
+}

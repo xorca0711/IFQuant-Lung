@@ -1,0 +1,3 @@
+image,region,section_id,mouse_id,genotype,condition,panel,region_area_um2,alveolar_area_um2,mean_linear_intercept_um,septal_thickness_um,airspace_frac
+slideA,parenchyma,slideA,M1,het,pr8,LEFT,74000000,52000000,45.2,4.1,0.70
+slideB,parenchyma,slideB,M2,hom,pr8,LEFT,71000000,44000000,38.9,5.3,0.62

@@ -1,0 +1,5 @@
+filename,mouse_id,section_id,genotype,condition,panel,relative_path
+<file>,<mouse_id>,<section_id>,het,uninfected,LEFT,
+<file>,<mouse_id>,<section_id>,het,PR8_d28,LEFT,
+<file>,<mouse_id>,<section_id>,hom,uninfected,LEFT,
+<file>,<mouse_id>,<section_id>,hom,PR8_d28,LEFT,

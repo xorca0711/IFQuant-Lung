@@ -1,0 +1,132 @@
+{
+  "module": "spatial",
+  "schema_version": "0.1.0-draft",
+  "contract": {
+    "aggregation_path": "single",
+    "statement": "spatial_stats.py emits ONLY additive sufficient statistics, under column-name suffixes that aggregate_to_mouse.classify_columns() already recognises. aggregate_to_mouse.py is NOT modified. Every ratio, median, quantile and enrichment is recomputed AFTER pooling, in spatial_mouse_metrics.py, from mouse_level_summary.csv.",
+    "statistical_unit": "MOUSE",
+    "row_identity": ["image|output_key", "region", "section_id", "panel"],
+    "mouse_identity": ["mouse_id", "genotype", "condition", "panel"],
+    "frozen_files_touched": []
+  },
+
+  "stage_s2_spatial_summary_csv": {
+    "_note": "one row per (image, region, section_id, panel). For the WSI route image = section_id = slide stem, matching the slide row aggregate_tiles_to_slide.py writes at its lines 266-267.",
+    "columns": [
+
+      {"column": "mouse_id | genotype | condition | panel | image | region | section_id | output_key",
+       "units": "identifier", "aggregation": "CARRY",
+       "meaning": "aggregate_to_mouse KEY_COLS + ROW_ID_COLS; the join key and the mouse key."},
+
+      {"column": "class_<A>_to_<B>_nn_<bin>_count", "units": "cells",
+       "aggregation": "SUM",
+       "meaning": "class-A cells whose nearest class-B cell is <= bin upper edge AND that are >= that radius from the window boundary. Numerator of the reduced-sample cross-type G function."},
+      {"column": "class_<A>_to_<B>_nn_<bin>_eligible_count", "units": "cells",
+       "aggregation": "SUM",
+       "meaning": "class-A cells >= bin upper edge from the window boundary. Denominator of G. Shrinks with r; that shrinkage IS the edge correction."},
+
+      {"column": "class_<F>_with_<B>_nbr_r<R>um_neighbour_count", "units": "cell-pairs",
+       "aggregation": "SUM",
+       "meaning": "class-B cells within R um of an eligible focal class-F cell, summed over focal cells."},
+      {"column": "class_<F>_with_<B>_nbr_r<R>um_total_neighbour_count", "units": "cell-pairs",
+       "aggregation": "SUM", "meaning": "all cells within R um of the same focal cells. Denominator of composition."},
+      {"column": "class_<F>_with_<B>_nbr_r<R>um_expected_neighbour_count", "units": "cell-pairs",
+       "aggregation": "SUM",
+       "meaning": "closed-form random-labelling expectation of the numerator: sum over focal i of m_i * (N_B - [i in B]) / (N_pool - 1). Additive, so observed/expected pools exactly."},
+      {"column": "class_<F>_with_<B>_nbr_r<R>um_focal_count", "units": "cells",
+       "aggregation": "SUM", "meaning": "eligible focal cells (>= R um from the window boundary)."},
+
+      {"column": "class_<A>_x_<B>_K_<bin>_S_count", "units": "um^2 (weighted pair count x area)",
+       "aggregation": "SUM",
+       "meaning": "cumulative translation-corrected weighted pair count out to the bin upper edge. Numerator of Ripley cross-K."},
+      {"column": "class_<A>_x_<B>_g_<bin>_S_count", "units": "um^2",
+       "aggregation": "SUM", "meaning": "same, for the ANNULUS only. Numerator of the pair correlation g(r)."},
+      {"column": "class_<A>_x_<B>_K_<bin>_Sborder_count", "units": "pairs",
+       "aggregation": "SUM", "meaning": "border/reduced-sample comparator. QC only: a large disagreement with the translation estimator at small r means the window raster is wrong."},
+      {"column": "class_<A>_x_<B>_K_denominator_per_um2_count", "units": "cells^2 / um^2",
+       "aggregation": "SUM",
+       "meaning": "n_A * n_B / |W| for this slide. K = sum(S) / sum(D) is the ratio-unbiased pooled estimator for replicated patterns; the denominator must be summed, never averaged."},
+      {"column": "class_<A>_x_<B>_K_n_a_count | _K_n_b_count", "units": "cells",
+       "aggregation": "SUM", "meaning": "point counts entering K (n_a is post-subsampling)."},
+
+      {"column": "class_<A>_to_<STRUCT>_<bin>_count", "units": "cells",
+       "aggregation": "SUM", "meaning": "class-A cells whose distance to the nearest structure pixel falls in the bin."},
+      {"column": "<STRUCT>_<bin>_positive_area_um2", "units": "um^2",
+       "aggregation": "SUM",
+       "meaning": "AVAILABLE tissue area at that distance from the structure. The denominator that makes distance-to-structure an enrichment rather than a restatement of how much damaged tissue exists."},
+      {"column": "class_<A>_to_<STRUCT>_beyond_max_count", "units": "cells",
+       "aggregation": "SUM", "meaning": "cells beyond the last bin edge (the EDT is capped there). Censored, not zero."},
+      {"column": "class_<A>_to_<STRUCT>_offwindow_count", "units": "cells",
+       "aggregation": "SUM", "meaning": "cells whose centroid fell outside the window raster. Must be ~0; non-zero means the window is wrong."},
+      {"column": "<STRUCT>_structure_positive_area_um2", "units": "um^2",
+       "aggregation": "SUM", "meaning": "total area of the structure mask on this slide."},
+
+      {"column": "class_spatial_all_cells_count", "units": "cells", "aggregation": "SUM",
+       "meaning": "retained, de-duplicated points in the analysed region."},
+      {"column": "class_spatial_eligible_pool_count", "units": "cells", "aggregation": "SUM",
+       "meaning": "cells with an evaluable call, i.e. the pool the random-labelling null permutes over."},
+      {"column": "class_spatial_indeterminate_excluded_count", "units": "cells", "aggregation": "SUM",
+       "meaning": "cells excluded because the engine's three-state call was indeterminate. In a real ALI run this was 76% for AcTub; treating those as negatives would have been a fabrication."},
+      {"column": "spatial_window_positive_area_um2", "units": "um^2", "aggregation": "SUM",
+       "meaning": "area of the analysis window. Its mouse-level _positive_area_fraction (vs pooled region_area_um2) is the reconciliation QC; expect ~0.8-1.2."},
+
+      {"column": "spatial_profile | spatial_bin_signature | spatial_window_mode | spatial_edge_correction | spatial_null_model | spatial_eligible_pool | spatial_query_fraction_* | spatial_perm_p_* | <STRUCT>_structure_source",
+       "units": "text / provenance", "aggregation": "QC",
+       "meaning": "NOT aggregated by design. spatial_perm_p_* is a WITHIN-SLIDE random-labelling p-value: valid for 'is this association non-random in THIS animal', invalid as a group test. Deliberately dropped before mouse level so it cannot become one."}
+    ]
+  },
+
+  "stage_s4_spatial_mouse_metrics_csv": {
+    "_note": "one row per (mouse_id, genotype, condition, panel, metric). Every value is RECOMPUTE from pooled sums; nothing here is summed further.",
+    "columns": [
+      {"column": "spatial_G_<A>_to_<B>_at_<bin>", "units": "fraction", "aggregation": "RECOMPUTE",
+       "meaning": "pooled cross-type nearest-neighbour CDF = sum(nn count) / sum(nn eligible)."},
+      {"column": "spatial_median_nn_um_<A>_to_<B> | spatial_q25_nn_um_<A>_to_<B>", "units": "um",
+       "aggregation": "RECOMPUTE",
+       "meaning": "quantile read off the POOLED G curve by linear interpolation. Never a mean of per-slide medians."},
+      {"column": "spatial_composition_<F>_with_<B>_r<R>um", "units": "fraction", "aggregation": "RECOMPUTE",
+       "meaning": "sum(neighbour) / sum(total neighbour): what fraction of the cells around F are B."},
+      {"column": "spatial_randomlabel_enrichment_<F>_with_<B>_r<R>um", "units": "ratio",
+       "aggregation": "RECOMPUTE",
+       "meaning": "sum(observed) / sum(expected under random labelling). 1.0 = no spatial association. This is the effect size to compare across mice."},
+      {"column": "spatial_K_<A>_x_<B>_at_<bin>", "units": "um^2", "aggregation": "RECOMPUTE",
+       "meaning": "sum(S) / sum(D), translation corrected."},
+      {"column": "spatial_Lminusr_<A>_x_<B>_at_<bin>", "units": "um", "aggregation": "RECOMPUTE",
+       "meaning": "sqrt(K/pi) - r. > 0 clustered, < 0 regular, RELATIVE TO CSR -- which is not the biological null. Interpret with the random-labelling enrichment, not alone."},
+      {"column": "spatial_g_<A>_x_<B>_at_<bin>", "units": "dimensionless", "aggregation": "RECOMPUTE",
+       "meaning": "pair correlation from the annulus form."},
+      {"column": "spatial_cellfrac_<A>_to_<STRUCT>_<bin>", "units": "fraction", "aggregation": "RECOMPUTE",
+       "meaning": "share of class-A cells in that distance bin."},
+      {"column": "spatial_areafrac_<STRUCT>_<bin>", "units": "fraction", "aggregation": "RECOMPUTE",
+       "meaning": "share of tissue area in that distance bin."},
+      {"column": "spatial_enrichment_<A>_to_<STRUCT>_<bin>", "units": "ratio", "aggregation": "RECOMPUTE",
+       "meaning": "cellfrac / areafrac. THE distance-to-structure endpoint. 1.0 = cells are distributed exactly as the tissue is. This is the 'CD8 AT the pod' number, area-normalised."}
+    ]
+  },
+
+  "stage_s4_spatial_group_metrics_csv": {
+    "columns": [
+      {"column": "genotype | condition | panel | metric", "units": "identifier", "aggregation": "CARRY"},
+      {"column": "n_mice", "units": "count", "aggregation": "RECOMPUTE",
+       "meaning": "THE statistical n. Not sections, not slides, not tiles, not cells."},
+      {"column": "mean", "units": "as metric", "aggregation": "RECOMPUTE",
+       "meaning": "mean across MICE of the per-mouse pooled value."},
+      {"column": "sd | sem", "units": "as metric", "aggregation": "RECOMPUTE",
+       "meaning": "BLANK when n_mice = 1. aggregate_to_mouse._stats() returns 0.0 there (its lines 353-356); that zero is an absent variance estimate, not a small one, and is not written out as a number."},
+      {"column": "inference_supported", "units": "yes/no", "aggregation": "QC",
+       "meaning": "'no' when n_mice < --min-n (default 3). At the current pilot (n=1 per group cell) every row is 'no'."},
+      {"column": "inference_note", "units": "text", "aggregation": "QC"}
+    ]
+  },
+
+  "stage_s1_pointpattern_qc_json": {
+    "keys": [
+      {"key": "n_cells_dropped_as_seam_duplicates / seam_duplicate_fraction", "meaning": "cross-tile fragments merged. Expect ~0.35% on this study."},
+      {"key": "estimated_chance_merge_pairs / estimated_chance_merge_fraction_of_pairs", "meaning": "upper bound on coincidental merges, from the (merge, 2*merge] annulus. Reported, never subtracted."},
+      {"key": "n_clusters_size_ge_3", "meaning": "tile-corner fragments split three or four ways."},
+      {"key": "max/mean_centroid_shift_um", "meaning": "area-weighted centroid correction applied to merged nuclei."},
+      {"key": "n_cells_outside_core", "meaning": "must be 0. Non-zero means the per-tile RoiSet was not applied and halo cells are double counted."},
+      {"key": "coordinate_selfcheck_max_delta_um", "meaning": "must be 0. Guards against a second tile-origin definition drifting from aggregate_tiles_to_slide.collect_cell_centroids()."}
+    ]
+  }
+}

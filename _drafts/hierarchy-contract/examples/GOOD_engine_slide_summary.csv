@@ -1,0 +1,3 @@
+image,output_key,region,section_id,mouse_id,genotype,condition,panel,region_area_um2,n_nuclei,KRT5_pod_area_um2,KRT5_n_pods,KRT5_pos_count
+slideA,eng@slideA@damaged,damaged,slideA,M1,het,pr8,LEFT@damaged,4960000,31000,21400,38,910
+slideB,eng@slideB@damaged,damaged,slideB,M2,hom,pr8,LEFT@damaged,4760000,29800,58200,71,2140

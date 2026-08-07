@@ -1,0 +1,273 @@
+{
+  "profile_schema": "injury_model_profile/1.0.0",
+  "model_id": "bleomycin",
+  "profile_version": "0.0.1",
+  "title": "UNVALIDATED TEMPLATE - Bleomycin-induced lung fibrosis (mouse)",
+  "species": "mus_musculus",
+
+  "authored": {
+    "author": "IFQuant-Lung config track (D)",
+    "date": "2026-08-07",
+    "lab": "Lung stem cell / regeneration group",
+    "notes": "*** UNVALIDATED TEMPLATE. NOT AN ESTABLISHED PROFILE. *** Every numeric parameter is null and every validation status is 'unset' or 'placeholder'. Nothing here has been measured on this microscope, this antibody lot, or this mouse line. The generator will refuse --tier confirmatory and will refuse --tier exploratory unless --allow-unvalidated is passed explicitly. The purpose of this file is to fix the VOCABULARY and the ENDPOINT SHAPE before anyone collects data, so that the bleomycin project and the influenza project do not grow two incompatible definitions of 'damaged area'."
+  },
+
+  "profile_validation": {
+    "status": "unset",
+    "evidence": "none",
+    "notes": "TEMPLATE. 'unset' is the only honest value: no endpoint-critical parameter has a measured value. Raising this requires an actual calibration run whose control set and selection rule are declared in calibration_requirements FIRST. The generator recomputes the status as the weakest endpoint-critical parameter and rejects any stronger claim."
+  },
+
+  "registry_requirement": {
+    "path_hint": "config/lung_marker_registry.json",
+    "min_schema_version": "1.3.0",
+    "markers_required": ["DAPI", "KRT5", "KRT17", "AGER", "ACTA2", "COL1A1", "CTHRC1", "PDGFRA", "TP63", "SFTPC", "KRT8"],
+    "research_profile_refs": ["ipf_fibrosis", "acute_injury_regeneration"]
+  },
+
+  "panels": [
+    {
+      "panel_key": "IPF_STROMA",
+      "source": "custom_panel_config",
+      "panel_config_path_hint": "<study-owned copy of config/custom_panels.example.json, OUTSIDE the repo>",
+      "role_in_model": "primary_endpoint",
+      "measures_states": ["fibrotic_matrix", "myofibroblast"],
+      "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json:80-89 defines it as a RESEARCH TEMPLATE with placeholder areaMinAreaUm2 values (CTHRC1 10.0, ACTA2 20.0, COL1A1 20.0) that the file itself says must be validated for acquisition resolution, section thickness, and endpoint."}
+    },
+    {
+      "panel_key": "IPF_BASALOID",
+      "source": "custom_panel_config",
+      "panel_config_path_hint": "<study-owned copy>",
+      "role_in_model": "companion",
+      "measures_states": ["krt17_basaloid", "krt5_pod"],
+      "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json:67-79. Channel idx values are examples and must be changed to match acquisition metadata."}
+    }
+  ],
+
+  "insult": {
+    "agent": "Bleomycin sulfate",
+    "route": "TEMPLATE - intratracheal single dose is the common form; oropharyngeal and osmotic-pump routes give different kinetics and are NOT the same model",
+    "dose": {"value": null, "units": "U_per_kg", "validation": {"status": "unset", "evidence": "none"}},
+    "vehicle": "TEMPLATE - sterile saline, same volume, same route, same day",
+    "severity_readout": {
+      "assay": "TEMPLATE - Ashcroft/modified Ashcroft score on a serial H&E or Masson trichrome section, and/or hydroxyproline on the contralateral lobe",
+      "required": true,
+      "status": {"status": "unset", "evidence": "none", "notes": "Bleomycin dosing is notoriously variable between batches, operators, and mouse weights. An independent severity readout is not optional here; without it, 'less fibrosis in the KO' and 'less bleomycin reached the KO lung' are indistinguishable."}
+    },
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "timepoints": [
+    {"label": "d0_naive", "days_post_insult": 0, "condition_token": "naive", "expected": ["TEMPLATE - intact AT1 sheet, no matrix expansion, KRT5 restricted to airway"], "endpoint_evaluable": false, "validation": {"status": "unset", "evidence": "none"}},
+    {"label": "d7_inflammatory", "days_post_insult": 7, "condition_token": "BLEO_d07", "expected": ["TEMPLATE - inflammatory phase; matrix endpoints are confounded by oedema and cellular infiltrate rather than by collagen"], "endpoint_evaluable": false, "validation": {"status": "unset", "evidence": "none"}},
+    {"label": "d14_fibrotic", "days_post_insult": 14, "condition_token": "BLEO_d14", "expected": ["TEMPLATE - peak fibrotic remodelling; KRT17+ basaloid and KRT5+ pods reported in this window"], "endpoint_evaluable": true, "validation": {"status": "unset", "evidence": "none"}},
+    {"label": "d28_resolving", "days_post_insult": 28, "condition_token": "BLEO_d28", "expected": ["TEMPLATE - partial resolution in most strains; persistence versus resolution is often the actual question"], "endpoint_evaluable": true, "validation": {"status": "unset", "evidence": "none"}}
+  ],
+
+  "cell_states": [
+    {
+      "state_id": "fibrotic_matrix",
+      "description": "TEMPLATE - expanded interstitial matrix defined by COL1A1 regional area.",
+      "markers": {"required_positive": ["COL1A1"], "supporting": ["CTHRC1"]},
+      "measured_as": "regional_area",
+      "panel_key": "IPF_STROMA",
+      "morphology_expectation": "TEMPLATE - confluent subpleural and peribronchiolar bands, not a diffuse haze. Band width is the morphometry feature.",
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "state_id": "myofibroblast",
+      "description": "TEMPLATE - ACTA2+ activated fibroblast. Note that ACTA2 also marks vascular smooth muscle and airway smooth muscle, which are present in EVERY animal including naive controls.",
+      "markers": {"required_positive": ["ACTA2"], "supporting": ["CTHRC1", "PDGFRA"], "excluded_by": []},
+      "measured_as": "regional_area",
+      "panel_key": "IPF_STROMA",
+      "morphology_expectation": "TEMPLATE - interstitial, away from vessel and airway walls. Without that geometric exclusion the endpoint measures normal smooth muscle.",
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "state_id": "krt17_basaloid",
+      "description": "TEMPLATE - KRT17+/KRT5- aberrant basaloid state.",
+      "markers": {"required_positive": ["KRT17"], "required_negative": ["KRT5"], "supporting": ["TP63"]},
+      "measured_as": "classification_rule",
+      "panel_key": "IPF_BASALOID",
+      "morphology_expectation": "TEMPLATE - flattened cells lining remodelled airspaces at the fibrotic front.",
+      "validation": {"status": "unset", "evidence": "lung_marker_registry.json research_profiles.ipf_fibrosis.caveat: KRT17+/KRT5- is a STATE DESCRIPTION, not a stand-alone IPF diagnosis; fibrotic geography and orthogonal pathology are required."}
+    },
+    {
+      "state_id": "krt5_pod",
+      "description": "TEMPLATE - KRT5+ dysplastic pod, SAME state definition as influenza_pr8.krt5_ectopic_pod. Deliberately shared so the two models do not diverge.",
+      "markers": {"required_positive": ["KRT5"], "required_negative": ["AGER"], "supporting": ["TP63"]},
+      "measured_as": "regional_area",
+      "panel_key": "IPF_BASALOID",
+      "morphology_expectation": "TEMPLATE - as influenza_pr8: compact, multicellular, sharply bounded solid sheets filling former airspace.",
+      "validation": {"status": "unset", "evidence": "none"}
+    }
+  ],
+
+  "morphology_signature": {
+    "architecture_expectations": [
+      {"feature": "collagen_band_width", "expected_direction": "increase", "scale_um": 100.0, "brightfield_capable": true, "validation": {"status": "placeholder", "evidence": "none", "notes": "scale_um is a guess. Masson trichrome on a serial section is the natural brightfield cross-check and is why this model needs the registration module."}},
+      {"feature": "at1_coverage_local_area_fraction", "expected_direction": "decrease", "scale_um": 40.0, "brightfield_capable": false, "validation": {"status": "placeholder", "evidence": "sigma 40 um is INHERITED from influenza_pr8 as a starting point because it is one alveolar diameter. It has NOT been re-derived on bleomycin controls and must be, because the bleomycin lesion is subpleural and interstitial rather than diffusely consolidating."}},
+      {"feature": "airspace_mean_linear_intercept", "expected_direction": "decrease", "scale_um": 40.0, "brightfield_capable": true, "validation": {"status": "unset", "evidence": "none"}}
+    ],
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "primary_endpoint": {
+    "endpoint_id": "fibrotic_area_fraction",
+    "statement": "TEMPLATE - COL1A1+ matrix area divided by total parenchymal area, both measured within lung parenchyma with conducting airways and large vessels excluded. THE DENOMINATOR IS THE DECISION THAT MUST BE MADE BEFORE DATA: total parenchyma measures 'how much of the lung is fibrotic' (a severity measure), whereas damaged parenchyma would measure 'how fibrotic is the injured tissue' (an intensity measure). These are different questions and are not interconvertible.",
+    "reference": "TEMPLATE - no reference selected.",
+    "reference_method": "TEMPLATE - if the chosen reference used Ashcroft scoring or hydroxyproline, an IF area fraction is a DIFFERENT quantity and agreement must be measured, not assumed.",
+    "numerator": {"engine_column": "COL1A1_positive_area_um2", "description": "TEMPLATE - regional_area role emits <marker>_positive_area_um2 (IF_Quant_Pipeline.groovy:2714). Requires areaMinAreaUm2, which custom_panels.example.json flags as a placeholder.", "aggregation": "SUM"},
+    "denominator": {"engine_column": "region_area_um2", "description": "TEMPLATE - whole parenchymal ROI.", "aggregation": "SUM", "why_not_total_tissue": "TEMPLATE - if airways and large vessels are not excluded, the denominator grows with how much conducting structure a section happens to contain, which is a sectioning artefact."},
+    "region_scope": {"mode": "whole_region", "endpoint_roi_name": "parenchyma_core", "substring_contract": "none"},
+    "mouse_level_column": "COL1A1_positive_area_fraction",
+    "aggregation": {"recompute_from_pooled": true, "path": "TEMPLATE - field images: run_summary.csv -> aggregate_to_mouse.py directly (aggregate_to_mouse.py:314-322 recomputes <marker>_positive_area_fraction from pooled area). WSI: add stage1/stage3 exactly as influenza_pr8 does; do NOT write a bleomycin-specific aggregator."},
+    "depends_on_parameters": ["col1a1_pos_threshold", "col1a1_min_area_um2", "panel_key"],
+    "interpretation_limits": [
+      "TEMPLATE - ACTA2 and COL1A1 are present in normal vessel and airway walls; without geometric exclusion the endpoint has a large genotype-independent floor.",
+      "TEMPLATE - a matrix area fraction on one section is not hydroxyproline and is not an Ashcroft score."
+    ],
+    "validation": {"status": "placeholder", "evidence": "none"}
+  },
+
+  "secondary_endpoints": [],
+
+  "qc_endpoints": [
+    {
+      "endpoint_id": "acta2_vascular_floor",
+      "statement": "TEMPLATE - ACTA2+ area per mm2 in NAIVE animals. This is the normal smooth-muscle floor. It must be non-zero, and it must not differ by genotype. If it does, the threshold or the geometric exclusion is wrong.",
+      "numerator": {"engine_column": "ACTA2_positive_area_um2", "description": "TEMPLATE", "aggregation": "SUM"},
+      "denominator": {"engine_column": "region_area_um2", "description": "TEMPLATE", "aggregation": "SUM", "why_not_total_tissue": "TEMPLATE - this IS a whole-parenchyma readout by design."},
+      "region_scope": {"mode": "whole_region", "endpoint_roi_name": "parenchyma_core", "substring_contract": "none"},
+      "mouse_level_column": "ACTA2_positive_area_fraction",
+      "aggregation": {"recompute_from_pooled": true, "path": "TEMPLATE"},
+      "depends_on_parameters": ["acta2_pos_threshold"],
+      "interpretation_limits": ["TEMPLATE"],
+      "validation": {"status": "unset", "evidence": "none"}
+    }
+  ],
+
+  "controls": [
+    {
+      "control_id": "naive_untreated",
+      "kind": "biological_negative",
+      "description": "TEMPLATE - age- and sex-matched untreated animals.",
+      "required": true,
+      "condition_token": "naive",
+      "controls_for": ["baseline matrix area fraction", "normal ACTA2 smooth-muscle floor", "KRT5 background in intact parenchyma"],
+      "does_not_control_for": ["the instillation procedure itself (needs a saline-instilled arm)", "antibody specificity", "batch-to-batch bleomycin potency"],
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "control_id": "saline_instilled",
+      "kind": "vehicle",
+      "description": "TEMPLATE - same route, same volume, same day, saline instead of bleomycin.",
+      "required": true,
+      "condition_token": "saline",
+      "controls_for": ["mechanical injury and inflammation caused by instillation itself"],
+      "does_not_control_for": ["bleomycin-independent strain differences", "operator differences in instillation depth, which change lesion distribution"],
+      "validation": {"status": "unset", "evidence": "none"}
+    },
+    {
+      "control_id": "secondary_only",
+      "kind": "secondary_only",
+      "description": "TEMPLATE - secondary without primary at identical exposure.",
+      "required": true,
+      "controls_for": ["secondary background", "autofluorescence, which is HIGHER in fibrotic tissue - collagen and elastin autofluoresce, so the fibrotic arm has a higher background than the control arm by construction"],
+      "does_not_control_for": ["primary cross-reactivity"],
+      "validation": {"status": "unset", "evidence": "none", "notes": "This control matters more in bleomycin than in influenza precisely because the confound tracks the endpoint."}
+    }
+  ],
+
+  "confounds": [
+    {
+      "confound_id": "collagen_autofluorescence",
+      "mechanism": "TEMPLATE - collagen and elastin autofluoresce broadly. The fibrotic arm therefore has a higher background in every channel than the control arm, and the difference is largest exactly where the endpoint signal is largest.",
+      "direction_of_bias": "toward_hypothesis",
+      "severity": "major",
+      "orthogonal_assay_required": "Unstained and secondary-only sections from a FIBROTIC animal, not only from a naive one.",
+      "blocking": true,
+      "status": "open"
+    },
+    {
+      "confound_id": "dose_delivery_variability",
+      "mechanism": "TEMPLATE - intratracheal delivery is operator- and weight-dependent, so lesion burden varies severalfold between animals of the same group.",
+      "direction_of_bias": "either",
+      "severity": "major",
+      "orthogonal_assay_required": "Independent severity score (Ashcroft) or hydroxyproline, plus randomising operator across genotypes.",
+      "blocking": true,
+      "status": "open"
+    },
+    {
+      "confound_id": "acta2_normal_smooth_muscle",
+      "mechanism": "TEMPLATE - ACTA2 marks vascular and airway smooth muscle in every animal. Any ACTA2 area endpoint without geometric exclusion has a large constant floor that dilutes the effect.",
+      "direction_of_bias": "toward_null",
+      "severity": "moderate",
+      "orthogonal_assay_required": "none - geometric exclusion of vessel and airway walls.",
+      "blocking": false,
+      "status": "open"
+    }
+  ],
+
+  "compartment_tags": {
+    "meaningful": ["alveolar", "fibrotic", "airway", "vascular", "stromal"],
+    "not_meaningful": ["tumor"],
+    "forbidden_uses": [
+      "TEMPLATE - do NOT tag a region 'fibrotic' from the same channel used to measure the fibrotic endpoint. Tagging with COL1A1 and then measuring COL1A1 area inside that tag is circular.",
+      "TEMPLATE - do NOT reuse influenza_pr8's frozen AGER damage parameters here without re-deriving them on bleomycin controls. The lesion geometry is different (subpleural/interstitial versus diffuse consolidation) and sigma is a geometry parameter."
+    ],
+    "roi_naming": {"whole": "parenchyma_core", "endpoint_region": "parenchyma_core", "contrast_region": ""}
+  },
+
+  "calibration_requirements": [
+    {
+      "requirement_id": "matrix_threshold_freeze",
+      "parameter_refs": ["col1a1_pos_threshold", "acta2_pos_threshold", "cthrc1_pos_threshold", "col1a1_min_area_um2"],
+      "must_be_frozen_before": "stage2_batch",
+      "control_set": ["naive_untreated", "saline_instilled", "secondary_only"],
+      "selection_rule": "TEMPLATE - declare the rule BEFORE looking. Suggested shape, copied from the damage-detector freeze that worked: constraint = worst-of-all-control-animals false-positive area fraction <= alpha; objective = subject to that, the most sensitive admissible setting; tie-break = flattest local slope. Fibrotic animals must NOT be opened during selection.",
+      "alpha": null,
+      "procedure_script": "not_written",
+      "held_out": ["every bleomycin-treated animal"],
+      "status": "not_started"
+    },
+    {
+      "requirement_id": "geometric_exclusion_rule",
+      "parameter_refs": ["vessel_airway_exclusion_um"],
+      "must_be_frozen_before": "any_confirmatory_run",
+      "control_set": ["naive_untreated"],
+      "selection_rule": "TEMPLATE - how far from a vessel or airway wall does interstitial matrix start? Fix it on naive animals only, where all ACTA2/COL1A1 is by definition normal.",
+      "procedure_script": "not_written",
+      "status": "not_started"
+    }
+  ],
+
+  "parameters": {
+    "panel_key": {"value": "IPF_STROMA", "units": "none", "consumed_by": {"kind": "env", "env": "IFQ_PANEL", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json is an EXAMPLE; channel idx values must be changed to match acquisition metadata."}},
+    "panel_config_path": {"value": null, "units": "none", "consumed_by": {"kind": "env", "env": "IFQ_PANEL_CONFIG", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "config/README.md:12-14 - copy the example to a study-controlled location OUTSIDE the repo before editing."}},
+    "col1a1_pos_threshold": {"value": null, "units": "raw_uint16_intensity", "consumed_by": {"kind": "env", "env": "IFQ_COL1A1_THRESHOLD", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "none"}},
+    "acta2_pos_threshold": {"value": null, "units": "raw_uint16_intensity", "consumed_by": {"kind": "env", "env": "IFQ_ACTA2_THRESHOLD", "stage": "stage2"}, "endpoint_critical": false, "validation": {"status": "unset", "evidence": "none"}},
+    "cthrc1_pos_threshold": {"value": null, "units": "raw_uint16_intensity", "consumed_by": {"kind": "env", "env": "IFQ_CTHRC1_THRESHOLD", "stage": "stage2"}, "endpoint_critical": false, "validation": {"status": "unset", "evidence": "none"}},
+    "col1a1_min_area_um2": {"value": null, "units": "um2", "consumed_by": {"kind": "panel_config", "panel_key": "IPF_STROMA", "marker": "COL1A1", "field": "areaMinAreaUm2"}, "endpoint_critical": true, "validation": {"status": "placeholder", "evidence": "config/custom_panels.example.json uses 20.0 as an EXAMPLE. The engine hard-fails a regional_area marker without areaMinAreaUm2 (IF_Quant_Pipeline.groovy:802-805) precisely because no universal biological size cutoff exists."}},
+    "vessel_airway_exclusion_um": {"value": null, "units": "um", "consumed_by": {"kind": "downstream", "note": "Geometric exclusion applied when ROIs are drawn; no code path exists."}, "endpoint_critical": true, "validation": {"status": "unset", "evidence": "none"}},
+    "min_included_nuclei": {"value": 0, "units": "count", "consumed_by": {"kind": "env", "env": "IFQ_MIN_INCLUDED_NUCLEI", "stage": "stage2"}, "endpoint_critical": true, "validation": {"status": "not_applicable", "evidence": "Same mechanical reason as influenza_pr8: a zero-nucleus region kills the whole image."}},
+    "genotype_tokens": {"value": "WT|KO", "units": "none", "consumed_by": {"kind": "samplesheet", "column": "genotype"}, "endpoint_critical": false, "validation": {"status": "placeholder", "evidence": "none"}},
+    "condition_tokens": {"value": "naive|saline|BLEO_d07|BLEO_d14|BLEO_d28", "units": "none", "consumed_by": {"kind": "samplesheet", "column": "condition"}, "endpoint_critical": false, "validation": {"status": "placeholder", "evidence": "Timepoint folded into the condition token so no new KEY_COL is needed."}}
+  },
+
+  "aggregation_contract": {
+    "statistical_n": "mouse",
+    "key_cols": ["mouse_id", "genotype", "condition", "panel"],
+    "row_id_cols": ["image", "region", "section_id"],
+    "path": ["stage2_engine", "stage4_to_mouse"],
+    "forbidden": [
+      "No model-specific aggregation script.",
+      "No new KEY_COL - timepoint lives in the condition token.",
+      "No averaging of region-level fractions."
+    ]
+  },
+
+  "run_plan_hints": {
+    "template_banner": "UNVALIDATED TEMPLATE. Do not run for analysis. Fill parameters, declare calibration selection rules BEFORE looking at any data, then bump profile_version to 1.0.0."
+  }
+}

@@ -1,0 +1,3 @@
+image,output_key,region,section_id,module_id,mouse_id,genotype,condition,panel,region_area_um2,morph_airspace_positive_area_um2,morph_airspace_n_components,morph_septalintercept_pos_count,morph_septum_positive_area_um2,morph_septum_n_components
+slideA,morph@slideA@parenchyma,parenchyma,slideA,morphometry.alveolar_architecture,M1,het,pr8,LEFT@parenchyma,74000000,52000000,1840,2301,9100000,1840
+slideB,morph@slideB@parenchyma,parenchyma,slideB,morphometry.alveolar_architecture,M2,hom,pr8,LEFT@parenchyma,71000000,44000000,2310,2262,12400000,2310

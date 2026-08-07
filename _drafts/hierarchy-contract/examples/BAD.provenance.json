@@ -1,0 +1,171 @@
+{
+ "provenance_schema_version": "1.0.0",
+ "module": {
+  "module_id": "morphometry.alveolar_architecture",
+  "module_version": "0.1.0",
+  "level": "slide",
+  "panel_scope": "LEFT@parenchyma",
+  "emits": [
+   "morph_airspace_positive_area_um2",
+   "morph_airspace_n_components",
+   "morph_septalintercept_pos_count",
+   "morph_septum_positive_area_um2",
+   "morph_septum_n_components"
+  ],
+  "owns_region_area_um2": true,
+  "reserved_prefix": "morph_"
+ },
+ "run": {
+  "run_id": "20260807T143012Z-3f9a1c",
+  "started_utc": "2026-08-07T14:30:12Z",
+  "finished_utc": "2026-08-07T14:52:40Z",
+  "operator": "chubyeon",
+  "host": "DESKTOP-EXAMPLE",
+  "command_line": "python morphometry/emit_morphometry_summary.py --slide-root D:/wsi_stage1 --profile config/injury_models/influenza_pr8.json",
+  "working_directory": "C:/Users/dream/Documents/GitHub/IFQuant-Lung",
+  "environment_overrides": {
+   "IFQ_MARKER_REGISTRY": "C:/Users/dream/Documents/GitHub/IFQuant-Lung/config/lung_marker_registry.json"
+  }
+ },
+ "software": {
+  "ifquant_repo_commit": "0000000000000000000000000000000000000000",
+  "ifquant_repo_dirty": false,
+  "ifquant_branch": "claude/qupath-wsi-stage1-tiling",
+  "contract_version": "1.0.0",
+  "aggregate_to_mouse_sha256": null,
+  "if_quant_pipeline_sha256": null,
+  "runtimes": [
+   {
+    "name": "python",
+    "version": "3.12.4"
+   },
+   {
+    "name": "qupath",
+    "version": "0.7.0"
+   },
+   {
+    "name": "os",
+    "version": "Windows 11 aarch64"
+   }
+  ],
+  "libraries": []
+ },
+ "inputs": [
+  {
+   "role": "source_image",
+   "path": "D:/Confocal_Images/20260806_CW/20260806_CW/slideA.vsi",
+   "series_index": 2,
+   "pixel_size_um": 0.345,
+   "size_px": [
+    57165,
+    42154
+   ],
+   "n_channels": 4,
+   "bit_depth": 16,
+   "dynamic_range_note": "12-bit data in uint16 (0-4095)",
+   "sha256": null,
+   "sha256_skipped_reason": null,
+   "size_bytes": 12884901888,
+   "mtime_utc": "2026-08-06T09:11:02Z"
+  },
+  {
+   "role": "injury_model_profile",
+   "path": "config/injury_models/influenza_pr8.json",
+   "schema_version": "1.0.0",
+   "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+ ],
+ "parameters": {
+  "locked": {
+   "ager_threshold": 150,
+   "damage_sigma_um": 40,
+   "damage_cutoff": 0.14
+  },
+  "lock_source": {
+   "ager_threshold": "config/injury_models/influenza_pr8.json#thresholds.damage_detector.ager_threshold",
+   "damage_sigma_um": "config/injury_models/influenza_pr8.json#thresholds.damage_detector.damage_sigma_um"
+  },
+  "calibration": {
+   "calibrated_on": "uninfected control slides only",
+   "criterion": "alpha = 0.01 false-positive area fraction on uninfected lung",
+   "held_out_result": "infected 6.71% / 4.68% damaged vs controls 0.93% / 0.18%",
+   "locked_utc": "2026-08-05T00:00:00Z",
+   "applies_to": {
+    "species": "mouse",
+    "injury_model": "influenza_pr8",
+    "panel": "LEFT",
+    "pixel_size_um_range": [
+     0.3,
+     0.4
+    ],
+    "modality": "IF"
+   }
+  },
+  "free": {
+   "min_component_area_um2": 50.0
+  }
+ },
+ "outputs": [
+  {
+   "path": "GOOD_morphometry_summary.csv",
+   "n_rows": 2,
+   "sha256": null,
+   "row_identity_key": [
+    "output_key",
+    "region",
+    "section_id",
+    "panel"
+   ],
+   "n_mice": 2
+  }
+ ],
+ "qc": {
+  "status": "ok",
+  "blocking": [],
+  "warnings": [],
+  "area_reconciliation": {
+   "module_area_um2": 74000000.0,
+   "reference_area_um2": 74010000.0,
+   "reference_source": "sum(tile_manifest.core_raster_area_um2)",
+   "rel_diff": 0.08,
+   "tolerance": 0.01,
+   "passed": true
+  },
+  "coverage": {
+   "n_expected": 2,
+   "n_analyzed": 2,
+   "fraction": 1.0,
+   "missing_ids": []
+  }
+ },
+ "contract": {
+  "contract_version": "1.0.0",
+  "validated_by": "contract/ifq_contract.py",
+  "validation_utc": "2026-08-07T14:52:41Z",
+  "sum_columns": [
+   "region_area_um2",
+   "morph_airspace_positive_area_um2",
+   "morph_airspace_n_components",
+   "morph_septalintercept_pos_count",
+   "morph_septum_positive_area_um2",
+   "morph_septum_n_components"
+  ],
+  "recomputed_at_mouse_level": [
+   "morph_airspace_positive_area_fraction",
+   "morph_septum_positive_area_fraction",
+   "morph_septalintercept_density_per_mm2"
+  ],
+  "dropped_columns": [
+   "module_id"
+  ],
+  "declared_endpoints": [
+   "config/endpoints/mean_linear_intercept.json"
+  ]
+ },
+ "statistics": {
+  "n_definition": "section_id",
+  "n_mice_contributed": 2,
+  "n_rows_written": 2,
+  "pseudoreplication_guard": "rows are pooled to mouse by aggregate_to_mouse.py; group stats use n = mice"
+ }
+}

@@ -1,0 +1,5 @@
+image,output_key,region,section_id,mouse_id,genotype,condition,panel,region_area_um2,n_nuclei,KRT5_pod_area_um2,KRT5_n_pods,KRT5_pos_count,module_id,morph_airspace_positive_area_um2,morph_airspace_n_components,morph_septalintercept_pos_count,morph_septum_positive_area_um2,morph_septum_n_components
+slideA,eng@slideA@damaged,damaged,slideA,M1,het,pr8,LEFT@damaged,4960000,31000,21400,38,910,,,,,,
+slideB,eng@slideB@damaged,damaged,slideB,M2,hom,pr8,LEFT@damaged,4760000,29800,58200,71,2140,,,,,,
+slideA,morph@slideA@parenchyma,parenchyma,slideA,M1,het,pr8,LEFT@parenchyma,74000000,,,,,morphometry.alveolar_architecture,52000000,1840,2301,9100000,1840
+slideB,morph@slideB@parenchyma,parenchyma,slideB,M2,hom,pr8,LEFT@parenchyma,71000000,,,,,morphometry.alveolar_architecture,44000000,2310,2262,12400000,2310

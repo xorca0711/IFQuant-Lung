@@ -1,0 +1,595 @@
+{
+  "generated_utc": "2026-08-07T04:45:56Z",
+  "generator": "tools/model_profile_to_run.py",
+  "tier": "exploratory",
+  "allow_unvalidated": false,
+  "profile": {
+    "path": "C:\\Users\\dream\\AppData\\Local\\Temp\\claude\\X--QuPath\\7933abe5-e14c-44b2-aa07-c4127fa41a9e\\scratchpad\\draft\\injury_model_profiles\\injury_models\\influenza_pr8.model.json",
+    "sha256": "541693eee89a1d5beb2e9c2f34aec5595aa339194d8f5187ba78e491f7fcdc62",
+    "model_id": "influenza_pr8",
+    "profile_version": "1.0.0",
+    "authored_status": "pilot_tuned",
+    "computed_status": "pilot_tuned",
+    "weakest_endpoint_critical_parameter": "pod_min_area_um2"
+  },
+  "base_model_profile": null,
+  "registry": {
+    "path": "C:\\Users\\dream\\Documents\\GitHub\\IFQuant-Lung\\config\\lung_marker_registry.json",
+    "sha256": "20c6859d8b7d1114b5476eefc90d8c92affa78d9a59d1be11d2449ba98460b37",
+    "schema_version": "1.3.0"
+  },
+  "primary_endpoint": {
+    "endpoint_id": "ectopic_pod_area_fraction",
+    "mouse_level_column": "KRT5_pod_area_frac",
+    "numerator": "KRT5_pod_area_um2",
+    "denominator": "region_area_um2",
+    "region_scope": {
+      "mode": "partitioned_damaged",
+      "endpoint_roi_name": "parenchyma_damaged",
+      "contrast_roi_name": "parenchyma_intact",
+      "substring_contract": "damaged"
+    }
+  },
+  "parameters": {
+    "panel_key": {
+      "value": "LEFT",
+      "units": "none",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_PANEL",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "control_derived",
+        "evidence": "IF_Quant_Pipeline.groovy:456-469; matches the acquired 4-channel VS200 series."
+      }
+    },
+    "wsi_panel_key": {
+      "value": "LEFT",
+      "units": "none",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_PANEL",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "control_derived",
+        "evidence": "qupath_wsi_tile_export.groovy:193. Must equal panel_key; the generator enforces this."
+      }
+    },
+    "wsi_partition_damage": {
+      "value": true,
+      "units": "boolean",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_PARTITION_DAMAGE",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "frozen_blinded_controls",
+        "evidence": "Without this the endpoint has no damaged-area denominator and silently becomes KRT5+ / total tissue, i.e. an infection-severity measure.",
+        "derived_from": [
+          "ctrl_uninfected_het_m4_2",
+          "ctrl_uninfected_hom_m6"
+        ]
+      }
+    },
+    "wsi_ager_threshold": {
+      "value": 150,
+      "units": "raw_uint16_intensity",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_AGER_THRESHOLD",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "frozen_blinded_controls",
+        "evidence": "docs/ECTOPIC_POD_ENDPOINT.md 4c. Every alpha level from 0.5% to 5% independently selected 150, not the 200 used in the superseded 4b tuning.",
+        "derived_from": [
+          "ctrl_uninfected_het_m4_2",
+          "ctrl_uninfected_hom_m6"
+        ],
+        "never_opened": [
+          "inf_het_m4_1",
+          "inf_hom_m2"
+        ],
+        "date": "2026-08-07",
+        "procedure": "scripts/calibrate_damage_controls.groovy; selection rule declared before any number was read",
+        "blinded": false,
+        "expires_after": "any change of AGER antibody lot, fluorophore, exposure, objective, or camera gain - the threshold is on RAW intensity and none of it transfers",
+        "superseded_value": 200,
+        "notes": "Stage 1 REQUIRES this to be supplied explicitly and has no default, so that supplying it stays a deliberate act (qupath_wsi_tile_export.groovy:229-239)."
+      }
+    },
+    "wsi_damage_sigma_um": {
+      "value": 40.0,
+      "units": "um",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_DAMAGE_SIGMA_UM",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "frozen_blinded_controls",
+        "evidence": "docs/ECTOPIC_POD_ENDPOINT.md:222-228. About one alveolar diameter, the physiologically natural neighbourhood for local AT1 coverage. The more stable alpha=0.5% point needs sigma=80 um, which averages across 2-3 alveoli and blurs the damaged/intact boundary.",
+        "derived_from": [
+          "ctrl_uninfected_het_m4_2",
+          "ctrl_uninfected_hom_m6"
+        ],
+        "never_opened": [
+          "inf_het_m4_1",
+          "inf_hom_m2"
+        ],
+        "superseded_value": 30.0
+      }
+    },
+    "wsi_damage_cutoff": {
+      "value": 0.14,
+      "units": "local_area_fraction",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_DAMAGE_CUTOFF",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "frozen_blinded_controls",
+        "evidence": "docs/ECTOPIC_POD_ENDPOINT.md 4c, alpha = 1%: het m4-2 0.93%, hom m6 0.18% false positive, local slope 11.57.",
+        "derived_from": [
+          "ctrl_uninfected_het_m4_2",
+          "ctrl_uninfected_hom_m6"
+        ],
+        "never_opened": [
+          "inf_het_m4_1",
+          "inf_hom_m2"
+        ],
+        "superseded_value": 0.1,
+        "notes": "AT1-intact territory is where AGER+ pixels occupy at least this fraction of an alveolus-sized neighbourhood. Binary closing of the AGER mask was tried first and failed (61-87% damaged in uninfected lung)."
+      }
+    },
+    "wsi_ager_channel": {
+      "value": 2,
+      "units": "zero_based_band_index",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_AGER_CHANNEL",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "control_derived",
+        "evidence": "qupath_wsi_tile_export.groovy:181 and its use as a raster band index at lines 595-601 (DataBufferUShort.getData(AGER_CH) / raster.getSamples(..., AGER_CH, ...)), i.e. ZERO-based. Panel LEFT places AGER at channel idx 3, which is 1-based. 3 - 1 = 2.",
+        "notes": "This off-by-one is a live footgun: 1-based panel idx versus 0-based Stage 1 band index. The generator asserts wsi_ager_channel == (panel AGER idx - 1)."
+      }
+    },
+    "wsi_roi_name_damaged": {
+      "value": "parenchyma_damaged",
+      "units": "none",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_ROI_NAME_DAMAGED",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "frozen_blinded_controls",
+        "evidence": "Load-bearing STRING. aggregate_tiles_to_slide.py:225 selects endpoint rows by the substring 'damaged' in the region column. Renaming this silently turns the endpoint denominator into the whole tile."
+      }
+    },
+    "wsi_roi_name_intact": {
+      "value": "parenchyma_intact",
+      "units": "none",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_ROI_NAME_INTACT",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "frozen_blinded_controls",
+        "evidence": "aggregate_tiles_to_slide.py:226 matches the substring 'intact' for the specificity QC readout."
+      }
+    },
+    "wsi_roi_compartment": {
+      "value": null,
+      "units": "none",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_ROI_COMPARTMENT",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "not_applicable",
+        "evidence": "Deliberately unset. Setting it to 'alveolar' prefixes every ROI name and asserts that no conducting airway is present, which is false until airway polygons are subtracted (qupath_wsi_tile_export.groovy:196-212).",
+        "notes": "value null means the generator emits NOTHING for this variable. It must not emit an empty string either - an empty IFQ_* is treated as absent by envOr, so an empty emission is at best a no-op and at worst hides an intent."
+      }
+    },
+    "wsi_core_px": {
+      "value": 2048,
+      "units": "px",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_CORE_PX",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "pilot_tuned",
+        "evidence": "qupath_wsi_tile_export.groovy:137 default. An engineering choice traded against Stage 2 runtime; not derived from controls."
+      }
+    },
+    "wsi_halo_px": {
+      "value": 128,
+      "units": "px",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_HALO_PX",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "pilot_tuned",
+        "evidence": "qupath_wsi_tile_export.groovy:138 default. 128 px at 0.345 um/px = 44 um of context, which exceeds a nucleus and a ring but is smaller than a large pod.",
+        "notes": "The halo supplies context; the companion RoiSet restricts measurement to the core, so halo size does not double-count area."
+      }
+    },
+    "wsi_compression": {
+      "value": "ZLIB",
+      "units": "none",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_WSI_COMPRESSION",
+        "stage": "stage1"
+      },
+      "validation": {
+        "status": "not_applicable",
+        "evidence": "qupath_wsi_tile_export.groovy:244-247 refuses lossy compression for quantitative data. ZLIB is lossless."
+      }
+    },
+    "krt5_pos_threshold": {
+      "value": 500,
+      "units": "raw_uint16_intensity",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_KRT5_THRESHOLD",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "control_derived",
+        "evidence": "Session measurement of KRT5 inside INTACT control parenchyma: p50 28-30, p90 41-48, p99 97-109, p99.9 188-243, p99.99 689-819, max 3194-3894. Best achievable false-positive AREA fraction ~4.4e-4 at threshold 500; NO threshold reaches the declared 1e-4 target.",
+        "derived_from": [
+          "ctrl_uninfected_het_m4_2",
+          "ctrl_uninfected_hom_m6"
+        ],
+        "never_opened": [
+          "inf_het_m4_1",
+          "inf_hom_m2"
+        ],
+        "procedure": "scripts/calibrate_krt5_controls.groovy",
+        "expires_after": "any change of KRT5 antibody lot, 488 exposure (currently ~949 ms), objective, or camera gain",
+        "notes": "This is the parameter that keeps the whole profile below confirmatory. The declared target was not met, so the honest status is control_derived, NOT frozen_blinded_controls. Raising it to 'frozen' without meeting the target - or by quietly relaxing the target to 4.4e-4 - is exactly the failure mode the validation ladder exists to prevent."
+      }
+    },
+    "ager_pos_threshold": {
+      "value": null,
+      "units": "raw_uint16_intensity",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_AGER_THRESHOLD",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "unset",
+        "evidence": "docs/ECTOPIC_POD_ENDPOINT.md:142-144: must be frozen from blinded control review before any batch run; not done. Per-image Otsu drifted 527 -> 742 (~40%).",
+        "notes": "Distinct from wsi_ager_threshold=150. That one runs at 2.76 um/px on a downsampled slide overview for the damage mask; this one would run per tile at 0.345 um/px for per-cell AGER calls. They are NOT interchangeable and must never be conflated. Leaving this null keeps AGER cell calls adaptive_otsu_exploratory, which is correct because they are not the endpoint."
+      }
+    },
+    "t1a_pos_threshold": {
+      "value": null,
+      "units": "raw_uint16_intensity",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_T1A_THRESHOLD",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "unset",
+        "evidence": "docs/ECTOPIC_POD_ENDPOINT.md:142-144. Not frozen. T1A/PDPN is the cross-check denominator, not the primary."
+      }
+    },
+    "min_included_nuclei": {
+      "value": 0,
+      "units": "count",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_MIN_INCLUDED_NUCLEI",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "not_applicable",
+        "evidence": "docs/ECTOPIC_POD_ENDPOINT.md:269-270 (mandatory companion 2): a small region with zero accepted nuclei throws inside the region loop and kills the WHOLE tile, endpoint row included. Engine default is 1 (IF_Quant_Pipeline.groovy:329).",
+        "notes": "Mechanical, not biological - but endpoint_critical because leaving it at 1 silently drops tiles and therefore silently changes the pooled denominator."
+      }
+    },
+    "morphology_primary": {
+      "value": true,
+      "units": "boolean",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_MORPHOLOGY_PRIMARY",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "not_applicable",
+        "evidence": "IF_Quant_Pipeline.groovy:242 default true. Morphology authorises the call; intensity only nominates candidate pixels. The area endpoint does not go through per-cell morphology gates, so this does not move the primary endpoint."
+      }
+    },
+    "segmenter": {
+      "value": "classic",
+      "units": "none",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_SEGMENTER",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "not_applicable",
+        "evidence": "IF_Quant_Pipeline.groovy:305: StarDist/CSBDeep are not installed and TensorFlow has no windows-arm64 native build, so stardist cannot run on this machine."
+      }
+    },
+    "projection": {
+      "value": "max",
+      "units": "none",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "env",
+        "env": "IFQ_PROJECTION",
+        "stage": "stage2"
+      },
+      "validation": {
+        "status": "not_applicable",
+        "evidence": "Series 2 is a single plane (sizeZ = 1), so every projection mode is the identity. 'max' is the engine default (IF_Quant_Pipeline.groovy:315)."
+      }
+    },
+    "pod_min_area_um2": {
+      "value": 50.0,
+      "units": "um2",
+      "endpoint_critical": true,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "downstream",
+        "note": "Hard-coded as POD_MIN_AREA_UM2 at IF_Quant_Pipeline.groovy:347 with NO environment override. It is recorded here for provenance and for the calibration record; it CANNOT be set by this profile without editing the frozen engine, which is prohibited."
+      },
+      "validation": {
+        "status": "pilot_tuned",
+        "evidence": "Session measurement: the 50 um2 component filter moves the control false-positive area fraction only from 4.51e-4 to 4.40e-4, i.e. it barely helps, which shows the KRT5 background is diffuse rather than scattered specks.",
+        "notes": "endpoint_critical AND not settable from the profile. That asymmetry is deliberate: the generator reports it as a frozen-engine constant in provenance so the number is on the record even though nobody can change it from here."
+      }
+    },
+    "airway_dilation_um": {
+      "value": null,
+      "units": "um",
+      "endpoint_critical": true,
+      "not_yet_implemented": {
+        "reason": "Airway exclusion is designed but not built: airway polygons must be drawn by hand in QuPath and subtracted per tile by Stage 1, and no such code path exists. Until then the endpoint's 'ectopic' qualifier is not earned and this parameter has nothing to act on.",
+        "tracked_by_confound": "airway_krt5_in_numerator"
+      },
+      "consumed_by": {
+        "kind": "downstream",
+        "note": "Applied when airway polygons are subtracted at Stage 1; no such code path exists yet."
+      },
+      "validation": {
+        "status": "unset",
+        "evidence": "docs/ECTOPIC_POD_ENDPOINT.md:272-275. Primary rule must be fixed before unblinding; 0 / +10 / +25 um is the sensitivity range, not the rule."
+      }
+    },
+    "manual_agreement_target": {
+      "value": null,
+      "units": "bland_altman_limits_of_agreement",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "downstream",
+        "note": "Human validation step."
+      },
+      "validation": {
+        "status": "unset",
+        "evidence": "Not declared. Must be declared before drawing."
+      }
+    },
+    "genotype_tokens": {
+      "value": "het|hom",
+      "units": "none",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "samplesheet",
+        "column": "genotype"
+      },
+      "validation": {
+        "status": "control_derived",
+        "evidence": "Slide names in scripts/measure_damage_locked.groovy use 'IFNg KO(het)' and 'IFNg KO(hom)'.",
+        "notes": "The generator emits these as the ALLOWED value set for the genotype column and rejects a samplesheet containing anything else, so a stray 'HET' or 'Het' cannot split one mouse group into two."
+      }
+    },
+    "condition_tokens": {
+      "value": "uninfected|PR8_d28",
+      "units": "none",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "samplesheet",
+        "column": "condition"
+      },
+      "validation": {
+        "status": "control_derived",
+        "evidence": "Timepoint is folded into the condition token because condition is an aggregate_to_mouse.py KEY_COL and a separate timepoint column would fork the grouping. samplesheet_template.csv already documents this ('add timepoint if needed e.g. PR8_d21')."
+      }
+    },
+    "virus_dose_pfu": {
+      "value": null,
+      "units": "PFU_per_mouse",
+      "endpoint_critical": false,
+      "not_yet_implemented": null,
+      "consumed_by": {
+        "kind": "wetlab",
+        "note": "Recorded in the animal record; must be identical across all mice pooled into one profile_version."
+      },
+      "validation": {
+        "status": "unset",
+        "evidence": "none"
+      }
+    }
+  },
+  "endpoint_critical_ladder": [
+    {
+      "parameter": "pod_min_area_um2",
+      "status": "pilot_tuned",
+      "rank": 1
+    },
+    {
+      "parameter": "krt5_pos_threshold",
+      "status": "control_derived",
+      "rank": 2
+    },
+    {
+      "parameter": "panel_key",
+      "status": "control_derived",
+      "rank": 2
+    },
+    {
+      "parameter": "wsi_ager_channel",
+      "status": "control_derived",
+      "rank": 2
+    },
+    {
+      "parameter": "wsi_panel_key",
+      "status": "control_derived",
+      "rank": 2
+    },
+    {
+      "parameter": "wsi_ager_threshold",
+      "status": "frozen_blinded_controls",
+      "rank": 3
+    },
+    {
+      "parameter": "wsi_damage_cutoff",
+      "status": "frozen_blinded_controls",
+      "rank": 3
+    },
+    {
+      "parameter": "wsi_damage_sigma_um",
+      "status": "frozen_blinded_controls",
+      "rank": 3
+    },
+    {
+      "parameter": "wsi_partition_damage",
+      "status": "frozen_blinded_controls",
+      "rank": 3
+    },
+    {
+      "parameter": "wsi_roi_name_damaged",
+      "status": "frozen_blinded_controls",
+      "rank": 3
+    },
+    {
+      "parameter": "wsi_roi_name_intact",
+      "status": "frozen_blinded_controls",
+      "rank": 3
+    }
+  ],
+  "endpoint_critical_deferred": [
+    {
+      "parameter": "airway_dilation_um",
+      "status": "unset",
+      "tracked_by_confound": "airway_krt5_in_numerator"
+    }
+  ],
+  "emitted_env": {
+    "stage1": {
+      "IFQ_WSI_AGER_CHANNEL": "2",
+      "IFQ_WSI_AGER_THRESHOLD": "150",
+      "IFQ_WSI_COMPRESSION": "ZLIB",
+      "IFQ_WSI_CORE_PX": "2048",
+      "IFQ_WSI_DAMAGE_CUTOFF": "0.14",
+      "IFQ_WSI_DAMAGE_SIGMA_UM": "40",
+      "IFQ_WSI_HALO_PX": "128",
+      "IFQ_WSI_PANEL": "LEFT",
+      "IFQ_WSI_PARTITION_DAMAGE": "true",
+      "IFQ_WSI_ROI_NAME_DAMAGED": "parenchyma_damaged",
+      "IFQ_WSI_ROI_NAME_INTACT": "parenchyma_intact",
+      "IFQ_WSI_INPUT": "D:/Confocal_Images/20260806_CW/20260806_CW/",
+      "IFQ_WSI_OUTPUT": "D:/wsi_stage1"
+    },
+    "stage2": {
+      "IFQ_KRT5_THRESHOLD": "500",
+      "IFQ_MIN_INCLUDED_NUCLEI": "0",
+      "IFQ_MORPHOLOGY_PRIMARY": "true",
+      "IFQ_PANEL": "LEFT",
+      "IFQ_PROJECTION": "max",
+      "IFQ_SEGMENTER": "classic",
+      "IFQ_INPUT_DIR": "D:/wsi_stage1/slideA/tiles",
+      "IFQ_OUTPUT_DIR": "D:/wsi_stage1/slideA/analysis",
+      "IFQ_MARKER_REGISTRY": "C:/Users/dream/Documents/GitHub/IFQuant-Lung/config/lung_marker_registry.json"
+    }
+  },
+  "not_emitted_because_null": [
+    "ager_pos_threshold",
+    "t1a_pos_threshold",
+    "wsi_roi_compartment"
+  ],
+  "frozen_engine_constants_not_settable": {
+    "POD_MIN_AREA_UM2": 50.0,
+    "POD_BLUR_SIGMA_PX": 2.0,
+    "POD_THRESH_METHOD": "Otsu",
+    "_source": "IF_Quant_Pipeline.groovy:347-349; no environment override exists"
+  },
+  "open_blocking_confounds": [
+    "ifng_alters_viral_clearance",
+    "airway_krt5_in_numerator",
+    "n_of_one"
+  ],
+  "warnings": [
+    "parameter pod_min_area_um2 is endpoint_critical but consumed_by.kind=downstream: it cannot be set from this profile. It is recorded in provenance only.",
+    "parameter airway_dilation_um is endpoint_critical but consumed_by.kind=downstream: it cannot be set from this profile. It is recorded in provenance only.",
+    "parameter airway_dilation_um is endpoint_critical and its value is null. The generator emits nothing for it, so the engine falls back to its own default."
+  ],
+  "notes": [
+    "BLOCKING CONFOUND OPEN: ifng_alters_viral_clearance -- A global IFN-gamma ligand knockout can alter viral clearance. If KO animals clear PR8 more slowly (or faster), they sustain a different amount of alveolar destruction, so a difference in KRT5+ pod area may be an infection-severity difference rather than a difference in the dysplastic response. (needs: Influenza NP immunostaining on a serial section, or NP qPCR. No image analysis can substitute for it.)",
+    "BLOCKING CONFOUND OPEN: airway_krt5_in_numerator -- Conducting airways are not excluded. Airway basal cells are KRT5+ in every animal, so the numerator carries an airway component whose size depends on how much airway each tile happens to contain. (needs: Manual airway polygons in QuPath, drawn blinded with the KRT5 channel off, exported as GeoJSON in slide coordinates and subtracted per tile by Stage 1.)",
+    "BLOCKING CONFOUND OPEN: n_of_one -- n = 1 mouse per group cell. With n = mice as the statistical unit, no group comparison is possible; any apparent difference is a single-animal anecdote. (needs: More mice.)"
+  ]
+}

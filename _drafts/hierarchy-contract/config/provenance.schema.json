@@ -1,0 +1,245 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/xorca0711/IFQuant-Lung/config/provenance.schema.json",
+  "title": "IFQuant-Lung module provenance sidecar",
+  "description": "Written by EVERY module beside every summary CSV as '<csv_stem>.provenance.json'. Design goal: a methods paragraph must be writable from these sidecars alone, without the code, the machine, or the operator's memory. Field ordering mirrors the existing run_manifest.json emitted by IF_Quant_Pipeline.groovy (run_timestamp / versions / config / images) so one parser can read both.",
+  "type": "object",
+  "required": ["provenance_schema_version", "module", "run", "software", "inputs", "parameters", "outputs", "qc", "contract", "statistics"],
+  "additionalProperties": false,
+  "properties": {
+    "provenance_schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "SemVer of THIS schema. Bump minor for additive fields only."
+    },
+
+    "module": {
+      "type": "object",
+      "required": ["module_id", "module_version", "level", "panel_scope", "emits", "owns_region_area_um2"],
+      "additionalProperties": false,
+      "properties": {
+        "module_id": {"type": "string", "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+          "description": "'<directory>.<measurement>', e.g. 'morphometry.alveolar_architecture'. The directory part must be one of: engine, wsi, morphometry, spatial, registration."},
+        "module_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+        "level": {"enum": ["region", "tile", "slide"],
+          "description": "Granularity of the rows this module wrote. NEVER 'mouse' or 'group' -- only aggregate_to_mouse.py may produce those."},
+        "panel_scope": {"type": "string", "pattern": "^[^@]+@[a-z_]+$",
+          "description": "The value written into the CSV 'panel' column: '<PANEL_KEY>@<denominator_scope>'. Declares which anatomical territory region_area_um2 measures."},
+        "emits": {"type": "array", "items": {"type": "string"}, "minItems": 1,
+          "description": "Measurement columns this module owns. Must be disjoint from every other module's 'emits'."},
+        "owns_region_area_um2": {"type": "boolean",
+          "description": "true = this module writes the denominator for its panel_scope. Exactly ONE producer per (mouse, panel_scope) may be true, else every area fraction is wrong by the ratio of the areas."},
+        "reserved_prefix": {"type": "string", "description": "e.g. 'morph_', 'spat_', 'reg_'."}
+      }
+    },
+
+    "run": {
+      "type": "object",
+      "required": ["run_id", "started_utc", "command_line"],
+      "properties": {
+        "run_id": {"type": "string", "description": "<UTC compact timestamp>-<6 hex>, unique per invocation."},
+        "started_utc": {"type": "string", "format": "date-time"},
+        "finished_utc": {"type": ["string", "null"], "format": "date-time"},
+        "operator": {"type": ["string", "null"]},
+        "host": {"type": ["string", "null"]},
+        "command_line": {"type": "string", "description": "Verbatim, so the run is reproducible by paste."},
+        "working_directory": {"type": ["string", "null"],
+          "description": "Load-bearing: IF_Quant_Pipeline.groovy:158 resolves config/lung_marker_registry.json relative to the process CWD."},
+        "environment_overrides": {"type": "object", "additionalProperties": {"type": "string"},
+          "description": "Every IFQ_* variable actually in effect, e.g. IFQ_MARKER_REGISTRY, IFQ_PANEL_CONFIG, IFQ_INJURY_PROFILE, IFQ_PROJECTION."}
+      }
+    },
+
+    "software": {
+      "type": "object",
+      "required": ["ifquant_repo_commit", "contract_version", "runtimes"],
+      "properties": {
+        "ifquant_repo_commit": {"type": ["string", "null"], "description": "git rev-parse HEAD; null only if not a git checkout."},
+        "ifquant_repo_dirty": {"type": "boolean", "description": "true means the tree had uncommitted changes -- the commit does NOT identify the code that ran."},
+        "ifquant_branch": {"type": ["string", "null"]},
+        "contract_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+        "aggregate_to_mouse_sha256": {"type": ["string", "null"],
+          "description": "Pins the single aggregation path. A change here invalidates cross-run comparability."},
+        "if_quant_pipeline_sha256": {"type": ["string", "null"], "description": "Pins the frozen engine."},
+        "runtimes": {
+          "type": "array", "minItems": 1,
+          "items": {"type": "object", "required": ["name", "version"],
+            "properties": {"name": {"type": "string"}, "version": {"type": "string"}}},
+          "description": "python / qupath / imagej / bioformats / java / os, and stardist+csbdeep when segmentation used them."
+        },
+        "libraries": {"type": "array",
+          "items": {"type": "object", "required": ["name", "version"],
+            "properties": {"name": {"type": "string"}, "version": {"type": "string"}}}}
+      }
+    },
+
+    "inputs": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["role", "path"],
+        "properties": {
+          "role": {"enum": ["source_image", "tile", "roi_set", "tile_manifest", "stage1_manifest",
+                            "run_summary", "cells_csv", "samplesheet", "marker_registry",
+                            "panel_config", "injury_model_profile", "endpoint_spec",
+                            "reference_histology", "transform", "mask", "other"]},
+          "path": {"type": "string"},
+          "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+          "sha256_skipped_reason": {"type": ["string", "null"],
+            "description": "REQUIRED whenever sha256 is null. A ~12 GB .vsi need not be hashed every run, but the omission must be explicit."},
+          "size_bytes": {"type": ["integer", "null"]},
+          "mtime_utc": {"type": ["string", "null"], "format": "date-time"},
+          "schema_version": {"type": ["string", "null"], "description": "for JSON config inputs"},
+          "series_index": {"type": ["integer", "null"]},
+          "series_name": {"type": ["string", "null"]},
+          "pixel_size_um": {"type": ["number", "null"], "description": "Required for source_image. Every micron in every output depends on it."},
+          "size_px": {"type": ["array", "null"], "items": {"type": "integer"}, "minItems": 2, "maxItems": 3},
+          "n_channels": {"type": ["integer", "null"]},
+          "n_z_planes": {"type": ["integer", "null"]},
+          "bit_depth": {"type": ["integer", "null"]},
+          "dynamic_range_note": {"type": ["string", "null"],
+            "description": "e.g. '12-bit data in uint16 (0-4095)'. Absolute intensity thresholds are meaningless without it."},
+          "channel_map": {"type": ["array", "null"],
+            "items": {"type": "object",
+              "properties": {"idx": {"type": "integer"}, "marker": {"type": "string"},
+                             "fluorophore": {"type": ["string", "null"]}}}}
+        },
+        "allOf": [{
+          "if": {"properties": {"sha256": {"const": null}}, "required": ["sha256"]},
+          "then": {"required": ["sha256_skipped_reason"],
+                   "properties": {"sha256_skipped_reason": {"type": "string", "minLength": 1}}}
+        }]
+      }
+    },
+
+    "parameters": {
+      "type": "object",
+      "required": ["locked", "free"],
+      "properties": {
+        "locked": {"type": "object", "additionalProperties": {"type": ["number", "string", "boolean"]},
+          "description": "Values frozen by a calibration and forbidden to vary between groups. Example (this study): ager_threshold 150, damage_sigma_um 40, damage_cutoff 0.14."},
+        "free": {"type": "object", "additionalProperties": {},
+          "description": "Values the operator may set per run. Any parameter that could differ between control and treated MUST be here and MUST be identical across the comparison, or the comparison is confounded."},
+        "lock_source": {"type": "object", "additionalProperties": {"type": "string"},
+          "description": "One entry per key in 'locked': a JSON pointer of the form '<profile path>#<dotted key>'. A locked value with no lock_source is uncited and the validator rejects it."},
+        "calibration": {
+          "type": "object",
+          "required": ["calibrated_on", "criterion", "locked_utc"],
+          "properties": {
+            "calibrated_on": {"type": "string", "description": "e.g. 'uninfected control slides only'. Calibrating on treated samples circularly guarantees the result."},
+            "calibration_run_id": {"type": ["string", "null"]},
+            "criterion": {"type": "string", "description": "e.g. 'alpha = 0.01 false-positive area fraction on uninfected lung'."},
+            "held_out_result": {"type": ["string", "null"], "description": "e.g. 'infected 6.71% / 4.68% damaged vs control 0.93% / 0.18%'."},
+            "locked_utc": {"type": "string", "format": "date-time"},
+            "applies_to": {
+              "type": "object",
+              "description": "Envelope outside which these numbers must NOT be reused. This is what stops the influenza AGER cutoff silently governing a bleomycin study.",
+              "properties": {
+                "species": {"type": "string"},
+                "injury_model": {"type": "string"},
+                "panel": {"type": "string"},
+                "pixel_size_um_range": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+                "section_thickness_um": {"type": ["number", "null"]},
+                "fixation": {"type": ["string", "null"]},
+                "modality": {"enum": ["IF", "brightfield", "IHC", "multiplex"]}
+              }
+            }
+          }
+        },
+        "not_applicable": {"type": "array", "items": {"type": "string"},
+          "description": "Parameters a reader might expect but that this module does not use. Absence of a knob is information."}
+      }
+    },
+
+    "outputs": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "n_rows", "row_identity_key"],
+        "properties": {
+          "path": {"type": "string"},
+          "n_rows": {"type": "integer", "minimum": 0},
+          "sha256": {"type": ["string", "null"]},
+          "row_identity_key": {"type": "array", "items": {"type": "string"},
+            "description": "Must be exactly ['output_key','region','section_id','panel'] -- the key aggregate_to_mouse.py:97-111 uses for its duplicate check."},
+          "n_mice": {"type": ["integer", "null"]}
+        }
+      }
+    },
+
+    "qc": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["ok", "WARN", "PROBLEM"]},
+        "blocking": {"type": "array", "items": {"type": "string"}},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "area_reconciliation": {
+          "type": "object",
+          "description": "How this module's measured area compares with the reference area for the same territory. Mandatory for any slide-level module that shares a mouse with the tile-level engine.",
+          "required": ["module_area_um2", "reference_area_um2", "reference_source", "rel_diff", "tolerance", "passed"],
+          "properties": {
+            "module_area_um2": {"type": "number"},
+            "reference_area_um2": {"type": "number"},
+            "reference_source": {"type": "string", "description": "e.g. 'sum(tile_manifest.core_raster_area_um2)' or 'stage1_manifest.tissue_area_mm2'."},
+            "rel_diff": {"type": "number", "minimum": 0},
+            "tolerance": {"type": "number", "description": "0.01 matches aggregate_tiles_to_slide.py:351."},
+            "passed": {"type": "boolean"}
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "description": "A unit that failed silently removes its numerator AND its denominator, and the result stays plausible. Coverage must be stated, not assumed.",
+          "properties": {
+            "n_expected": {"type": "integer"},
+            "n_analyzed": {"type": "integer"},
+            "fraction": {"type": "number", "minimum": 0, "maximum": 1},
+            "missing_ids": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "negative_control": {
+          "type": "object",
+          "description": "The biological negative, when one exists. For KRT5 in intact control parenchyma the measured background was p50 28-30, p99 97-109, and the best achievable false-positive area fraction was 4.4e-4 at threshold 500.",
+          "properties": {
+            "description": {"type": "string"},
+            "metric": {"type": "string"},
+            "value": {"type": "number"},
+            "acceptance_threshold": {"type": ["number", "null"]},
+            "passed": {"type": ["boolean", "null"]}
+          }
+        }
+      }
+    },
+
+    "contract": {
+      "type": "object",
+      "required": ["contract_version", "sum_columns", "dropped_columns"],
+      "properties": {
+        "contract_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+        "validated_by": {"type": "string", "description": "e.g. 'contract/ifq_contract.py'"},
+        "validation_utc": {"type": ["string", "null"], "format": "date-time"},
+        "sum_columns": {"type": "array", "items": {"type": "string"},
+          "description": "Emitted columns that aggregate_to_mouse.classify_columns() places in sum_cols."},
+        "recomputed_at_mouse_level": {"type": "array", "items": {"type": "string"},
+          "description": "Ratios the aggregator will derive. The module does not compute these."},
+        "dropped_columns": {"type": "array", "items": {"type": "string"},
+          "description": "Emitted columns the aggregator will not read. A NUMERIC entry here is a contract violation."},
+        "declared_endpoints": {"type": "array", "items": {"type": "string"},
+          "description": "Paths under config/endpoints/ that define ratios over this module's pooled totals."}
+      }
+    },
+
+    "statistics": {
+      "type": "object",
+      "required": ["n_definition"],
+      "properties": {
+        "n_definition": {"const": "mouse_id",
+          "description": "Constant by design. n = MICE, never sections/slides/tiles. Any other value is a contract violation."},
+        "n_mice_contributed": {"type": ["integer", "null"]},
+        "n_rows_written": {"type": ["integer", "null"]},
+        "pseudoreplication_guard": {"type": "string",
+          "description": "Free text naming the mechanism, e.g. 'rows are pooled to mouse by aggregate_to_mouse.py; group stats use n = mice'."}
+      }
+    }
+  }
+}

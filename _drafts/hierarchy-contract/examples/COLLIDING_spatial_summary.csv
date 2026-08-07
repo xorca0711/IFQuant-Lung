@@ -1,0 +1,3 @@
+image,output_key,region,section_id,mouse_id,genotype,condition,panel,region_area_um2,class_KRT5pod_near_AGERneg_count
+slideA,spat@slideA@damaged,damaged,slideA,M1,het,pr8,LEFT@damaged,4960000,26
+slideB,spat@slideB@damaged,damaged,slideB,M2,hom,pr8,LEFT@damaged,4760000,58

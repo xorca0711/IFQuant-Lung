@@ -1,0 +1,49 @@
+{
+  "endpoint_schema_version": "1.0.0",
+  "endpoint_id": "ectopic_pod_over_damaged",
+  "label": "KRT5+ ectopic pod area / damaged alveolar area",
+  "reference": "Lin et al. J Clin Invest 2024;134(19):e176828 (measured by hand with outline splines)",
+
+  "evaluated_on": "mouse_level_summary.csv",
+  "panel_scope": "LEFT@damaged",
+
+  "numerator": {
+    "column": "KRT5_pod_area_um2_total",
+    "produced_from": "KRT5_pod_area_um2 (SUM, aggregate_to_mouse.py:168-169)",
+    "units": "um2"
+  },
+  "denominator": {
+    "column": "total_tissue_area_um2",
+    "produced_from": "region_area_um2 (SUM, aggregate_to_mouse.py:184,230-232)",
+    "units": "um2",
+    "semantics": "In the LEFT@damaged scope, region_area_um2 is the DAMAGED alveolar area only. aggregate_tiles_to_slide.py:276-284 sums only the damaged rows into the slide row, so the damaged area is already the denominator by the time aggregate_to_mouse.py sees it."
+  },
+  "value": "KRT5_pod_area_um2_total / total_tissue_area_um2",
+  "units": "dimensionless area fraction",
+
+  "already_computed_as": "KRT5_pod_area_frac",
+  "audit_rule": "abs(numerator/denominator - KRT5_pod_area_frac) < 1e-9. If this fails, the pooled totals and the recomputed fraction disagree and neither may be reported.",
+
+  "pooling": {
+    "rule": "SUM numerator across all rows of a mouse, SUM denominator across all rows of a mouse, THEN divide.",
+    "never": "Do not average per-tile or per-slide pod fractions. Tiles differ in damaged area by more than an order of magnitude; an unweighted mean is a different quantity."
+  },
+
+  "statistics": {
+    "n_definition": "mouse_id",
+    "group_key": ["genotype", "condition", "panel"],
+    "reported_by": "group_level_summary.csv rows with metric == 'KRT5_pod_area_frac'",
+    "n_mice_column": "n_mice"
+  },
+
+  "detection_floor": {
+    "value": 0.00044,
+    "basis": "false-positive KRT5 area fraction in INTACT control parenchyma at threshold 500; no threshold reaches 1e-4",
+    "rule": "An effect smaller than this floor is not distinguishable from KRT5 background and must not be reported as a difference."
+  },
+
+  "guards": [
+    "The denominator must be non-zero. A mouse with zero damaged area yields 0.0 by construction (aggregate_to_mouse.py:330) and must be excluded by hand, not silently averaged in as a zero.",
+    "KRT5_pod_area_frac_of_intact (aggregate_tiles_to_slide.py:303) is the QC counterpart: dysplastic pods belong in damaged parenchyma. A large intact value means the damage mask, the KRT5 threshold, or both are wrong. NOTE: that column is currently DROPPED at mouse level because its name matches no sum_cols pattern -- see MODULE_CONTRACT.md section 3.3."
+  ]
+}

@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/xorca0711/IFQuant-Lung/contract/module_provenance.schema.json",
+  "title": "IFQuant-Lung module provenance",
+  "description": "Written by EVERY module (wsi/, morphometry/, spatial/, registration/, and the Stage 3/4 aggregators) beside its output CSV as 'module_provenance.json'. The goal is a methods paragraph that can be written from the outputs alone, with no access to the operator, the shell history, or the repo working tree. Field names deliberately mirror the shapes the frozen engine already writes in run_manifest.json (run_timestamp, versions, config, images, status, *_count) and in qupath_wsi_tile_export.groovy's stage1_manifest.json (slide_stem, source_vsi, series_index, pixel_size_um, tissue_area_mm2, coverage_complete) so old artefacts can be lifted into this schema mechanically.",
+  "type": "object",
+  "required": ["schema_version", "module", "runtime", "inputs", "parameters", "outputs", "emits", "qc"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "description": "Version of THIS provenance schema. Bump only for breaking changes."
+    },
+    "contract_version": {
+      "type": "string",
+      "description": "Version of the aggregate_to_mouse column contract this module was written against, e.g. '1.0.0'.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "module": {
+      "type": "object",
+      "required": ["name", "version", "level", "language", "entrypoint"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "description": "Directory-qualified module id, e.g. 'morphometry.alveolar_architecture'."},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "level": {
+          "enum": ["tile", "slide", "region", "section", "field"],
+          "description": "The physical unit ONE OUTPUT ROW describes. Determines whether the module may join onto engine rows (tile/field) or must claim its own panel token (slide/section)."
+        },
+        "language": {"enum": ["groovy-fiji", "groovy-qupath", "python", "powershell", "csharp"]},
+        "entrypoint": {"type": "string", "description": "Repo-relative path of the script that produced this output."},
+        "repo_commit": {"type": ["string", "null"], "description": "git rev-parse HEAD at run time, or null if the tree was dirty/untracked."},
+        "repo_dirty": {"type": "boolean"},
+        "entrypoint_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Hash of the entrypoint file itself. This is what makes the run reproducible when repo_dirty is true."}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "description": "Everything a reviewer needs to reproduce the numeric environment. Mirrors run_manifest.json.versions.",
+      "required": ["timestamp_utc", "host_os"],
+      "properties": {
+        "timestamp_utc": {"type": "string", "format": "date-time"},
+        "duration_s": {"type": "number", "minimum": 0},
+        "host_os": {"type": "string", "examples": ["Windows 11 aarch64"]},
+        "hostname": {"type": "string"},
+        "java_version": {"type": "string"},
+        "imagej_version": {"type": "string", "examples": ["1.54p99"]},
+        "bioformats_version": {"type": "string", "examples": ["8.5.0"]},
+        "qupath_version": {"type": "string", "examples": ["0.7.0"]},
+        "python_version": {"type": "string"},
+        "third_party": {
+          "type": "array",
+          "description": "Any additional dependency that can change a number (StarDist, CSBDeep, scikit-image, elastix, ANTs...).",
+          "items": {
+            "type": "object",
+            "required": ["name", "version"],
+            "properties": {"name": {"type": "string"}, "version": {"type": "string"}, "source": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Every file read. Hashing large WSI files is optional; recording size+mtime is not.",
+      "items": {
+        "type": "object",
+        "required": ["path", "role"],
+        "properties": {
+          "path": {"type": "string"},
+          "role": {
+            "enum": ["image", "tile", "roiset", "mask", "manifest", "samplesheet",
+                     "marker_registry", "panel_config", "injury_profile",
+                     "upstream_summary", "transform", "annotation"],
+            "description": "Why the module opened it."
+          },
+          "bytes": {"type": "integer", "minimum": 0},
+          "mtime_utc": {"type": "string", "format": "date-time"},
+          "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+          "sha256_skipped_reason": {"type": "string", "examples": ["file larger than 2 GB"]},
+          "pixel_size_um": {"type": "number", "exclusiveMinimum": 0},
+          "series_index": {"type": "integer"},
+          "n_channels": {"type": "integer", "minimum": 1},
+          "bit_depth": {"type": "integer", "examples": [12, 16]}
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "description": "EVERY value that could change a number, including ones left at their default. A parameter absent here is a parameter that cannot be reported in a methods section. Keys are the module's own parameter names.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["value", "units", "source"],
+        "properties": {
+          "value": {"description": "Scalar, array, or object. Whatever the module actually used, AFTER defaults and env overrides were resolved."},
+          "units": {"type": "string", "description": "'um', 'um2', 'raw_intensity_16bit', 'fraction', 'count', 'none'. Never leave blank; unitless is 'none'."},
+          "source": {
+            "enum": ["default", "env", "cli", "config_file", "calibrated", "locked"],
+            "description": "'locked' means a frozen, control-derived constant that MUST NOT be re-tuned per run."
+          },
+          "env_var": {"type": "string", "examples": ["IFQ_WSI_AGER_THRESHOLD"]},
+          "locked_by": {"type": "string", "description": "Path or DOI of the calibration artefact that fixed this value, e.g. 'scripts/calibrate_damage_controls.groovy @ 2026-08-07'."},
+          "calibration_alpha": {"type": "number", "description": "Declared false-positive rate the value was chosen to hit, e.g. 0.01."},
+          "note": {"type": "string"}
+        }
+      },
+      "examples": [{
+        "ager_threshold": {"value": 150, "units": "raw_intensity_16bit", "source": "locked",
+                           "env_var": "IFQ_WSI_AGER_THRESHOLD",
+                           "locked_by": "scripts/calibrate_damage_controls.groovy",
+                           "calibration_alpha": 0.01},
+        "damage_sigma_um": {"value": 40.0, "units": "um", "source": "locked", "env_var": "IFQ_WSI_DAMAGE_SIGMA_UM"},
+        "damage_cutoff": {"value": 0.14, "units": "fraction", "source": "locked", "env_var": "IFQ_WSI_DAMAGE_CUTOFF"}
+      }]
+    },
+    "denominator": {
+      "type": "object",
+      "description": "MANDATORY for any module that writes region_area_um2. This is the single most dangerous field in the pipeline: aggregate_to_mouse.py sums region_area_um2 over every row sharing (mouse_id, genotype, condition, panel) and divides every fraction by that sum.",
+      "required": ["denominator_id", "semantics", "panel_token"],
+      "properties": {
+        "denominator_id": {"type": "string", "description": "Stable token also written as a CSV column, e.g. 'damaged_parenchyma_core', 'slide_tissue_mask'. Two rows with different denominator_id must never share a panel token."},
+        "semantics": {"type": "string", "description": "One sentence a reader can check: 'parenchymal tissue inside the tile core lacking AGER coverage at 40 um scale'."},
+        "panel_token": {"type": "string", "description": "The value written to the `panel` column. Base panel for join-mode modules; '<BASE>.<module>' for own-row modules."},
+        "measured_by": {"type": "string", "description": "Which mask/ROI produced the area, e.g. 'tile core ROI n <stem>.ome_RoiSet.zip'."}
+      }
+    },
+    "emits": {
+      "type": "array",
+      "description": "Data dictionary for every measurement column in the output CSV. The checker compares this to the real header.",
+      "items": {
+        "type": "object",
+        "required": ["column", "units", "aggregation", "meaning"],
+        "properties": {
+          "column": {"type": "string"},
+          "units": {"type": "string"},
+          "aggregation": {
+            "enum": ["SUM", "RECOMPUTE", "CARRY", "QC"],
+            "description": "SUM: pooled by addition by aggregate_to_mouse. RECOMPUTE: minted downstream from pooled sums; the module's own value is discarded. CARRY: identity column. QC: intentionally dropped diagnostic."
+          },
+          "meaning": {"type": "string"},
+          "numerator_of": {"type": "string", "description": "Name of the mouse-level derived metric this column feeds, if any."},
+          "denominator_column": {"type": "string", "description": "Which column divides it at mouse level. Almost always region_area_um2 or n_nuclei."},
+          "scale_constant": {"type": "number", "description": "Multiplier a post-aggregation derivation must apply, e.g. total test-line length per section for MLI."}
+        }
+      }
+    },
+    "derived_metrics": {
+      "type": "array",
+      "description": "Ratios the module intends but CANNOT emit, because aggregate_to_mouse.py only pools extensive counts and areas. These are computed AFTER mouse-level aggregation from the *_total columns, never before.",
+      "items": {
+        "type": "object",
+        "required": ["name", "numerator", "denominator", "units"],
+        "properties": {
+          "name": {"type": "string", "examples": ["mean_linear_intercept_um"]},
+          "numerator": {"type": "string", "description": "Mouse-level column, e.g. 'mli_testline_pos_count_total'."},
+          "denominator": {"type": "string", "examples": ["mli_intercept_pos_count_total"]},
+          "scale": {"type": "number", "description": "Constant multiplier, e.g. test-line length in um."},
+          "units": {"type": "string"},
+          "formula": {"type": "string", "examples": ["scale * numerator / denominator"]}
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "kind"],
+        "properties": {
+          "path": {"type": "string"},
+          "kind": {"enum": ["summary_csv", "per_object_csv", "mask", "overlay", "qc_png", "transform", "manifest"]},
+          "rows": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "upstream": {
+      "type": "array",
+      "description": "Provenance chain. Each entry points at the module_provenance.json of a module whose output this one consumed, so the chain reads back to the raw .vsi.",
+      "items": {
+        "type": "object",
+        "required": ["module", "provenance_path"],
+        "properties": {
+          "module": {"type": "string"},
+          "version": {"type": "string"},
+          "provenance_path": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "qc": {
+      "type": "object",
+      "description": "Whatever the module checked about itself. status MUST be 'ok' before the output may be aggregated.",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["ok", "PROBLEM", "incomplete", "dry_run"]},
+        "notes": {"type": "array", "items": {"type": "string"}},
+        "n_units_expected": {"type": "integer"},
+        "n_units_measured": {"type": "integer"},
+        "coverage_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "reconciliation": {
+          "type": "array",
+          "description": "Cross-level area checks, e.g. this module's slide tissue area vs sum(region_area_um2) over the engine's tiles.",
+          "items": {
+            "type": "object",
+            "required": ["quantity", "this_value", "reference_value", "reference_source", "rel_diff", "tolerance"],
+            "properties": {
+              "quantity": {"type": "string"},
+              "this_value": {"type": "number"},
+              "reference_value": {"type": "number"},
+              "reference_source": {"type": "string"},
+              "rel_diff": {"type": "number"},
+              "tolerance": {"type": "number"},
+              "passed": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "study": {
+      "type": "object",
+      "description": "Optional. Free-form study context copied from the samplesheet so a figure legend can be generated. NEVER the source of mouse_id -- that comes from the CSV.",
+      "properties": {
+        "study_id": {"type": "string"},
+        "endpoint": {"type": "string"},
+        "reference": {"type": "string", "examples": ["Lin et al. J Clin Invest 2024;134(19):e176828"]},
+        "n_mice_in_output": {"type": "integer"},
+        "injury_profile": {"type": "string", "examples": ["config/profiles/influenza_pr8.profile.json"]}
+      }
+    }
+  }
+}

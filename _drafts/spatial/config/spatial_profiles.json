@@ -1,0 +1,107 @@
+{
+  "schema_version": "0.1.0-draft",
+  "_comment": [
+    "Spatial analysis profiles. EVERY radius and bin edge is declared here, a",
+    "priori. Nothing downstream may choose a radius after looking at a curve:",
+    "with 12 radius bins and a free choice of r, an uncorrected 'significant'",
+    "result is guaranteed. Exactly one radius per profile carries",
+    "primary=true; all others are exploratory and must be reported as such.",
+    "Bin edges are FIXED so that histograms from different slides and mice are",
+    "additive. build/stats will refuse to pool rows whose declared",
+    "spatial_bin_signature differs."
+  ],
+
+  "cell_classes": {
+    "_comment": "A class is a predicate over the engine's per-cell columns. 'call' uses <MARKER>_final_call (1 / 0 / '' = indeterminate, IF_Quant_Pipeline.groovy line 2532). 'class_col' uses the engine's compound class column (line 2557). Indeterminate cells are NEVER silently treated as negative: they are excluded from the class AND from the eligible pool, and the exclusion is counted.",
+    "KRT5pos":    {"kind": "call", "marker": "KRT5", "want": 1},
+    "KRT5neg":    {"kind": "call", "marker": "KRT5", "want": 0},
+    "AGERpos":    {"kind": "call", "marker": "AGER", "want": 1},
+    "T1Apos":     {"kind": "call", "marker": "T1A",  "want": 1},
+    "KRT5posAGERneg": {"kind": "class_col", "column": "class_KRT5+_AGER-"},
+    "AGERposT1Apos":  {"kind": "class_col", "column": "class_AGER+_T1A+"},
+    "AllCells":   {"kind": "all"}
+  },
+
+  "profiles": {
+
+    "ifng_ko_pr8_ectopic_pod": {
+      "label": "IFN-gamma KO + PR8, KRT5 ectopic pod niche (panel LEFT)",
+      "panel": "LEFT",
+      "region_filter": "damaged",
+      "_region_comment": "The endpoint denominator is DAMAGED alveolar area. Restricting the point pattern to region rows containing 'damaged' keeps the spatial window identical to the endpoint denominator that aggregate_tiles_to_slide.py already uses (its endpoint_rows selection, lines 225-228).",
+
+      "eligible_pool": "AllCells",
+      "_pool_comment": "The random-labelling null permutes the class label among this pool. Change it and you change the null hypothesis; it is therefore declared, not inferred.",
+
+      "nn_pairs": [
+        {"from": "KRT5neg", "to": "KRT5pos"},
+        {"from": "AGERpos", "to": "KRT5pos"}
+      ],
+      "nn_edges_um": [0, 5, 10, 15, 20, 30, 40, 60, 80, 120, 160, 240],
+
+      "neighbourhood_radii_um": [25, 50, 100],
+      "primary_neighbourhood_radius_um": 50,
+      "neighbourhood_pairs": [
+        {"focal": "KRT5pos", "neighbour": "KRT5pos"},
+        {"focal": "KRT5pos", "neighbour": "AGERpos"}
+      ],
+
+      "ripley_edges_um": [0, 10, 20, 30, 40, 60, 80, 100, 140, 200],
+      "primary_ripley_radius_um": 50,
+      "ripley_pairs": [
+        {"a": "KRT5pos", "b": "KRT5pos"},
+        {"a": "KRT5pos", "b": "AGERpos"}
+      ],
+
+      "structures": [
+        {
+          "name": "KRT5pod",
+          "source": "engine_mask",
+          "mask_suffix": "__KRT5_pod_mask.tif",
+          "_source_comment": "Written by IF_Quant_Pipeline.groovy line 2782 for every channel with areaMarker:true and areaMode 'pod'. Full-tile binary mask at the tile's own calibration.",
+          "fallback": {
+            "source": "cell_class_dilation",
+            "cell_class": "KRT5pos",
+            "dilate_um": 8.0,
+            "_fallback_comment": "PROXY ONLY. Discs around KRT5+ nuclei are not the pod area the endpoint measures. Any row produced from the fallback is stamped structure_source=cell_class_dilation_proxy and must not be reported as a pod distance."
+          },
+          "target_classes": ["AGERpos", "KRT5neg"],
+          "edges_um": [0, 10, 25, 50, 100, 200, 400]
+        }
+      ],
+
+      "raster_um": 2.0,
+      "covariance_um": 8.0,
+      "window": {
+        "mode": "nucleus_support",
+        "dilate_um": 30.0,
+        "_window_comment": "Stage 1 keeps the global tissue mask in memory only (qupath_wsi_tile_export.groovy lines 607-624) and never writes it to disk, so the analysis window is estimated from the nuclei themselves: the union of discs of radius dilate_um around every retained nucleus. Smaller values fragment the window and inflate its boundary; larger values swallow airspace and vessels. 30 um is ~ one alveolar wall spacing. The window area is reconciled against region_area_um2 from run_summary and the ratio is emitted as QC."
+      },
+
+      "max_query_points": 200000,
+      "query_seed": 20260806,
+      "_query_comment": "Ripley/neighbourhood focal points are subsampled above this count with a fixed seed. K-hat = sum(S) / sum(D) and D is computed from the SUBSAMPLED focal count, so the ratio stays unbiased; only its variance rises. n_query_points and query_subsample_fraction are emitted."
+    },
+
+    "generic_immune_niche": {
+      "label": "Generic immune-cell-to-structure niche template (any panel)",
+      "panel": null,
+      "region_filter": null,
+      "eligible_pool": "AllCells",
+      "nn_pairs": [],
+      "nn_edges_um": [0, 10, 20, 30, 50, 75, 100, 150, 200],
+      "neighbourhood_radii_um": [25, 50, 100],
+      "primary_neighbourhood_radius_um": 50,
+      "neighbourhood_pairs": [],
+      "ripley_edges_um": [0, 10, 20, 30, 40, 60, 80, 100, 140, 200],
+      "primary_ripley_radius_um": 50,
+      "ripley_pairs": [],
+      "structures": [],
+      "raster_um": 2.0,
+      "covariance_um": 8.0,
+      "window": {"mode": "nucleus_support", "dilate_um": 30.0},
+      "max_query_points": 200000,
+      "query_seed": 20260806
+    }
+  }
+}

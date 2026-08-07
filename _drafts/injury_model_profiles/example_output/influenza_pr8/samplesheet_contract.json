@@ -1,0 +1,44 @@
+{
+  "columns": [
+    "filename",
+    "mouse_id",
+    "section_id",
+    "genotype",
+    "condition",
+    "panel",
+    "relative_path"
+  ],
+  "required_columns": [
+    "filename",
+    "mouse_id",
+    "section_id",
+    "genotype",
+    "condition",
+    "panel"
+  ],
+  "key_cols_downstream": [
+    "mouse_id",
+    "genotype",
+    "condition",
+    "panel"
+  ],
+  "allowed_genotype": [
+    "het",
+    "hom"
+  ],
+  "allowed_condition": [
+    "uninfected",
+    "PR8_d28"
+  ],
+  "allowed_panel": [
+    "LEFT",
+    "RIGHT"
+  ],
+  "rules": [
+    "mouse_id must never be NA/blank/UNKNOWN; aggregate_to_mouse.py exits on it (lines 76-85).",
+    "One mouse_id must map to exactly one (genotype, condition); the aggregator exits on a conflict (lines 87-95).",
+    "Timepoint belongs INSIDE the condition token. There is no timepoint column and adding one would fork the grouping.",
+    "Token case and spelling are load-bearing: 'het' and 'Het' become two different groups.",
+    "(image|output_key, region, section_id, panel) must be unique across all rows (lines 97-111)."
+  ]
+}
