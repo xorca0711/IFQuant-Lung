@@ -201,13 +201,28 @@ $jre = (Get-ChildItem "$fj\java" -Recurse -Filter java.exe | Select-Object -Firs
 & $jre `
   '--add-opens=java.base/java.lang=ALL-UNNAMED' `
   "-javaagent:$fj\jars\ij1-patcher-2.0.0.jar=init" `
-  '-Djava.awt.headless=true' "-Dplugins.dir=$fj" '-Xmx8g' `
+  '-Djava.awt.headless=true' "-Dplugins.dir=$fj" '-Xmx6g' `
   -cp "$fj\jars\*;$fj\plugins\*" net.imagej.Main --headless `
   --run .\IF_Quant_Pipeline.groovy
 ```
 
 Note the `ij1-patcher` javaagent and `--add-opens`. Without them the run dies
 with `No _hooks field found in ij.IJ`.
+
+### Heap sizing — do not over-allocate
+
+`-Xmx` must leave room for the OS and for any other JVM running concurrently.
+The development machine has 15.6 GB total, and asking for `-Xmx12g` on it makes
+the JVM believe it has memory the OS then has to page to disk; the run gets
+*slower*, not faster, and the symptom looks like slow I/O rather than swapping.
+
+Rule of thumb: **one heavy JVM at a time**, `-Xmx` no more than about 40% of
+physical RAM, and lower still when sharding Stage 2 — each shard is its own JVM
+and they all draw on the same physical memory. Five shards at `-Xmx6g` on a
+16 GB machine will thrash; size shard heaps to `RAM * 0.4 / n_shards`.
+
+QuPath sizes its tile cache as a percentage of max heap, so an inflated `-Xmx`
+also inflates a cache that cannot be backed by real memory.
 
 ### Runtime, and sharding
 
