@@ -215,6 +215,18 @@ def aggregate_slide(slide_name, manifest_rows, header, tile_rows, stage1_slide,
     """Sum tile rows into one slide row, after reconciling coverage."""
     cats = classify_columns(header)
 
+    # --- partition awareness ------------------------------------------------
+    # When Stage 1 partitions each tile into damaged/intact parenchyma the engine
+    # emits TWO rows per tile. The endpoint denominator is then the DAMAGED area
+    # only (KRT5+ area / damaged alveolar area), not the whole tile.
+    def _region(r):
+        return (r.get("region") or "").strip().lower()
+
+    damaged_rows = [r for r in tile_rows if "damaged" in _region(r)]
+    intact_rows = [r for r in tile_rows if "intact" in _region(r)]
+    partitioned = bool(damaged_rows or intact_rows)
+    endpoint_rows = damaged_rows if partitioned else tile_rows
+
     expected = {r["section_id"] for r in manifest_rows}
     got = {(r.get("section_id") or "").strip() for r in tile_rows}
     missing = sorted(expected - got)
@@ -253,17 +265,42 @@ def aggregate_slide(slide_name, manifest_rows, header, tile_rows, stage1_slide,
     # One row per slide, so give it stable slide-scoped identity columns.
     rec["image"] = slide_name
     rec["section_id"] = slide_name
-    rec["region"] = (tile_rows[0].get("region") if tile_rows else "alveolar_core") or "alveolar_core"
+    rec["region"] = ((endpoint_rows[0].get("region") if endpoint_rows else None)
+                     or (tile_rows[0].get("region") if tile_rows else None)
+                     or "parenchyma_core")
 
+    # Sums are taken over the ENDPOINT rows. When partitioned that is the damaged
+    # parenchyma only, so region_area_um2 -- and therefore every fraction derived
+    # from it here and again in aggregate_to_mouse.py -- uses the damaged area as
+    # the denominator, which is the endpoint definition.
     sums = {}
     for c in cats["sum_cols"]:
-        vals = [_num(r.get(c)) for r in tile_rows]
+        vals = [_num(r.get(c)) for r in endpoint_rows]
         vals = [v for v in vals if v is not None]
         sums[c] = sum(vals) if vals else 0.0
     for c, v in sums.items():
         rec[c] = v
 
     total_area = sums.get("region_area_um2", 0.0)
+
+    rec["partitioned"] = "true" if partitioned else "false"
+    if partitioned:
+        def _area(rows):
+            return sum(v for v in (_num(r.get("region_area_um2")) for r in rows) if v is not None)
+
+        dmg_area, int_area = _area(damaged_rows), _area(intact_rows)
+        rec["damaged_area_um2"] = dmg_area
+        rec["intact_area_um2"] = int_area
+        whole = dmg_area + int_area
+        rec["damaged_fraction_of_parenchyma"] = (dmg_area / whole) if whole > 0 else 0.0
+        # KRT5 in the INTACT compartment is a QC readout, not the endpoint:
+        # dysplastic pods should sit in damaged parenchyma. A large value here
+        # means the damage mask, the KRT5 threshold, or both are wrong.
+        for c in cats["pod_area"]:
+            m = marker_of(c, "_pod_area_um2")
+            iv = sum(v for v in (_num(r.get(c)) for r in intact_rows) if v is not None)
+            rec[f"{m}_pod_area_um2_in_intact"] = iv
+            rec[f"{m}_pod_area_frac_of_intact"] = (iv / int_area) if int_area > 0 else 0.0
 
     # Recompute every derived quantity from POOLED numerators. Never average
     # per-tile fractions: tiles differ in tissue area.
@@ -277,16 +314,30 @@ def aggregate_slide(slide_name, manifest_rows, header, tile_rows, stage1_slide,
         rec[f"{m}_positive_area_frac"] = (sums[c] / total_area) if total_area > 0 else 0.0
 
     # ---- QC / provenance ------------------------------------------------
+    # Count TILES, not rows: a partitioned tile contributes two rows.
+    n_tiles = len({(r.get("section_id") or "").strip() for r in tile_rows})
     rec["n_tiles_expected"] = len(manifest_rows)
-    rec["n_tiles_analyzed"] = len(tile_rows)
+    rec["n_tiles_analyzed"] = n_tiles
+    rec["n_summary_rows"] = len(tile_rows)
     rec["n_tiles_missing"] = len(missing)
-    rec["tile_coverage_fraction"] = (len(tile_rows) / len(manifest_rows)) if manifest_rows else 0.0
+    rec["tile_coverage_fraction"] = (n_tiles / len(manifest_rows)) if manifest_rows else 0.0
 
-    manifest_core_um2 = sum(float(r["core_tissue_area_um2"]) for r in manifest_rows)
+    # Reconciliation uses EVERY row. damaged + intact partition the tile core, so
+    # their sum must still equal the Stage 1 core area even when the endpoint
+    # denominator above is only the damaged part.
+    all_area = sum(v for v in (_num(r.get("region_area_um2")) for r in tile_rows) if v is not None)
+    # Prefer the rasterised area: the engine measures ROI pixels, so that is the
+    # like-for-like comparison. Fall back for manifests written before it existed.
+    key = ("core_raster_area_um2" if manifest_rows and "core_raster_area_um2" in manifest_rows[0]
+           else "core_tissue_area_um2")
+    manifest_core_um2 = sum(float(r[key]) for r in manifest_rows)
     rec["stage1_core_tissue_area_um2"] = manifest_core_um2
-    rec["stage2_region_area_um2"] = total_area
+    rec["stage1_area_column"] = key
+    rec["stage2_region_area_um2"] = all_area
+    total_area_for_reconcile = all_area
     rec["tissue_area_rel_diff"] = (
-        abs(total_area - manifest_core_um2) / manifest_core_um2 if manifest_core_um2 > 0 else 0.0)
+        abs(total_area_for_reconcile - manifest_core_um2) / manifest_core_um2
+        if manifest_core_um2 > 0 else 0.0)
     if stage1_slide is not None:
         rec["stage1_slide_tissue_mm2"] = stage1_slide.get("tissue_area_mm2")
         rec["stage1_tissue_threshold_otsu"] = stage1_slide.get("tissue_threshold_otsu")

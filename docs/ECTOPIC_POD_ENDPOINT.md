@@ -1,6 +1,7 @@
 # Ectopic KRT5+ pod endpoint — definition, hazards, and calibration
 
-Status: **protocol decision record, not yet implemented.** Written 2026-08-07.
+Status: **damaged-area denominator implemented and mechanically validated;
+airway exclusion NOT implemented; thresholds NOT calibrated.** Written 2026-08-07.
 Supersedes the endpoint described in `docs/WSI_TILING_WORKFLOW.md` §"What this
 measures", which used total tissue area as the denominator.
 
@@ -152,12 +153,54 @@ concern and argues for a conservative threshold.
 
 ---
 
-## 5. Known defect in the current Stage 1
+## 4b. How the damaged area is computed, and its measured parameters
 
-`qupath_wsi_tile_export.groovy` currently names every tile ROI `alveolar_core`.
-Tiles that are entirely conducting airway are therefore already mislabelled as
-alveolar, and AGER/T1A read `compatible` there. This is wrong today, independent
-of the partition work above.
+Healthy alveolus is mostly airspace with thin AT1 membranes, so "pixels below
+the AGER threshold" is not the damaged area. Binary closing of the AGER mask was
+tried first and **failed**: it reported 61–87% damaged even in uninfected lung,
+because at 5.5 µm/px the membranes are largely sub-resolution.
+
+What works is a **local area fraction**: AT1-intact territory is where AGER⁺
+pixels occupy at least `cutoff` of an alveolus-sized neighbourhood. Smoothing a
+0/1 mask with a Gaussian *is* that local fraction.
+
+Measured on all four pilot slides (detection at 2.76 µm/px):
+
+| slide | AGER in-tissue p50 | AGER⁺% | **damaged%** |
+|---|---|---|---|
+| het m4-1 **infected** | 304 | 71.6 | **12.4** |
+| hom m2 **infected** | 285 | 69.9 | **9.9** |
+| het m4-2 *uninfected* | 314 | 80.5 | **2.1** |
+| hom m6 *uninfected* | 369 | 95.6 | **1.0** |
+
+at `IFQ_WSI_AGER_THRESHOLD=200`, `IFQ_WSI_DAMAGE_SIGMA_UM=30`,
+`IFQ_WSI_DAMAGE_CUTOFF=0.10`.
+
+The **het pair is the internal control**: `m4-1` and `m4-2` have matched AGER
+staining intensity (in-tissue p50 304 vs 314) yet separate 12.4% vs 2.1%, so the
+separation is not a staining-intensity artifact.
+
+**It is fragile.** At a fixed threshold of 400 the separation vanishes; at 500+
+it inverts. With *per-slide adaptive* Otsu it inverts at every one of 15
+parameter combinations tested — uninfected read **more** damaged than infected —
+because Otsu picked higher AGER thresholds on the uninfected slides (690/864 vs
+616/617). Stage 1 therefore refuses to partition without an explicit
+`IFQ_WSI_AGER_THRESHOLD`.
+
+These values are **pilot settings, not calibrated**. They must be frozen from
+blinded control review and validated against hand-drawn outlines before use.
+
+## 5. Stage 1 ROI naming
+
+Fixed. Stage 1 previously named every tile ROI `alveolar_core`, which asserts the
+tile contains no conducting airway — mislabelling pure-airway tiles. The default
+is now the neutral `parenchyma_core` (matching no compartment keyword), and the
+alveolar claim is opt-in via `IFQ_WSI_ROI_COMPARTMENT=alveolar`, to be set only
+once airways are actually excluded.
+
+Consequence of the neutral default: AGER and T1A declare
+`expectedCompartment:"alveolar"`, so their calls degrade to
+`context_unresolved` / `indeterminate`. The KRT5 pod endpoint is unaffected.
 
 ---
 
