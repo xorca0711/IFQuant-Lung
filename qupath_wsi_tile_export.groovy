@@ -180,8 +180,14 @@ def MAX_TILES      = envInt("IFQ_WSI_MAX_TILES_PER_SLIDE", 0)
 def PARTITION      = envBool("IFQ_WSI_PARTITION_DAMAGE", false)
 def AGER_CH        = envInt("IFQ_WSI_AGER_CHANNEL", 2)
 def AGER_THR_RAW   = envOr("IFQ_WSI_AGER_THRESHOLD", "")
-def DAMAGE_SIGMA   = envDouble("IFQ_WSI_DAMAGE_SIGMA_UM", 30.0d)
-def DAMAGE_CUTOFF  = envDouble("IFQ_WSI_DAMAGE_CUTOFF", 0.10d)
+// Defaults are the CONTROL-DERIVED operating point (alpha = 1% false positive
+// on uninfected lung): AGER threshold 150, sigma 40 um, cutoff 0.14. Chosen
+// from the two uninfected slides ONLY -- the infected slides were not opened by
+// the calibration -- so the operating point is not tuned on the outcome.
+// sigma 40 um is about one alveolar diameter, the natural neighbourhood for
+// "is this alveolus lined by AT1". See docs/ECTOPIC_POD_ENDPOINT.md section 4c.
+def DAMAGE_SIGMA   = envDouble("IFQ_WSI_DAMAGE_SIGMA_UM", 40.0d)
+def DAMAGE_CUTOFF  = envDouble("IFQ_WSI_DAMAGE_CUTOFF", 0.14d)
 
 // ---- downstream metadata ----------------------------------------------------
 def PANEL          = envOr("IFQ_WSI_PANEL", "LEFT")

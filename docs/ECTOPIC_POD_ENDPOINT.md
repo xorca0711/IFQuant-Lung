@@ -187,8 +187,66 @@ because Otsu picked higher AGER thresholds on the uninfected slides (690/864 vs
 616/617). Stage 1 therefore refuses to partition without an explicit
 `IFQ_WSI_AGER_THRESHOLD`.
 
-These values are **pilot settings, not calibrated**. They must be frozen from
-blinded control review and validated against hand-drawn outlines before use.
+**Those values were tuned on the outcome** — they were chosen by looking at how
+well infected and uninfected separated, which is exactly the thing the endpoint
+is supposed to measure. They have been superseded. See 4c.
+
+## 4c. LOCKED operating point, derived from controls only
+
+Selection rule, **declared before any number was read**:
+
+* Uninfected lung has an intact AT1 sheet, so its damaged fraction *is* the
+  detector's **false-positive rate**.
+* **Constraint:** worst-of-both control slides ≤ α.
+  Worst-of-both, not the mean — one clean slide must not buy tolerance for a
+  dirty one.
+* **Objective:** subject to that, the **largest** cutoff. Damaged% is monotone
+  increasing in cutoff, so the largest admissible cutoff is the most sensitive
+  operating point that still meets the specificity floor. Ties break toward the
+  flattest local slope.
+* The calibration script opens **only** `m4-2` and `m6`. The infected slides are
+  never read, so the operating point cannot be tuned on the outcome.
+
+Result (worst-of-both control damaged%, i.e. false-positive rate):
+
+| α | AGER thr | σ (µm) | cutoff | het m4-2 | hom m6 | slope |
+|---|---|---|---|---|---|---|
+| 0.5% | 150 | 80 | 0.10 | 0.27 | 0.09 | 5.96 |
+| **1%** | **150** | **40** | **0.14** | **0.93** | **0.18** | **11.57** |
+| 2% | 150 | 20 | 0.18 | 1.71 | 0.22 | 13.66 |
+| 5% | 150 | 10 | 0.35 | 4.95 | 0.64 | 22.56 |
+
+Every α level independently selects **AGER threshold 150**, not the 200 used in
+4b.
+
+### LOCKED: α = 1% → `AGER_THRESHOLD=150`, `DAMAGE_SIGMA_UM=40`, `DAMAGE_CUTOFF=0.14`
+
+Rationale for α = 1%: a clean specificity spec for "healthy lung reads as
+undamaged", and σ = 40 µm is approximately one alveolar diameter — the
+physiologically natural neighbourhood for local AT1 coverage. The α = 0.5% point
+is more stable (slope 5.96) but needs σ = 80 µm, which averages across 2–3
+alveoli and blurs the damaged/intact boundary.
+
+These are now the Stage 1 defaults for σ and cutoff. The AGER threshold remains
+**required** rather than defaulted, so that supplying it stays a deliberate act.
+
+### The binding control
+
+`het m4-2` carries roughly 5× the false-positive rate of `hom m6` at every α
+(0.93 vs 0.18 at α = 1%). That traces to staining intensity: `m6` has brighter
+AGER (in-tissue p50 369 vs 314), so at a fixed threshold it reads as more
+intact. Using worst-of-both rather than the mean was therefore load-bearing —
+the mean would have let `m6` mask `m4-2`.
+
+### Still outstanding
+
+The infected slides have **not** been measured at the locked parameters. When
+they are, that is a genuine held-out readout, not part of the selection. It must
+be reported as such.
+
+Validation against hand-drawn outlines on a subset is still required — the
+reference method is manual, so manual outlines are the only available ground
+truth.
 
 ## 5. Stage 1 ROI naming
 
