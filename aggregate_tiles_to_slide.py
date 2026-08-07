@@ -283,6 +283,26 @@ def aggregate_slide(slide_name, manifest_rows, header, tile_rows, stage1_slide,
 
     total_area = sums.get("region_area_um2", 0.0)
 
+    # KNOWN LIMITATION -- these columns do NOT reach mouse level.
+    # aggregate_to_mouse.classify_columns() builds sum_cols as a CLOSED WHITELIST
+    # of name suffixes (aggregate_to_mouse.py:184-186) and writes rec[] only from
+    # that set; every other column is silently discarded. Verified empirically:
+    # damaged_area_um2, intact_area_um2, damaged_fraction_of_parenchyma,
+    # <M>_pod_area_um2_in_intact and <M>_pod_area_frac_of_intact are all absent
+    # from mouse_level_summary.csv.
+    #
+    # The PRIMARY ENDPOINT is unaffected: region_area_um2 carries the damaged
+    # area when partitioned, and <M>_pod_area_um2 matches the whitelist, so
+    # pod-area-over-damaged-area survives and is recomputed from pooled
+    # numerators correctly.
+    #
+    # What is lost is per-mouse QC: "% of lung damaged" and the KRT5-in-intact
+    # tripwire stop at slide level. Fixing it properly means emitting one row per
+    # denominator SCOPE rather than one row per slide, because
+    # aggregate_to_mouse hard-wires every area fraction to sum(region_area_um2)
+    # and KEY_COLS (line 43) does not include `region`, so damaged and intact
+    # rows would otherwise be summed into a single mouse row.
+    # See docs/ECTOPIC_POD_ENDPOINT.md section 9.
     rec["partitioned"] = "true" if partitioned else "false"
     if partitioned:
         def _area(rows):

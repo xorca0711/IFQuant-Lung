@@ -400,6 +400,61 @@ Consequence of the neutral default: AGER and T1A declare
 
 ---
 
+## 9. KNOWN BUG: partition QC columns do not reach mouse level
+
+Found 2026-08-07 by a design audit, then confirmed empirically.
+
+`aggregate_to_mouse.classify_columns()` builds `sum_cols` as a **closed whitelist
+of name suffixes** (`aggregate_to_mouse.py:184-186`) and `aggregate_mice()`
+writes `rec[]` only from that set. **Every column outside the whitelist is
+silently discarded** — no error, no warning, it simply is not in the output
+header.
+
+Verified by running `aggregate_to_mouse.py` on the real partitioned slide
+summary:
+
+| column | in slide summary | at mouse level |
+|---|---|---|
+| `damaged_area_um2` | present | **DROPPED** |
+| `intact_area_um2` | present | **DROPPED** |
+| `damaged_fraction_of_parenchyma` | present | **DROPPED** |
+| `KRT5_pod_area_um2_in_intact` | present | **DROPPED** |
+| `KRT5_pod_area_frac_of_intact` | present | **DROPPED** |
+| `KRT5_pod_area_um2` | present | survives |
+
+### The primary endpoint is NOT affected
+
+`region_area_um2` carries the damaged area when partitioned, and
+`<M>_pod_area_um2` matches the whitelist, so pod-area-over-damaged-area survives
+and its fraction is recomputed from pooled numerators correctly.
+
+### What is lost
+
+Per-mouse QC. "% of lung damaged" never becomes a mouse-level endpoint, and the
+KRT5-in-intact tripwire — the check that would catch a bad damage mask or a bad
+KRT5 threshold — stops at slide level and never reaches the group table. That is
+exactly the readout most worth having per animal.
+
+### Why the obvious fix does not work
+
+Renaming the columns to match the whitelist is not enough, because every
+recomputed area fraction in `aggregate_to_mouse` divides by
+`sum(region_area_um2)`. There is only ONE denominator. And `KEY_COLS`
+(`aggregate_to_mouse.py:43`) is `[mouse_id, genotype, condition, panel]` — it
+does **not** include `region`, so writing damaged and intact as separate `region`
+values does not separate them either; they are summed into one mouse row.
+
+### Proposed fix, not yet applied
+
+Emit one row per denominator **scope** rather than one row per slide, using the
+only free grouping key: `panel = "<PANEL>@<scope>"`, e.g. `LEFT@damaged` and
+`LEFT@parenchyma`. Each row then carries its own `region_area_um2`, and every
+fraction is recomputed against the correct denominator, with
+`aggregate_to_mouse.py` completely unchanged.
+
+This changes the shape of `slide_level_summary.csv`, so it is a deliberate
+decision rather than a patch, and is left for review.
+
 ## 8. What this pilot can and cannot claim
 
 n = 1 mouse per group cell (het/hom × infected/uninfected). With n = mice as the
