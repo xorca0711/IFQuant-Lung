@@ -1,11 +1,13 @@
 # AI handoff — machine-oriented project context
 
-> **Purpose.** A dense, factual context transfer for an AI agent picking up this
+> **Purpose.** A dense, factual *technical* context transfer for an AI agent picking up this
 > project with no conversation history. Written to be read start-to-finish.
 > State as of commit `685e8f1`, 2026-08-09.
 > The human-facing entry points are [`../README.md`](../README.md) and
 > [`../WORKFLOW.md`](../WORKFLOW.md); [`PROJECT_STATE.md`](PROJECT_STATE.md) is
-> the living handoff. This file adds what those omit: environment traps,
+> the living handoff, and [`../DEVELOPMENT.md`](../DEVELOPMENT.md) is the
+> authorship and scientific-control statement.
+> This file adds what those omit: environment traps,
 > failure modes, and process lessons that are expensive to rediscover.
 
 ---
@@ -202,60 +204,24 @@ Costly, and not visible in the code.
 
 ---
 
-## 11. Division of labour — what the operator decides
+## 11. Division of labour — see DEVELOPMENT.md
 
-**Read this before proposing anything.** The operator is a wet-lab
-scientist who runs the microscope, prepares the sections, and owns the
-biology. Several of the most consequential corrections in this project came
-from them, not from the code and not from an agent. The pattern is consistent:
-**an AI can measure, but it cannot know what the tissue is.**
+The operator is a wet-lab scientist who owns the biology. Several of this
+project''s most consequential corrections came from them rather than from code
+or from an automated agent — cell-type identity, section-level staining
+judgement, the control-locked threshold rule, the rejection of two markers, and
+the refusal of an analysis that would have been selective manipulation.
 
-### Corrections the operator made that no amount of analysis would have produced
+That record now lives in **[`../DEVELOPMENT.md`](../DEVELOPMENT.md)**, which is
+the authorship and scientific-control statement for this repository. Read it
+before proposing anything; it is not a courtesy document, it defines which
+decisions are not yours to make.
 
-| Call | Why it needed a human |
-|---|---|
-| **"The ProSPC ring at the airway isn't AT2 — those are other basal lineages"** | A morphological/lineage judgement from the image. The pipeline had no concept that a bright, correctly-shaped, correctly-thresholded population could be the wrong *cell type*. |
-| **"AT2 have circular, nuclei-located morphology, not a ring"** | Supplied the discriminating feature. Led directly to the finding that intensity cannot separate them (measured: AT2 p50 = 430, airway p50 = 385) and that the difference is extent, not brightness. |
-| **"M6 has staining issues" (from the PI)** | Section-level QC that no in-image statistic flagged. Confirmed afterwards by data (AGER `frac>500` 0.0097 LEFT vs 0.289 RIGHT, same antibody, same animal) — but the hypothesis came first from the bench. |
-| **"KRT8 should be strict — normal alveolar regions aren't what I want to see"** | Defined the biological target (transitional/DATP state, not baseline epithelium). This framing is what made the enrichment test the right test, which then rejected the marker. |
-| **"Isn't that selective manipulation?"** | Caught a background-subtraction proposal whose radius had been chosen *because the airway disappeared at that value* — the same error as the retired component gate, in a more respectable form. Stopped it before it shipped. |
-| **Pointing to the Lin et al. PDF on disk** | Resolved the endpoint sign. The implementation had computed KRT5⁺PDPN⁻ for the whole project; reading the primary source showed the reference specifies KRT5⁺PDPN⁺ over a hand-traced union. |
-| **Authorising the engine unfreeze** | The `black` token fix required modifying a file that had been frozen by policy. Only the operator could weigh "the freeze protects a bug" against "the validation that justified the freeze was run with the bug present". |
-| **"Comparability comes next"** | A priority ordering for figures that the software could not derive. It resolved ten versions of oscillation between fixed and per-image windows. |
-
-### Direction the operator set
-
-- Study design, panel composition, marker choice, and which channel is the
-  endpoint. **All acquisition parameters** — the DAPI saturation is an
-  acquisition setting only they can change.
-- The instruction to **re-derive thresholds from uninfected controls only**,
-  which is the anti-circularity rule the whole calibration now rests on.
-- Repository direction: consolidation onto `main`, the rename to
-  `IFQuant-Lung`, and the decision that this is a **portfolio piece** — which
-  changed the optimisation target from throughput to legibility and honesty.
-- The launcher's four-route design, including that H&E must be **visible and
-  disabled** rather than hidden.
-
-### Errors the operator caught that agents and I did not
-
-Recorded because it calibrates how much to trust an unreviewed agent result:
-
-- v8 "merge panels" were a **segmentation overlay**, not the requested product.
-- A README tagline that "describes nothing".
-- Replacing mermaid algorithmic diagrams with ASCII boxes — a **downgrade**
-  presented as an improvement.
-- Diagram edges crossing subgraph boundaries and overlapping.
-- Marker channels being **wiped out** by over-aggressive floors, twice.
-- The 555 channel spilling into airspace.
-
-### Escalate to the operator, do not decide alone
-
-Cell-type identity · whether a population is specific staining or artefact ·
-acquisition settings · what a figure must show · which animals or sections are
-usable · anything outward-facing (push, release, deleting tracked history) ·
-unfreezing the engine · trading measurement validity for appearance.
-
----
+**Escalate, do not decide alone:** cell-type identity · whether a population is
+specific staining or artefact · acquisition settings · what a figure must show ·
+which animals or sections are usable · anything outward-facing (push, release,
+deleting tracked history) · unfreezing the engine · trading measurement validity
+for appearance.
 
 ## 12. Key files
 

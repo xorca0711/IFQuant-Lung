@@ -29,6 +29,23 @@ in [`docs/NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md).
 
 ---
 
+## Development and AI assistance
+
+Claude Code was used as an implementation and documentation assistant.
+Scientific questions, experimental interpretation, analysis specifications,
+acceptance and rejection criteria, validation strategy, and interpretation of
+results were directed and reviewed by the repository author. Generated
+implementations were tested against the underlying data, the literature,
+synthetic fixtures, or independent outputs before being retained.
+
+Worked examples — control-locked thresholds, the rejection of AGER and KRT8 on
+enrichment evidence, the statistical-unit constraint, a cell-type identity call
+the software could not make, and an analysis refused as selective manipulation —
+are documented in **[`DEVELOPMENT.md`](DEVELOPMENT.md)**, along with the errors
+the assistant produced and how generated work was verified.
+
+---
+
 ## Architecture
 
 ```mermaid
