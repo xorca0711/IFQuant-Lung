@@ -3,7 +3,7 @@
 // calibration built on it, so this compares pixel by pixel rather than
 // spot-checking.
 //
-//   IFQ_CACHE_DIR   default X:\ifq_cache
+//   IFQ_CACHE_DIR   default X:\GitHub\IFQuant-Lung\.cache\slide_channels
 //   IFQ_CACHE_INPUT folder of .vsi (to re-read one slide fresh)
 //   IFQ_CACHE_DS    default 8
 import qupath.lib.images.servers.ImageServers
@@ -20,7 +20,7 @@ def LOG = "[IFQ_CACHEVERIFY]"
 def logMsg = { String m -> println LOG + " " + m }
 def envOr = { String n, String d -> def v = System.getenv(n); (v == null || v.trim().isEmpty()) ? d : v.trim() }
 
-def CACHE = envOr("IFQ_CACHE_DIR", "X:\\ifq_cache")
+def CACHE = envOr("IFQ_CACHE_DIR", "X:\\GitHub\\IFQuant-Lung\\.cache\\slide_channels")
 def INPUT = envOr("IFQ_CACHE_INPUT", "D:\\Confocal_Images\\20260806_CW\\20260806_CW")
 double DS = Double.parseDouble(envOr("IFQ_CACHE_DS", "8"))
 

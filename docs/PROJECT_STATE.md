@@ -98,7 +98,7 @@ equal to v1.7.2 by execution: 82 checks, 0 failures, recorded in
 | released launcher | `IFQuantLauncher-v1.7.2.exe` — **unchanged, still current** |
 | data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` (4 slides) |
 | pipeline runs | `D:\IFQ_Runs\` — `validated/` and `superseded/`, see its README |
-| channel cache | `X:\ifq_cache` (ds=8, bit-exact, 31× faster than decoding) |
+| channel cache | `<repo>\.cache\slide_channels` (ds=8, bit-exact, 24.5× faster than decoding). Gitignored, regenerable in ~10 min via `scripts/cache_slide_channels.groovy`. Override with `IFQ_CACHE_DIR`. Moved here from `X:\ifq_cache` on 2026-08-08 and re-verified bit-exact from the new path. |
 | QuPath | `X:\QuPath\QuPath-0.7.0 (console).exe` |
 | Fiji | `X:\Fiji` — its `.exe` is **broken on ARM64**; invoke the JVM directly |
 

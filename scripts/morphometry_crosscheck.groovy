@@ -25,7 +25,7 @@
 //
 // RUNS ENTIRELY FROM THE CHANNEL CACHE -- no .vsi access, so it works while the
 // data volume is offline.
-//   IFQ_CACHE_DIR  default X:\ifq_cache
+//   IFQ_CACHE_DIR  default X:\GitHub\IFQuant-Lung\.cache\slide_channels
 //   IFQ_CACHE_DS   default 8
 // ============================================================================
 
@@ -39,7 +39,7 @@ def LOG = "[IFQ_MORPH]"
 def logMsg = { String m -> println LOG + " " + m }
 def envOr = { String n, String d -> def v = System.getenv(n); (v == null || v.trim().isEmpty()) ? d : v.trim() }
 
-def CACHE = envOr("IFQ_CACHE_DIR", "X:\\ifq_cache")
+def CACHE = envOr("IFQ_CACHE_DIR", "X:\\GitHub\\IFQuant-Lung\\.cache\\slide_channels")
 double DS = Double.parseDouble(envOr("IFQ_CACHE_DS", "8"))
 // LOCKED damage parameters -- docs/ECTOPIC_POD_ENDPOINT.md 4c
 double AGER_THR = 150.0d, DMG_SIGMA = 40.0d, DMG_CUT = 0.14d

@@ -43,6 +43,14 @@ group_level_summary.csv
 *.tif
 *.tiff
 
+# Decoded-channel cache. scripts/cache_slide_channels.groovy writes the .vsi
+# slides out at ds=8 as raw shorts (~1 GB for four slides) so the morphometry
+# cross-check loads a slide in ~1.2 s instead of ~38 s. Verified bit-exact
+# against a fresh decode, and regenerable from D:\Confocal_Images in ~10 min,
+# so it is derived data that lives beside the code for convenience only.
+# NEVER commit it: it is decoded image data, which this project does not track.
+.cache/
+
 # Built launcher artefacts at the repository root. build.ps1 writes the versioned
 # .exe and its .sha256.txt sidecar here; a release belongs in GitHub Releases,
 # not in git. Anchored to the root so the superseded binaries archived under

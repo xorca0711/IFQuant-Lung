@@ -21,7 +21,7 @@
 //
 // RUN
 //   IFQ_CACHE_INPUT   = folder of .vsi (or a single .vsi)
-//   IFQ_CACHE_DIR     = where to write   (default X:\ifq_cache)
+//   IFQ_CACHE_DIR     = where to write   (default X:\GitHub\IFQuant-Lung\.cache\slide_channels)
 //   IFQ_CACHE_DS      = downsample       (default 8)
 //   "X:\QuPath\QuPath-0.7.0 (console).exe" script scripts/cache_slide_channels.groovy
 //
@@ -46,7 +46,7 @@ def failRun = { String m -> System.err.println("FATAL: " + m); println LOG + " F
 def envOr = { String n, String d -> def v = System.getenv(n); (v == null || v.trim().isEmpty()) ? d : v.trim() }
 
 def INPUT  = envOr("IFQ_CACHE_INPUT", "")
-def OUTDIR = envOr("IFQ_CACHE_DIR", "X:\\ifq_cache")
+def OUTDIR = envOr("IFQ_CACHE_DIR", "X:\\GitHub\\IFQuant-Lung\\.cache\\slide_channels")
 double DS  = Double.parseDouble(envOr("IFQ_CACHE_DS", "8"))
 if (INPUT.isEmpty()) failRun("IFQ_CACHE_INPUT is required (a .vsi file or a folder of them)")
 
