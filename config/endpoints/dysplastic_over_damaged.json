@@ -1,0 +1,153 @@
+{
+  "schema_version": "2.0.0",
+  "endpoint_id": "dysplastic_over_damaged",
+  "title": "Dysplastic KRT5+PDPN+ area over damaged alveolar area (PDPN- OR KRT5+)",
+  "panel": "LEFT",
+
+  "supersedes": {
+    "endpoint_id": "ectopic_pod_over_damaged",
+    "reason": [
+      "That spec had the numerator SIGN INVERTED and the denominator wrong, and",
+      "mis-quoted the reference to justify both. It claimed Lin et al. Fig 2A-B",
+      "quantify 'KRT5+PDPN- areas'. The paper says the opposite.",
+      "",
+      "Verbatim, Lin et al. 2024 (J Clin Invest 134(19):e176828):",
+      "  Fig 2A-B legend: 'quantification of percentages of KRT5+PDPN+ areas in",
+      "                    PDPN- and KRT5+ areas'",
+      "  Fig 6E-G:        'percentages of dysplastic cell (KRT5+ PDPN+) areas in",
+      "                    damaged alveolar areas (PDPN- and KRT5+)'",
+      "  Fig 2E-F:        'Immunofluorescence images of dysplastic cells",
+      "                    (KRT5+ PDPN+) and AT1 (PDPN+) cells'",
+      "",
+      "PDPN is expressed BY basal/dysplastic cells as well as by AT1, so it does",
+      "not discriminate dysplastic tissue from AT1 by absence. Requiring",
+      "PDPN-negativity excluded the very population being measured. The old",
+      "spec's stated rationale -- that co-negativity rejects autofluorescence --",
+      "was an inference of ours, not the paper's method."
+    ]
+  },
+
+  "rationale": [
+    "The engine is marker-wise: positiveAreaInRoi() takes ONE marker's mask and",
+    "every recomputed fraction divides by region_area_um2. It can express neither",
+    "a numerator that is a RELATION between two markers nor a denominator that is",
+    "a UNION of two masks. The reference endpoint is both.",
+    "This spec declares the relation as DATA so it is reviewable and diffable, and",
+    "evaluates it by mask algebra on masks the engine already saves.",
+    "IF_Quant_Pipeline.groovy is not modified."
+  ],
+
+  "numerator": {
+    "op": "AND",
+    "terms": [
+      { "mask": "KRT5_pod_mask", "negate": false,
+        "note": "KRT5+ area after the engine's component filter" },
+      { "mask": "T1A_membrane_positive_mask", "negate": false,
+        "note": "PDPN/T1alpha POSITIVE. Co-POSITIVE, per the reference. Dysplastic cells are KRT5+PDPN+." }
+    ]
+  },
+
+  "denominator": {
+    "op": "OR",
+    "terms": [
+      { "mask": "T1A_membrane_positive_mask", "negate": true,
+        "note": "PDPN-negative: alveolar tissue lacking normal AT1 lining" },
+      { "mask": "KRT5_pod_mask", "negate": false,
+        "note": "plus the KRT5+ dysplastic area itself" }
+    ],
+    "note": [
+      "'damaged alveolar areas (PDPN- and KRT5+)' is the UNION of the two, as the",
+      "methods confirm: 'To quantify KRT5+ OR PDPN- area'.",
+      "The union is clipped to the analysed region, so it can never exceed",
+      "region_area_um2. The script asserts that."
+    ]
+  },
+
+  "companion_outputs": {
+    "note": [
+      "The paper words the numerator two ways. Fig 2A-B says 'KRT5+PDPN+ areas';",
+      "Fig 6H-J, Fig 7K-M and Supplemental say 'KRT5+ dysplastic cell areas' and",
+      "'KRT5+ lung areas' with no PDPN qualifier. Those are the same quantity only",
+      "if essentially all KRT5+ area is also PDPN+.",
+      "Rather than pick a reading, emit BOTH and let the data decide. If the ratio",
+      "is near 1 the wording is immaterial; if it is not, the choice is a real",
+      "analytical decision that must be declared in the methods."
+    ],
+    "emit": [
+      "KRT5dysplastic_pod_area_um2      numerator as specified: KRT5+ AND PDPN+",
+      "KRT5bare_pod_area_um2            KRT5+ alone, the Fig 6/7 wording",
+      "qc_krt5_pdpn_positive_fraction   KRT5+PDPN+ / KRT5+, the number that settles it"
+    ]
+  },
+
+  "output": {
+    "area_column": "KRT5dysplastic_pod_area_um2",
+    "aggregation": "SUM",
+    "naming_note": [
+      "Ends in _pod_area_um2 so aggregate_to_mouse.classify_columns() puts it in",
+      "sum_cols. A name outside that whitelist is SILENTLY DROPPED at mouse level.",
+      "See docs/ECTOPIC_POD_ENDPOINT.md section 9."
+    ]
+  },
+
+  "parameters": {
+    "krt5_threshold": { "value": 300, "status": "LOCKED_ONE_CONTROL",
+      "env": "IFQ_KRT5_THRESHOLD",
+      "note": [
+        "Derived from uninfected controls only: in-tissue p99.99 was 283 (M4-2)",
+        "and 255 (M6); 300 clears both. BUT M6 LEFT is an established",
+        "section-level staining failure (AGER frac>500 = 0.0097 vs 0.289 in M6",
+        "RIGHT, same antibody and animal), so it cannot corroborate. This value",
+        "rests on M4-2 alone and must be re-derived."
+      ] },
+    "t1a_threshold": { "value": null, "status": "NOT_CALIBRATED",
+      "env": "IFQ_T1A_THRESHOLD",
+      "note": [
+        "PDPN now appears in BOTH numerator (positive) and denominator",
+        "(negated), so this threshold moves the endpoint in two directions at",
+        "once and a sensitivity sweep is mandatory before any reported number.",
+        "The previously proposed value of 200 was derived as a co-NEGATIVITY",
+        "ceiling and its justification does not transfer to co-POSITIVITY."
+      ] }
+  },
+
+  "validation_status": "PROPOSED_NOT_VALIDATED",
+
+  "known_limitations": [
+    "METHOD MISMATCH, the largest one: the reference measured these areas BY HAND",
+    "with the Axiovision 4.8 outline spline over a whole-lobe image mosaic on a",
+    "widefield BX51. A hand-traced 'damaged alveolar area' is a contiguous",
+    "REGION judged at low magnification. A per-pixel PDPN-negative mask is not",
+    "the same quantity: it includes every airspace and every gap between AT1",
+    "membranes. Expect agreement in direction and magnitude, NOT in value.",
+    "Because of that, a regional (spatially closed) denominator variant is",
+    "available and is closer in spirit -- see denominator_regional below.",
+    "SAMPLING: the reference is a whole left lobe. Ten sampled confocal fields",
+    "per mouse cannot reproduce it. This endpoint belongs on the WSI route.",
+    "SCALE: the reference uses n = 15 mice per group.",
+    "Conducting airways are excluded from neither numerator nor denominator, and",
+    "airway basal cells are KRT5+ in every animal including uninfected controls.",
+    "Nothing in the 4-channel panel separates airway from injured alveolus."
+  ],
+
+  "denominator_regional": {
+    "status": "OPTIONAL_NOT_DEFAULT",
+    "env": "IFQ_ENDPOINT_DENOM_CLOSE_UM",
+    "note": [
+      "Set a closing radius in um to emulate spline tracing: the PDPN-negative",
+      "mask is morphologically closed at that scale so scattered sub-cellular",
+      "gaps merge into contiguous damaged REGIONS, which is what a human outlines.",
+      "0 (default) = strict per-pixel union, exactly reproducible and clearly",
+      "defined but not what the reference measured.",
+      "Any non-zero value is a free parameter and must be justified against hand",
+      "outlines before use. Do not tune it to make a result appear."
+    ]
+  },
+
+  "reference": {
+    "citation": "Lin X. et al., J Clin Invest 2024;134(19):e176828",
+    "doi": "10.1172/JCI176828",
+    "figures": "Fig 2A-B (definition), Fig 2E-F (KRT5+PDPN+ = dysplastic), Fig 6E-G, Fig 7H-J/K-M",
+    "methods_verbatim": "Quantification of KRT5+ lung area. To quantify KRT5+ or PDPN- area, the left lung lobes were sectioned and stained for KRT5 and PDPN antibodies, then were imaged by Olympus BX51, and an image mosaic was created using ImageJ software. The KRT5+ or PDPN- areas were measured using outline spline in the measure menu of Axiovision 4.8."
+  }
+}
