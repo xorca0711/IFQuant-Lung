@@ -5,13 +5,13 @@
 > * The **panel/registry schema** in sections 3 and 5 is implemented: the engine
 >   reads it, and the built-in LEFT and RIGHT panels used by the current study are
 >   expressed in it.
-> * The **research-context profiles** in section 4 — acute injury, IPF/fibrosis,
->   lung adenocarcinoma — are **proposed designs. None has been run on data in
+> * The **research-context profiles** in section 4 ??acute injury, IPF/fibrosis,
+>   lung adenocarcinoma ??are **proposed designs. None has been run on data in
 >   this repository.** They are a statement of how a panel *would* be assembled,
 >   not a record of one that was.
 > * The marker catalogue is broader than anything this study measured. The
->   markers with real data behind them are DAPI, KRT5, AGER, T1α/PDPN (LEFT
->   panel) and ProSPC, mRAGE, KRT8 (RIGHT panel) — and of those, only KRT5 has a
+>   markers with real data behind them are DAPI, KRT5, AGER, T1慣/PDPN (LEFT
+>   panel) and ProSPC, mRAGE, KRT8 (RIGHT panel) ??and of those, only KRT5 has a
 >   calibrated threshold.
 >
 > This document predates the confocal data. Last checked: 2026-08-08.
@@ -81,22 +81,18 @@ Unknown markers can be used without editing Groovy source when the panel JSON
 declares one of these roles. Registry membership is a convenience, not a
 whitelist.
 
-### Operational profiles for KRT8, ITGA2, PDGFRB, SOX9, Red2-Kras, pan-KRAS, and Ki-67
+### Operational profiles — moved
 
-| Marker | Default role | Primary morphology | Interpretation boundary |
-|---|---|---|---|
-| KRT8 | `cyto` | Connected extranuclear/perinuclear filament support | Positivity is broad epithelial expression; a KRT8-high transitional state additionally needs a frozen abundance rule, alveolar/fibrotic geography, and co-markers |
-| ITGA2/CD49b | `membrane` | Connected membrane-support coverage; assay-dependent cytoplasmic staining is retained only as an audit measurement | Not lineage-specific; require the intended epithelial, tumor, stromal, or immune ROI and co-markers |
-| PDGFRB/CD140b | `membrane` when cell ownership is validated; otherwise `regional_area` | Perivascular/stromal connected signal and spatial relationship to vessels | PDGFRB alone does not establish pericyte or myofibroblast identity; regional area is preferred at 20x |
-| SOX9 | `nuc_marker` | Connected DAPI-nuclear support plus nuclear:ring enrichment | Cytoplasmic-only staining is not positive; developmental, injury, fibrotic, or tumor meaning requires geography and co-markers |
-| Red2-KrasG12D RFP | `cyto` plus `areaMarker: true` in the study panel | Connected RFP reporter support; filtered RFP-positive clone area is primary at 20x | RFP-positive marks the oncogene-coupled clone after model/induction verification; RFP-negative alone is not wild type |
-| KRAS | `cyto` | Connected nucleus-associated cytoplasmic/inner-membrane protein support | Pan-KRAS staining cannot establish a mutation or allele; mutant-specific claims require allele-specific validation against genotyping |
-| Ki-67/MKI67 | `nuc_marker` | Connected DAPI-nuclear support plus enrichment, using a lower coverage gate for granular/nucleolar patterns | Report a labeling index within a predeclared cell population/ROI; there is no universal lung high/low cutoff |
-
-The canonical symbol is `ITGA2`; the registry accepts the user-supplied
-`IGTA2` spelling only as an alias. The explicit pilot morphology defaults are
-documented in [`MARKER_MORPHOLOGY_GUIDE.md`](MARKER_MORPHOLOGY_GUIDE.md).
-
+> **Consolidated 2026-08-09.** The per-marker operational profile table for
+> KRT8, ITGA2, PDGFRB, SOX9, Red2-Kras, pan-KRAS and Ki-67 lived here *and* in
+> `MARKER_MORPHOLOGY_GUIDE.md` §4 in near-identical form. Marker interpretation
+> now has one home:
+> **[`MARKER_MORPHOLOGY_GUIDE.md` §4](MARKER_MORPHOLOGY_GUIDE.md)**.
+>
+> This file keeps what is genuinely its own: the marker-selection hierarchy,
+> the analytical role vocabulary, the custom panel JSON schema, the ROI context
+> vocabulary, and the control checklist — i.e. *how to configure*, not *how to
+> interpret*.
 ## 4. Research-context profiles
 
 ### Acute respiratory injury and regeneration

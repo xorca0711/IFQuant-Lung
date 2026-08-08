@@ -724,7 +724,9 @@ nuclei are not independent biological replicates.
 
 ## Current validation outputs
 
-The two final local pilots are under `test_runs/current/`:
+> **Note (2026-08-09):** `test_runs/` and `ref_images/` were deleted from the working tree — they were gitignored generated outputs, ~7.3 GB, regenerable by re-running the pipeline. Paths below are historical provenance, not live locations. The numerical results they produced are preserved in this document.
+
+The two final local pilots were under `test_runs/current/`:
 
 - `FinalPilot_CC10_AcTub_G002_morphology_primary_v2`;
 - `FinalPilot_T1A_mRAGE_G002_morphology_primary_v2`.

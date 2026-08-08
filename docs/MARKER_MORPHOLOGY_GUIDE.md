@@ -151,6 +151,29 @@ characters are removed from the environment token, so `tdTOM` becomes
 
 ## 4. Marker-specific interpretation
 
+> **Consolidated 2026-08-09.** This section is now the single home for marker
+> interpretation. The operational-profile table below was previously duplicated
+> in `UNIVERSAL_MARKER_CONFIGURATION.md` §3; that file now points here and
+> retains only the configuration schema. None of these markers was measured in
+> the IFN-γ/PR8 study — they are pilot defaults and interpretation boundaries
+> for future panels, not validated cutoffs.
+
+### Operational profiles at a glance
+
+| Marker | Default role | Primary morphology | Interpretation boundary |
+|---|---|---|---|
+| KRT8 | `cyto` | Connected extranuclear/perinuclear filament support | Positivity is broad epithelial expression; a KRT8-high transitional state additionally needs a frozen abundance rule, alveolar/fibrotic geography, and co-markers |
+| ITGA2/CD49b | `membrane` | Connected membrane-support coverage; assay-dependent cytoplasmic staining is retained only as an audit measurement | Not lineage-specific; require the intended epithelial, tumor, stromal, or immune ROI and co-markers |
+| PDGFRB/CD140b | `membrane` when cell ownership is validated; otherwise `regional_area` | Perivascular/stromal connected signal and spatial relationship to vessels | PDGFRB alone does not establish pericyte or myofibroblast identity; regional area is preferred at 20x |
+| SOX9 | `nuc_marker` | Connected DAPI-nuclear support plus nuclear:ring enrichment | Cytoplasmic-only staining is not positive; developmental, injury, fibrotic, or tumor meaning requires geography and co-markers |
+| Red2-KrasG12D RFP | `cyto` plus `areaMarker: true` in the study panel | Connected RFP reporter support; filtered RFP-positive clone area is primary at 20x | RFP-positive marks the oncogene-coupled clone after model/induction verification; RFP-negative alone is not wild type |
+| KRAS | `cyto` | Connected nucleus-associated cytoplasmic/inner-membrane protein support | Pan-KRAS staining cannot establish a mutation or allele; mutant-specific claims require allele-specific validation against genotyping |
+| Ki-67/MKI67 | `nuc_marker` | Connected DAPI-nuclear support plus enrichment, using a lower coverage gate for granular/nucleolar patterns | Report a labeling index within a predeclared cell population/ROI; there is no universal lung high/low cutoff |
+
+
+The canonical symbol is `ITGA2`; the registry accepts `IGTA2` only as an
+alias. Detailed reasoning for each marker follows.
+
 ### Nuclear markers: p63 and Sox2
 
 Positive signal must occupy a substantial, connected part of the DAPI nucleus

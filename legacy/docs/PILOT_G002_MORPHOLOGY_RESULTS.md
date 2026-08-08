@@ -1,10 +1,12 @@
 # G002 Morphology-Primary Fiji Pilot Results
 
+> **Note (2026-08-09):** `test_runs/` and `ref_images/` were deleted from the working tree — they were gitignored generated outputs, ~7.3 GB, regenerable by re-running the pipeline. Paths below are historical provenance, not live locations. The numerical results they produced are preserved in this document.
+
 Date: 2026-07-21
 
 This report records one original 20x field from each requested staining panel,
 processed with the morphology-first three-state hierarchy in
-[`../IF_Quant_Pipeline.groovy`](../IF_Quant_Pipeline.groovy).
+[`../IF_Quant_Pipeline.groovy`](../../IF_Quant_Pipeline.groovy).
 
 These are technical pilot results, not study endpoints. All marker and area
 thresholds were image-specific Otsu thresholds, so every positive/negative result
