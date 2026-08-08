@@ -1763,7 +1763,24 @@ def resolveTissueRois(String imgPath, ImagePlus dapi, cfg) {
   }
   // Auto tissue from DAPI
   def mask = buildThresholdMask(dapi, cfg.tissueBlur, cfg.tissueMethod)
-  IJ.run(mask, "Options...", "iterations=2 count=1 do=Close")
+  // The `black` token is LOAD-BEARING and must never be removed. ImageJ's Binary
+  // Options dialog is a GenericDialog: in macro mode an ABSENT checkbox keyword
+  // reads as UNCHECKED, so an option string without `black` makes this call
+  // write Prefs.blackBackground = false GLOBALLY, silently overriding the true
+  // set in main(). This runs inside resolveTissueRois, i.e. BEFORE segmentNuclei,
+  // for every image -- so the flipped pref then inverted the polarity of
+  // `Fill Holes` during nucleus segmentation, which erased every nucleus that did
+  // not touch the image frame and left only the border-connected rim.
+  //
+  // Measured cost of the missing token on the 260808-CW confocal batch: nucleus
+  // density 185/mm^2 recorded against 16422/mm^2 corrected, an 89x undercount,
+  // with 100% of candidate components border-touching in all 79 fields. A replay
+  // of the buggy path reproduced the shipped mask at IoU = 1.0000.
+  //
+  // Area masks were NOT affected: they are read via setThreshold(128,255,
+  // NO_LUT_UPDATE) on pixel values, and Convert to Mask inverts the LUT rather
+  // than the data.
+  IJ.run(mask, "Options...", "iterations=2 count=1 black do=Close")
   def rois = particlesToRois(mask, cfg.tissueMinArea, false)
   mask.close()
   if (rois.isEmpty()) {
