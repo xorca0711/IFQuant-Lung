@@ -324,24 +324,81 @@ does not claim 3D cell-boundary reconstruction.
 
 ```mermaid
 flowchart TD
-    A[Marker-specific projected channel] --> P{Launcher operation}
-    P -->|Review and run analysis| B[Keep original calibrated pixels for quantification]
-    P -->|Review and run analysis| C[Duplicate display copy for every analyzed image]
-    P -->|Create visual merge panels; configured image scope| C
-    C --> D[Resolve per-channel low and high percentiles]
-    D --> E[Map display range to 8-bit]
-    E --> F[Apply optional display gamma]
-    F --> G[Write labeled individual marker PNG]
-    F --> H[Color-merge enhanced marker copies]
-    H --> I[Write labeled enhanced composite]
-    I --> Q{Visual-merge-only operation?}
-    Q -->|Yes| R[Stop: PNG files only]
-    Q -->|No| J
-    B --> J[Thresholds, masks, morphology, and final calls]
+    A["Marker-specific projected channel<br/><i>original calibrated pixels</i>"]
+
+    A ==>|"NEVER modified"| M["<b>MEASUREMENT BRANCH</b><br/>thresholds · masks · morphology<br/>final calls · run_summary.csv"]
+
+    A --> D1["<b>display copy</b> (duplicate)"]
+
+    subgraph ENG["In-run preview · engine · IFQ_EXPORT_DISPLAY_CHANNELS"]
+        D1 --> E1["per-channel percentiles<br/>default p1.0–p99.8, gamma 1.0"]
+        E1 --> E2["map to 8-bit · optional gamma"]
+        E2 --> E3["labelled channel PNGs +<br/>merged composite<br/><i>DISPLAY ONLY – NOT QUANTIFIED</i>"]
+        E3 --> E4{"visual-merge-only run?"}
+        E4 -->|yes| E5["stop: PNGs only<br/>no masks, CSV, manifest"]
+        E4 -->|no| M
+    end
+
+    subgraph PAN["Figure generation · panels/ · offline, post-run"]
+        direction TB
+        P0["reads the SAME .oir + the engine's exported masks"]
+        P0 --> P1{"which product?"}
+        P1 -->|"panels/MergePanels.java"| MP["<b>MERGE PANEL</b> — a photograph<br/>raw fluorescence, nothing deleted"]
+        P1 -->|"panels/qc/RenderPanels.java"| QC["<b>QC OVERLAY</b> — an analysis result<br/>outlines the engine's positive calls"]
+        MP --> W1["per-marker window:<br/>abs · rel · auto"]
+        W1 --> W2["floor = max(fraction of this image's<br/>in-tissue range, absFloor,<br/><b>airspace p99.9</b>)"]
+        W2 --> W3["ceiling = percentile of pixels<br/>ABOVE the floor"]
+        W3 --> W4["caption states the RESOLVED window<br/>+ panel_qc.csv"]
+        QC --> Q1["mask → fill (weight &lt; DAPI)<br/>→ outline drawn LAST"]
+        Q1 --> W4
+    end
+
+    A -.->|"read-only"| P0
+
+    style M fill:#1b3a5c,color:#fff
+    style MP fill:#2d4a2b,color:#fff
+    style QC fill:#4a3a1b,color:#fff
 ```
 
-Intensity adjustment is deliberately isolated from measurement. The default
-display range is the 1.0th to 99.8th percentile with gamma 1.0. A panel channel
+**The invariant:** the original projected pixels are the *only* source for
+thresholds, masks, intensity audit fields, morphology features and final calls.
+Display copies are duplicates; no display transform can reach a number. That is
+why the graph above has one heavy edge into the measurement branch and a dotted
+read-only edge into figure generation.
+
+**Two display paths, deliberately different.** The engine's in-run preview
+(left) is a per-image percentile stretch for QC glancing. The `panels/` module
+(right) is offline figure generation and is documented in
+[`docs/VISUAL_PANELS.md`](docs/VISUAL_PANELS.md). It splits into two products
+that must never be confused:
+
+| | merge panel | QC overlay |
+|---|---|---|
+| what it is | a photograph — raw fluorescence | an analysis result — the engine's calls |
+| deletes content | **no** | n/a, it is an overlay |
+| outlines | none | per-object, drawn last at full saturation |
+| honest use | a figure | validating the counting |
+
+**Two rules learned the hard way, both encoded above:**
+
+*The airspace floor.* Window statistics are computed inside the DAPI tissue
+mask, but a panel renders the whole field. For a weak channel the in-tissue
+floor can land *below* the noise of empty airspace, and the frame washes with
+that channel's colour. Alveolar airspace holds no fluorophore, so it is each
+image's own optical-background control: nothing dimmer than its p99.9 is drawn.
+No free parameter.
+
+*No content deletion in a merge panel.* An earlier version removed a
+non-specific airway population with a connected-component size gate. That is
+selective manipulation of an image presented as a micrograph
+(Rossner & Yamada 2004, *J Cell Biol* 166:11), categorically different from a
+window or gamma change, and it is **retired** — a config still carrying
+`minAreaUm2`/`maxAreaUm2` now fails rather than silently rendering differently.
+Suppressing a population is the overlay's job, where it is visibly an analysis
+decision.
+
+The engine's default display range is the 1.0th to 99.8th percentile with
+gamma 1.0. A panel channel
 may override `displayLowPercentile`, `displayHighPercentile`, or
 `displayGamma`. All enhanced files contain the banner
 `DISPLAY ONLY - NOT QUANTIFIED`; merged outputs are labeled
