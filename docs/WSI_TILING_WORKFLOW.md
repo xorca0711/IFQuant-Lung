@@ -1,5 +1,18 @@
 # Whole-Slide (WSI) Tiling Workflow
 
+> **Status: VALIDATED (plumbing) / PROPOSED (thresholds).**
+>
+> * The Stage 1 → 2 → 3 chain is validated end to end on real data: exported
+>   tiles bit-identical to the source region, ROI areas exact, summed region
+>   areas reconciling to 2.1e-16. The evidence table is section 10.
+> * **No threshold in this document is calibrated for slide-scanner data.**
+>   `IFQ_KRT5_THRESHOLD = 300` was derived from *confocal* controls and **does
+>   not transfer** — see section 10.
+> * **This route has not been run on the current study data.** The confocal
+>   route was used instead. The 6-tile pilot is what validated the plumbing.
+>
+> Last checked: 2026-08-08.
+
 This document describes the slide-scanner route: quantifying an Olympus VS200
 `.vsi` whole-slide scan with the **unchanged** validated Fiji engine.
 
@@ -112,8 +125,15 @@ thumbnail series, and channel names matching the expected pattern. It requires
 
 ## 5. The tissue denominator is a protocol decision
 
-The primary endpoint is KRT5+ pod area **as a fraction of tissue**, so what
-counts as "tissue" is a first-order scientific choice, not cleanup.
+Whatever the study endpoint is, this route reports areas against `region_area_um2`
+— the analysed tissue region — so what counts as "tissue" is a first-order
+scientific choice, not cleanup.
+
+> **Note.** The study endpoint is **not** "KRT5⁺ area / tissue area". It is
+> `KRT5+ AND PDPN+ / (PDPN− OR KRT5+)`, defined in
+> `config/endpoints/dysplastic_over_damaged.json`. The tissue denominator here is
+> the *engine's* measurement region, which the endpoint module clips to; it is not
+> the endpoint's denominator. See [`PROJECT_STATE.md`](PROJECT_STATE.md) §2.
 
 Two settings change it materially, both measured on the pilot slide:
 
@@ -287,8 +307,20 @@ The plumbing is verified end to end on real data (QuPath 0.7.0, Fiji/ImageJ
 
 That last row is the point: the tile count never becomes the n.
 
-**Thresholds are NOT validated.** The gate defaults and any
+**Thresholds are NOT validated on this route.** The gate defaults and any
 `IFQ_*_THRESHOLD` values in examples here are placeholders. Per the project
 rule — tune on 2-3 images, freeze, then batch — thresholds must be set from
 blinded control review before any confirmatory run. Until then every call is
 `adaptive_otsu_exploratory` and must be reported as exploratory.
+
+**`IFQ_KRT5_THRESHOLD = 300` does not transfer here.** That value was derived
+from *confocal* uninfected controls at 0.3107 µm/px, where the in-tissue 488
+p99.99 was 283 and 255. On this scanner the same channel has an autofluorescence
+floor an order of magnitude worse — per-image Otsu on uninfected `m6` chose 54.6
+and reported 4.95% KRT5⁺, indistinguishable from an infected animal. Confocal
+removing that floor is the whole reason the calibration became possible. A
+slide-scanner threshold must be derived from slide-scanner controls.
+
+**No study data has been through this route.** The 6-tile pilot above validated
+the machinery; the 2026-08-06 `.vsi` slides were superseded by the 2026-08-08
+confocal acquisition before a full slide run happened.

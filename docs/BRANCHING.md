@@ -1,5 +1,10 @@
 # Branch roles
 
+> **Status: CURRENT.** Branch topology verified against `git branch -a` and
+> `git tag` on 2026-08-08. The "Completed Z-stack merge gate" section at the
+> bottom is a **historical record** of a gate that was passed, not a live
+> checklist.
+
 The repository was renamed to **`IFQuant-Lung`** on 2026-08-07 (previously
 `Fiji_ImageJ_Cell_Counting`). GitHub redirects the old URL, so existing clones
 keep working, but new remotes should use the new name.
@@ -8,8 +13,25 @@ keep working, but new remotes should use the new name.
 
 - `main`: **the only development line.** Carries the morphology-first Fiji
   engine, the QuPath whole-slide front end, the damaged-area partition, the
-  relational endpoints module, the control-derived calibration, and released
-  launcher v1.7.2. Start all new work here.
+  relational endpoints module, the control-derived calibration, and the
+  four-route launcher. Start all new work here.
+
+## Tags
+
+| tag | commit | what it marks |
+|---|---|---|
+| `v2.0.0` | `dfa3cfa` | "Preserve the superseded QuPath engines and consolidate branch roles" |
+| `v1.8.0` | `f16e8b4` | the four-route launcher |
+| *(none)* | `22afada` | **current `main` tip — untagged.** Launcher v1.9.0. |
+
+Two tag series coexist because `v2.0.0` versions the **repository** and `v1.8.0`
+versions the **launcher**. That is confusing, reads as a rollback in `git tag`
+output, and puts the *lower* number on the *later* commit.
+
+The launcher has since shipped **v1.9.0** (`22afada`) without a tag, so the tag
+series is four commits behind the code it is meant to label. Either tag `v1.9.0`
+or stop tagging launchers and version the repository only. See
+[`PROJECT_STATE.md`](PROJECT_STATE.md) §4.
 
 Everything else was consolidated onto `main` on 2026-08-07 (PR #11).
 
@@ -59,10 +81,13 @@ of them.
 - `codex/incorporate-morphology-hierarchy`
 - `codex/legacy-pre-reorganization` (historical pre-reorganization snapshot)
 
-## Completed Z-stack merge gate
+## Completed Z-stack merge gate — historical
 
 The following checks were completed before promoting
-`codex/z-stack-analysis` to `main`:
+`codex/z-stack-analysis` to `main`. They are a record of a gate that was passed
+during the ALI organoid pilot; they are **not** a live checklist, and the
+launcher version history below stops at v1.7.2 because that is where the gate
+stopped. Current launcher state is in [`PROJECT_STATE.md`](PROJECT_STATE.md) §4.
 
 1. Representative 20× stacks for `ALI1`, `ALI2`, and `ALI3` completed.
 2. Each validation manifest completed without image failures.

@@ -1,18 +1,131 @@
 # Project state — living handoff
 
-Updated 2026-08-08 ~18:40 KST. **Update this whenever work is parked.**
-It exists so a fresh session can resume without the prior conversation.
+> **Status: CURRENT.** This is the one document that is allowed to contradict an
+> older one. Where any other doc in `docs/` disagrees with this file, this file
+> wins and the other doc is stale — say so rather than reconciling silently.
+>
+> Last reconciled against data and code: **2026-08-08**, against
+> `D:\IFQ_Runs\confocal_260808_fixed`, `main` @ `22afada`.
+
+**Update this whenever work is parked.** It exists so a fresh session — or a
+reader with five minutes — can tell what was built, what is validated, and what
+is not.
 
 ---
 
-## 0. Latest session (2026-08-08 evening) — read this first
+## 0. The 60-second version
 
-**Confocal data arrived and the KRT5 threshold is now calibrated.** The whole
-project was blocked on it; it no longer is.
+* The measurement engine is `IF_Quant_Pipeline.groovy` (Fiji). **QuPath measures
+  nothing**; it reads and tiles whole slides. The handoff is file-based because
+  the two ship incompatible Java versions.
+* Confocal data arrived 2026-08-08. **`IFQ_KRT5_THRESHOLD = 300` is calibrated**
+  from uninfected controls. AGER and T1A are **not** calibrated and every call
+  they make is labelled `adaptive_otsu_exploratory`.
+* The headline area result is real and reproducible: KRT5⁺ area 14.11% / 11.98%
+  in infected mice against 0.000% / 0.003% in uninfected controls.
+* **n = 1 mouse per genotype × condition cell, and genotype is confounded with
+  condition. No statistics are possible from this batch.** Anything that reads
+  like a group comparison is a description of four animals, not a result.
+* Two things were tested and **rejected** with a control-locked enrichment test:
+  AGER as a co-negativity marker, and KRT8 as a discriminator. See
+  [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md).
+* One one-token bug (`black`, missing from an ImageJ Binary Options macro string)
+  destroyed every nucleus count in the first run. Diagnosed, fixed, re-validated,
+  and area measurements proven unaffected. Section 3 below.
+* The endpoint **specification was wrong and has been corrected**: the reference
+  measures KRT5⁺PDPN**⁺**, not KRT5⁺PDPN⁻. Section 2 below.
+
+---
+
+## 1. Where everything is
+
+| | |
+|---|---|
+| repo | `X:\GitHub\IFQuant-Lung` (renamed from `Fiji_ImageJ_Cell_Counting`) |
+| GitHub | `xorca0711/IFQuant-Lung` |
+| branch | `main` @ `22afada`. Tags are `v1.8.0` (`f16e8b4`) and `v2.0.0` (`dfa3cfa`); **the current tip is untagged** — see `BRANCHING.md` |
+| review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
+| launcher binary | `IFQuantLauncher-v1.9.0.exe` at repo root — **gitignored** (`.gitignore:58`), see section 4 |
+| confocal data | `D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × 2 panels × ~10 fields |
+| slide-scanner data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` — 4 slides (WSI pilot) |
+| pipeline runs | `D:\IFQ_Runs\` — see its README |
+| channel cache | `<repo>\.cache\slide_channels` (ds=8, bit-exact, 24.5× faster than decoding). Gitignored, regenerable in ~10 min via `scripts/cache_slide_channels.groovy`. Override with `IFQ_CACHE_DIR`. |
+| QuPath | `X:\QuPath\QuPath-0.7.0 (console).exe` |
+| Fiji | `X:\Fiji` — its `.exe` is **broken on ARM64**; invoke the JVM directly |
+
+Only two remote branches exist: `main` and `claude/module-drafts`. Everything
+else was merged or retired on 2026-08-07; see [`BRANCHING.md`](BRANCHING.md).
+
+### The runs, and which one to trust
+
+| run | what it is | use it for |
+|---|---|---|
+| `D:\IFQ_Runs\confocal_260808` | first confocal run; carries the `blackBackground` bug | **areas only**; every count in it is wrong |
+| `D:\IFQ_Runs\confocal_260808_fixed` | re-run after the fix | **everything** — this is the current run |
+| `D:\IFQ_Runs\validated` / `superseded` | earlier WSI pilot outputs | provenance |
+| `D:\IFQ_Runs\archive_202607_pre_revision` | 14 July runs (12.0 GB) moved off the system drive | provenance |
+
+A confocal run is ~7.6 GB: 5.9 GB of uncompressed 2048² mask TIFFs, 1.7 GB of QC
+PNGs, and 2.7 MB of actual numbers. Masks must be kept
+(`endpoints/evaluate_endpoints.groovy` does mask algebra on them) but compress
+~50–100×.
+
+---
+
+## 2. The endpoint — corrected specification
+
+```
+dysplastic fraction  =  KRT5+ AND PDPN+ area  /  (PDPN- OR KRT5+) area
+```
+
+**This is a change of sign from what was implemented.** Lin et al. 2024
+(J Clin Invest 134(19):e176828) Fig 2A–B quantify *"percentages of **KRT5⁺PDPN⁺**
+areas in PDPN⁻ and KRT5⁺ areas"*. The implementation computed KRT5⁺PDPN**⁻**
+over a computed damaged area, and the old spec mis-quoted the paper to justify
+it. PDPN is expressed by basal/dysplastic cells as well as AT1, so requiring
+PDPN-negativity excluded the population being measured.
+
+| artefact | status |
+|---|---|
+| `config/endpoints/dysplastic_over_damaged.json` | **CURRENT spec.** Correct sign, union denominator, cites the reference verbatim. |
+| `config/endpoints/ectopic_pod_over_damaged.json` | **SUPERSEDED.** Wrong sign, wrong denominator, mis-quotes the reference. Kept as the record. |
+| `endpoints/evaluate_endpoints.groovy` | **Cannot execute the current spec yet.** It reads `spec.numerator` and always divides by `region_area_um2`. It never reads `spec.denominator`. |
+
+That last row matters and is the largest open gap: the corrected endpoint is
+**declared but not computable**. The only endpoint numbers that exist
+(`D:\IFQ_Runs\confocal_260808\endpoint_areas.csv`, `endpoint.log`) were produced
+by the **superseded** spec — `endpoint : ectopic_pod_over_damaged`,
+`numerator: KRT5_pod_mask AND NOT T1A_membrane_positive_mask`, denominator =
+total tissue region, not damaged area. They validated the *machinery*, not the
+*endpoint*.
+
+### What is actually established
+
+| item | status | evidence |
+|---|---|---|
+| WSI chain Stage 1→2→3 | **VALIDATED** | reconciliation to 2.1e-16; see [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) §10 |
+| mask-algebra endpoint module | **VALIDATED mechanically** | reconstruction rel. diff 3.285e-07 (a TIFF resolution-tag rounding constant), containment 39/39, three failure guards executed |
+| `IFQ_KRT5_THRESHOLD = 300` | **CALIBRATED**, one sound control | control p99.99 = 283 (M4-2) / 255 (M6); recorded as `fixed_predeclared` in both runs. **M6 LEFT is a staining failure, so this rests on M4-2 alone.** |
+| `IFQ_AGER_THRESHOLD`, `IFQ_T1A_THRESHOLD` | **NOT CALIBRATED** | both run `adaptive_otsu_exploratory`; deliberately so — they are constitutively expressed, so "the control should be negative" gives no handle |
+| AGER damage detector (AGER 150, σ 40 µm, cutoff 0.14) | **RETIRED as the denominator** | it was locked from controls and the derivation is sound, but the reference's denominator is a **hand-traced union**, not a density detector. It solves a problem the reference does not have. |
+| PDPN ceiling t = 200 | **RETIRED** | derived as a co-*negativity* ceiling; the justification does not transfer to co-*positivity* |
+| airway exclusion | **NOT IMPLEMENTED** | needs hand-drawn annotations |
+| morphometry cross-check | **drafted, directional only** | on `claude/module-drafts`; its MLI is inter-nuclear spacing, not the classical quantity |
+
+Full derivations and the evidence trail:
+[`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md) — which is retained as the
+**calibration record** and is no longer the specification. Read its banner first.
+
+**No defensible dysplastic-fraction number exists yet.** The KRT5⁺ area numbers
+in section 3 are area measurements, not the endpoint.
+
+---
+
+## 3. The confocal batch, and the bug that nearly ate it
 
 `D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × BOTH panels × ~10 fields
-= 82 analysis fields, 2048², 4ch, single plane, 0.3107 µm/px. The RIGHT panel
-(ProSPC/mRAGE/KRT8) that was deferred to confocal is now in hand.
+= **82 acquisitions**, 2048², 4 ch, single plane, 0.3107 µm/px. The RIGHT panel
+(ProSPC / mRAGE / KRT8) that had been deferred to confocal is now in hand.
 
 Confocal removes the slide-scanner autofluorescence floor that made KRT5
 uncalibratable. Pooled in-tissue 488 statistics:
@@ -23,164 +136,151 @@ uncalibratable. Pooled in-tissue 488 statistics:
 | M6 hom | uninfected | 195 | 255 | 1254 | 0.00000 |
 | M2 hom | infected | 4095 | 4095 | 4095 | 0.08112 |
 
-**`IFQ_KRT5_THRESHOLD = 300`**, derived from the two uninfected controls only
-(just above both p99.99, so false-positive area ≤ 1e-4 in each control
-independently). AGER and T1A are deliberately left ADAPTIVE — they are
-constitutively expressed, so "the control should be negative" gives no
-calibration handle, and the engine labels their calls `exploratory_*`.
+`IFQ_KRT5_THRESHOLD = 300` sits just above both control p99.99 values, so the
+false-positive area is ≤ 1e-4 in each control independently.
 
-Run: `D:\IFQ_Runs\confocal_260808\` (script: `scratchpad/run_confocal.ps1`).
-79/82 succeeded. The 3 failures are data, not pipeline: two truncated
-acquisitions (7.3 / 8.2 MB against a uniform 37.7 MB) and one field where DAPI
-tissue detection correctly refused rather than analysing background. 13
-`Map_A01.oir` overviews were skipped by the engine's own guard.
+**82 → 79 analysed.** Two `.oir` files are truncated at acquisition (7.3 and
+8.2 MB against a uniform 37.7 MB) and fail in both Bio-Formats paths; one field
+was refused by DAPI tissue detection rather than analysed as background. 13
+`Map_A01.oir` overviews were skipped by the engine's own guard. All three
+failures are data, not pipeline.
 
-### The result (mouse level, LEFT panel, area-based)
+### The `blackBackground` bug — FOUND, FIXED, RE-VALIDATED
 
-| mouse | condition | KRT5⁺ area | KRT5 pods | T1α area |
-|---|---|---|---|---|
-| M2 (hom) | PR8 | 14.11% | 1080 | 13.4% |
-| M4-1 (het) | PR8 | 11.98% | 1092 | 13.4% |
-| M4-2 (het) | uninfected | 0.000% | 0 | 24.6% |
-| M6 (hom) | uninfected | 0.003% | ~0 (23 µm²) | 28.7% |
+The first run reported ~**150 nuclei/mm²** in lung parenchyma, where 5×10³–2×10⁴
+is expected.
+
+**Root cause: one missing token.** `IJ.run(mask, "Options...", "iterations=2
+count=1 do=Close")` inside `resolveTissueRois`. ImageJ's Binary Options dialog is
+a `GenericDialog`, and in macro mode an **absent** checkbox keyword reads as
+*unchecked* — so the call wrote `Prefs.blackBackground = false` **globally**,
+silently overriding the `true` set in `main()`. That ran before `segmentNuclei`
+for every image, inverting the polarity of `Fill Holes`, which erased every
+nucleus that did not touch the image frame and left only the border-connected
+rim. 100% of candidate components were border-touching in all 79 fields.
+
+**Diagnosis, not inference.** A replay of the buggy code path reproduced the
+shipped mask at **IoU = 1.0000**. The fix is the token `black`, at
+`IF_Quant_Pipeline.groovy:1783`, with the reasoning written into the source so it
+cannot be removed again by tidying.
+
+**Measured cost and blast radius**, pooled over all 79 fields, buggy run vs fixed
+run:
+
+| quantity | buggy | fixed | change |
+|---|---|---|---|
+| nucleus density | 152.5 /mm² | 15 393.3 /mm² | **~101× undercount** |
+| `KRT5_pod_area_frac`, worst field | — | — | **0.0154 pp** |
+| `T1A_positive_area_frac`, worst field | — | — | **0.0209 pp** |
+| `AGER_positive_area_frac`, worst field | — | — | **0.0042 pp** |
+| `region_area_um2`, worst field | — | — | 0.456% rel |
+
+Area masks are read via `setThreshold(128, 255, NO_LUT_UPDATE)` on pixel values,
+and *Convert to Mask* inverts the LUT rather than the data — so areas were
+structurally immune. The table is the proof, not the argument: the largest change
+in any area fraction across 79 fields is **0.021 percentage points**. The
+LEFT-panel area result below therefore survived the bug unchanged.
+
+> The in-source comment at `IF_Quant_Pipeline.groovy:1775-1778` quotes
+> 185 → 16 422 /mm² and "89×", computed on a different field subset. The pooled
+> figures above are the ones reproducible from `run_summary.csv`. The two should
+> be reconciled — `IF_Quant_Pipeline.groovy` is outside this document's
+> ownership.
+
+### The result (mouse level, LEFT panel, area-based, `confocal_260808_fixed`)
+
+| mouse | genotype | condition | KRT5⁺ area | KRT5 pods | T1α area | nuclei |
+|---|---|---|---|---|---|---|
+| M2 | hom | PR8 | **14.114%** | 1080 | 13.37% | 20 805 |
+| M4-1 | het | PR8 | **11.977%** | 1094 | 13.38% | 23 086 |
+| M4-2 | het | uninfected | **0.000%** | 0 | 24.62% | 3 623 |
+| M6 | hom | uninfected | **0.0035%** | 0 (23 µm²) | 28.67% | 10 470 |
 
 Near-binary separation, and T1α area moves the right way (down in infected =
-AT1 loss). **Caveat: n = 1 mouse per genotype × condition cell.** Genotype is
-confounded with condition; no statistics are possible from this batch.
+AT1 loss).
 
-### KNOWN DEFECT — nucleus segmentation under-detects ~50–100×
+**Caveat, and it is the binding one: n = 1 mouse per genotype × condition cell.**
+Genotype is confounded with condition — there is no infected/uninfected pair
+within a genotype *and* no het/hom pair within a condition that is not also
+confounded by section. No statistics are possible from this batch. These four
+numbers describe four animals.
 
-Measured density is **~140 nuclei/mm²**; lung parenchyma is ~5e3–2e4. The
-candidate count before filtering is only 35–106 per field, so DAPI thresholding
-is failing upstream of the size filter rather than being over-filtered. The
-defaults (`dapiLocalRadiusUm=4.0`, `dapiBackgroundRadiusUm=15.0`,
-`minNucArea=8.0`) were tuned on slide-scanner data.
+### Markers tested and REJECTED
 
-- **Unaffected** (area-based, no nuclei): `*_positive_area_um2`,
-  `*_positive_area_frac`, `*_pod_area_um2`, `*_n_pods`, `region_area_um2`.
-  The LEFT-panel result above is therefore sound.
-- **Affected — do not report**: every `*_pos_count`, `*_density_per_mm2`,
-  `*_morphology_*`, `*_final_*_cell_count`, `class_*_count`, `n_nuclei`.
+See [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md) for the test, the data, and the
+diagnosis in each case.
 
-Consequence: the **RIGHT panel is currently unusable**, because the registry
-defines area mode only for KRT5/AGER/T1A, so ProSPC and KRT8 have cell-count
-outputs only. Fixing this needs no engine change — the DAPI parameters are
-environment-configurable — but it does need a calibration sweep against
-hand-counted fields.
+- **AGER as co-negativity marker**: R ≈ 0.99–1.05, indiscriminate. Retracted —
+  the removal was definitional, not biological.
+- **KRT8 as infected/uninfected discriminator**: R = 0.80–1.25 at every
+  control-locked cut. The two infected mice **bracket** the two controls, so
+  between-section staining variance exceeds the biological signal. Not a tuning
+  problem.
+- **Co-negativity as the endpoint's form**: superseded by section 2.
 
-### Storage and locations
+### What the RIGHT panel can and cannot do
 
-A confocal run is ~7.6 GB: 5.9 GB uncompressed 2048² mask TIFFs, 1.7 GB QC
-PNGs, and 2.7 MB of actual numbers. Masks must be kept
-(`evaluate_endpoints.groovy` does mask algebra on them) but compress ~50–100×.
-
-Results live under `D:\IFQ_Runs\`. The July runs the v1.7.2 launcher had
-written to `C:\Users\dream\Documents\IFQuantResults` (12.0 GB, 14 runs) were
-moved to `D:\IFQ_Runs\archive_202607_pre_revision\`, and the launcher's
-first-run default no longer points at the system drive.
-
-### Launcher v1.8.0 landed (`f7dbb02`)
-
-Four routes (confocal / slide scanner / H&E-disabled / legacy). Route 4 proven
-equal to v1.7.2 by execution: 82 checks, 0 failures, recorded in
-`launcher/legacy_equivalence_report.txt`. See `launcher/README.md`.
+Fixed. Per-cell masks and counts for ProSPC and KRT8 are now sound (that was the
+`blackBackground` casualty). What remains true is narrower: the marker registry
+defines **area** mode only for KRT5 / AGER / T1A, so ProSPC and KRT8 have
+**cell-level outputs only** — no area endpoints. They are renderable and
+countable, not area-quantifiable, without a registry change.
 
 ---
 
-## 1. Where everything is
+## 4. Launcher — v1.8.0 landed, v1.9.0 supersedes it
 
-| | |
-|---|---|
-| repo | `X:\GitHub\IFQuant-Lung` (renamed from `Fiji_ImageJ_Cell_Counting`) |
-| GitHub | `xorca0711/IFQuant-Lung` |
-| branch | `main` @ `99bdda9`, tagged **`v2.0.0`** |
-| review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
-| released launcher | `IFQuantLauncher-v1.7.2.exe` — **unchanged, still current** |
-| data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` (4 slides) |
-| pipeline runs | `D:\IFQ_Runs\` — `validated/` and `superseded/`, see its README |
-| channel cache | `<repo>\.cache\slide_channels` (ds=8, bit-exact, 24.5× faster than decoding). Gitignored, regenerable in ~10 min via `scripts/cache_slide_channels.groovy`. Override with `IFQ_CACHE_DIR`. Moved here from `X:\ifq_cache` on 2026-08-08 and re-verified bit-exact from the new path. |
-| QuPath | `X:\QuPath\QuPath-0.7.0 (console).exe` |
-| Fiji | `X:\Fiji` — its `.exe` is **broken on ARM64**; invoke the JVM directly |
+Four routes: confocal fields / slide scanner / H&E (deliberately disabled) /
+legacy. v1.8.0 committed at `f7dbb02`; **v1.9.0 at `22afada`** adds a responsive
+WinForms layout and makes the equivalence claim reproducible. See
+`launcher/README.md`.
 
-Only two remote branches exist: `main` and `claude/module-drafts`. Everything
-else was merged or retired on 2026-08-07; see `BRANCHING.md`.
+**Route 4 is proven equal to v1.7.2 by execution, not assertion.**
+`launcher/legacy_equivalence_report.txt`: **84 checks, 0 failures**, in six
+groups — canonical env diff across 7 fixtures, source-drift guards against the
+real v1.7.2 file, "the source cannot quietly stop being legacy", process-level
+diff of what the child process actually receives, command line, and the Advanced
+box decided line-for-line (23/23 identical).
 
----
+**Read the scope of that claim carefully.** Route 4 reproduces the v1.7.2
+**environment and command line** exactly. It does **not** ship v1.7.2's engine:
+the embedded pipeline hash now differs (`b45e4289…` against v1.7.2's
+`defffe67…`) because the engine carries the `blackBackground` fix. The harness
+**detects and names that drift** rather than papering over it, and points at the
+archived v1.7.2 binary in `legacy/launchers/` for byte-exact historical numbers.
+That is the honest version of the claim: same environment, deliberately newer
+engine.
 
-## 2. The endpoint, and what is actually established
+An earlier build of v1.8.0 was rejected by an adversarial verifier that drove the
+real `.exe` and returned `legacy_equivalence_holds: false` with five defects —
+the worst being a fail-closed gate bypassable in four clicks with a custom panel,
+which would have recorded `run_classification=THRESHOLDS_FROZEN` while every
+channel ran adaptive Otsu. **The lesson is kept deliberately**: that same build's
+first test pass reported GateMatrix 36/36 and LegacyEquivalence 48/48 with the
+bypass wide open, because every gate scenario used a built-in panel. Green test
+counts are not evidence; the adversarial pass is.
 
-```
-ectopic pod fraction = KRT5+ PDPN- area / damaged alveolar area
-```
+### Resolved: the version collision
 
-| item | status |
-|---|---|
-| WSI chain Stage 1→2→3 | **validated** — reconciliation exact (2.1e-16) |
-| damaged-area denominator | **LOCKED** from controls: AGER 150, σ 40 µm, cutoff 0.14 |
-| held-out check | infected 6.71% / 4.68% vs controls 0.93% / 0.18% |
-| `endpoints/` relational module | built, runs, guards in place |
-| **`IFQ_KRT5_THRESHOLD`** | **NOT CALIBRATED — blocks any reportable number** |
-| PDPN co-negativity ceiling | **proposed 200, not locked** (measured only at 2.76 µm/px) |
-| airway exclusion | **not implemented** — needs hand-drawn annotations |
-| morphometry cross-check | drafted, unverified, on `claude/module-drafts` |
+Two materially different launcher sources both declared `1.8.0.0` — the
+committed one and a ~476-line uncommitted WinForms layout revision on top of it.
+**Fixed at `22afada`:** the source now declares `AssemblyFileVersion("1.9.0.0")`
+and `IFQuantLauncher-v1.9.0.exe` ships beside it with its own SHA-256 file.
 
-Full evidence and derivations: [`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md).
+### Still owed
 
-**Nothing here produces a defensible pod number yet.**
-
----
-
-## 3. In flight when parked
-
-**Launcher v1.8.0 fix + re-verify** — workflow `wf_3c3980ae-8ed`, started 23:29,
-0/2 returned at time of writing.
-
-* script: `C:\Users\dream\.claude\projects\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\workflows\scripts\launcher-fix-and-reverify-wf_3c3980ae-8ed.js`
-* transcripts + per-agent results: `…\subagents\workflows\wf_3c3980ae-8ed\journal.jsonl`
-* work dir: `…\scratchpad\launcher_final\` — **scratchpad is temp storage**
-
-Resume with `Workflow({scriptPath, resumeFromRunId: "wf_3c3980ae-8ed"})`.
-Completed agents replay from cache.
-
----
-
-## 4. Launcher v1.8.0 — five defects found, fixes in flight
-
-A build produced a compiling v1.8.0 with routes R1/R2/R4 and R3 disabled. An
-adversarial verifier driving the real exe returned
-**`legacy_equivalence_holds: false`** and five defects. **Do not ship v1.8.0
-until these are confirmed fixed.**
-
-**D1 (critical) — H2 is bypassable with a custom panel.**
-`FailClosedGate.Evaluate` guards H2 with `if (panel != null && …)`, and
-`ResolveSelectedPanel()` returns **null for a custom panel key**. So custom panel
-+ custom JSON + confirmatory tier + zero thresholds gives a green
-*"Ready … 0/0 thresholds fixed, tier confirmatory"* bar, starts, and records
-`run_classification=THRESHOLDS_FROZEN` — while every channel runs adaptive Otsu.
-That is the 4.95%-KRT5-on-an-uninfected-control failure, reachable in four
-clicks and labelled frozen. Also bypasses the route-2 "unconditional" block.
-
-**D2 — route 4 mislabels itself.** It writes no thresholds by construction, yet
-emits `THRESHOLDS_FROZEN`/`thresholds_frozen=true`, contradicting its own
-threshold_policy block. Any aggregator grepping that field pools unfrozen legacy
-runs with frozen ones.
-
-**D3 — route 4 breaks legacy equivalence.** v1.7.2 accepted any
-`^IFQ_[A-Z0-9_]+$` Advanced key; v1.8.0 blocks `IFQ_MIN_INCLUDED_NUCLEI`
-(the *only* way v1.7.2 could set the nuclei floor) and unknown keys. Archived
-analyses using them cannot be reproduced.
-
-**D4 — R3 re-enable is two edits**, but the user-visible string says one.
-
-**D5 — `RunEnvironment.BuildStage1` has no route guard** (returns a full stage-1
-environment for route 3), and `RouteCatalog.Describe` **fails open** on an
-undefined enum value.
-
-Also: two real CS0162 unreachable-code warnings.
-
-**Lesson worth keeping:** the first pass reported GateMatrix 36/36 and
-LegacyEquivalence 48/48 with D1 wide open, because every gate scenario used a
-built-in panel. Green test counts are not evidence; the adversarial pass is.
+* **The tip is untagged.** Tags stop at `v1.8.0` (`f16e8b4`), four commits behind.
+  `v1.9.0` should be tagged at `22afada`, or the launcher tag series abandoned.
+* **The shipped binary is gitignored** (`.gitignore:58`, `/IFQuantLauncher-*.exe`),
+  so it cannot be tied to a commit. Every *retired* launcher back to v1.1 **is**
+  tracked, under `legacy/launchers/`. The current one is the only untracked link
+  in that chain.
+* **`IFQuantLauncher-v1.8.0.exe` is still at the repo root** next to v1.9.0, with
+  nothing marking which is current. It belongs in `legacy/launchers/` with the
+  others — a deletion/move for the orchestrator, not for this document.
+* Section `[c]` of the equivalence report is still headed "The **v1.8.0** source
+  cannot quietly stop being legacy". Cosmetic, but it is the sort of stale label
+  that later reads as evidence about the wrong build.
 
 ---
 
@@ -189,23 +289,30 @@ built-in panel. Green test counts are not evidence; the adversarial pass is.
 Five partition QC columns are **silently dropped** at mouse level —
 `aggregate_to_mouse.classify_columns()` uses a closed whitelist
 (`aggregate_to_mouse.py:184-186`), and anything outside it vanishes with no
-error. The primary endpoint is unaffected; per-mouse QC is lost. Proposed fix
+error. The primary endpoint is unaffected; per-mouse QC is lost. The proposed fix
 (`panel = "<PANEL>@<scope>"`) is **not applied** — it changes the shape of
-`slide_level_summary.csv`. See `ECTOPIC_POD_ENDPOINT.md` §9.
+`slide_level_summary.csv`. Verified empirically; see
+[`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md) §9.
 
 ---
 
 ## 6. Decisions waiting on the user
 
-1. **`panel@scope`** — apply the QC-column fix, or leave it?
-2. **Threshold calibration** — `IFQ_KRT5_THRESHOLD` needs blinded control
-   review. Nothing downstream is interpretable first.
-3. **Saturday confocal** — image an uninfected section at **low 488 exposure**.
-   KRT5 was acquired at ~949 ms vs ~0.5–2 ms for the other channels; if the
-   background is an acquisition artifact, that fixes the numerator at source and
-   makes the whole co-negativity apparatus far less load-bearing.
-4. **Is `het` the control?** A heterozygous *Ifng*⁺/⁻ often signals normally.
-   This defines n and therefore the comparison.
+1. **The corrected endpoint needs an executor.** `evaluate_endpoints.groovy`
+   cannot compute a union denominator. Extend it, or accept that the endpoint
+   stays a specification.
+2. **`panel@scope`** — apply the QC-column fix, or leave it?
+3. **Whether the launcher tag series continues.** v1.9.0 shipped untagged; tags
+   stop at v1.8.0. Either tag it or stop tagging launchers and version the repo
+   only.
+4. **Low-exposure 488 control.** KRT5 was acquired at ~949 ms against ~0.5–2 ms
+   for the other channels. If the background is an acquisition artefact, that
+   fixes the numerator at source.
+5. **Is `het` the control?** A heterozygous *Ifng*⁺/⁻ often signals normally.
+   This defines n and therefore what comparison is even available.
+6. **M6 LEFT staining failure.** AGER frac>500 = 0.0097 in M6 LEFT vs 0.289 in
+   M6 RIGHT — same antibody, same animal. Until that is resolved, `KRT5=300`
+   rests on one control.
 
 ---
 
@@ -214,23 +321,25 @@ error. The primary endpoint is unaffected; per-mouse QC is lost. Proposed fix
 Snapdragon X Oryon, **8 cores**, **15.6 GB RAM**, **ARM64**.
 
 A full-resolution slide is 57165 × 42154 × 2 B × 4 ch = **19.3 GB** — it cannot
-be held in memory. That is *why* tiling is mandatory and why the PDPN ceiling
-still cannot be confirmed at full resolution. **64 GB would turn several
+be held in memory. That is *why* tiling is mandatory. `-Xmx` must stay ≤ ~40% of
+RAM; earlier runs used `-Xmx12g` on this machine and paged to disk, and the
+symptom looks like slow I/O rather than swapping. **64 GB would turn several
 outstanding caveats into answered questions.**
 
-`-Xmx` must stay ≤ ~40% of RAM. Earlier runs used `-Xmx12g` on this machine and
-paged to disk; the symptom looks like slow I/O, not swapping.
-
 GPU would only help if deep-learning segmentation (StarDist/Cellpose) were
-adopted — and the area-based pod endpoint never touches nuclei segmentation.
+adopted — and the area-based endpoint never touches nuclei segmentation.
 
 ---
 
 ## 8. Next steps, in order
 
-1. Land the launcher fixes; **apply only if `safe_to_apply` is true**.
-2. Calibrate `IFQ_KRT5_THRESHOLD` from blinded controls (use the channel cache —
-   sweeps are now ~1 s/slide instead of ~38 s).
-3. Re-measure the PDPN ceiling at full tile resolution.
-4. Airway annotation workflow (QuPath GeoJSON → per-tile subtraction).
-5. Morphometry, as an independent check on the damaged-area denominator.
+1. Tag `v1.9.0` at `22afada`, move `IFQuantLauncher-v1.8.0.exe` into
+   `legacy/launchers/`, and decide whether the current binary is tracked
+   (section 4).
+2. Teach `evaluate_endpoints.groovy` the union denominator, or record explicitly
+   that `dysplastic_over_damaged.json` is a specification only (section 2).
+3. Re-derive `IFQ_KRT5_THRESHOLD` once a second sound control exists.
+4. Airway annotation workflow (QuPath GeoJSON → per-tile subtraction). Every
+   KRT5 number includes airway basal cells until this exists.
+5. Validate against hand-drawn outlines on a subset — the reference method is
+   manual, so manual outlines are the only available ground truth.

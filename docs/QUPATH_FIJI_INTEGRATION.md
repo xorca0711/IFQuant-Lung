@@ -1,5 +1,13 @@
 # Why QuPath and Fiji are used together, and how
 
+> **Status: REFERENCE — architecture rationale.** This document explains a design
+> decision; it makes no claim about study results. The two concrete technical
+> claims in it were verified: Fiji's bundled Bio-Formats really cannot decode
+> these `.vsi` files (`ClassNotFoundException` on the JPEG-2000 codec), and the
+> Stage 1 → 2 → 3 reconciliation really is exact — evidence in
+> [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) §10.
+> Last checked: 2026-08-08.
+
 This repository runs QuPath and Fiji **side by side, each doing what it is good
 at**, with a file-based handoff between them. That is a deliberate architecture,
 and it follows an established published pattern rather than being invented here.
@@ -91,6 +99,7 @@ development.
 
 ## Reading order
 
+* [`PROJECT_STATE.md`](PROJECT_STATE.md) — what is calibrated, what the numbers are, what is still owed
 * [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) — the concrete whole-slide route
-* [`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md) — what the numbers mean and how they were calibrated
+* [`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md) — the calibration record. **Superseded as a specification**; read its banner first
 * [`../WORKFLOW.md`](../WORKFLOW.md) — the field/confocal route and the shared interpretation model

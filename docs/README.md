@@ -1,75 +1,103 @@
-# Documentation Index
+# Documentation index
 
-The repository supports **two acquisition routes**, both measured by the same
-validated Fiji engine:
+> **Status: CURRENT.** Every document below carries a status banner at its top.
+> The vocabulary is fixed and is used literally:
+>
+> | label | means |
+> |---|---|
+> | **VALIDATED** | a check was run against real data and its result is recorded in the document |
+> | **PARTLY VALIDATED** | the mechanism was checked; the science it supports was not |
+> | **PROPOSED** | designed and written down; not executed, or not checked against data |
+> | **REFERENCE** | policy, vocabulary or interpretation rules — describes how the engine decides, not what it found |
+> | **SUPERSEDED** | kept because it is the only record of work that was done; **do not build on it** |
+>
+> "Validated" never means "looks right". If a document says validated, the check
+> and its number are in the document.
+
+**Read [`PROJECT_STATE.md`](PROJECT_STATE.md) first.** It is the only document
+allowed to overrule another. Its section 0 is a 60-second summary.
+
+---
+
+## What this project is
+
+Lung immunofluorescence quantification for an IFN-γ KO + PR8 influenza study,
+across two acquisition routes measured by the **same** engine:
 
 * **field / confocal route** — small calibrated images go straight to
   `IF_Quant_Pipeline.groovy`. Described in [`../WORKFLOW.md`](../WORKFLOW.md).
-* **whole-slide route** — a slide-scanner container (`.vsi`) is opened and tiled
-  by QuPath, then the same engine measures the tiles. Described in
+  This is the route the current data came through.
+* **whole-slide route** — a slide-scanner `.vsi` is opened and tiled by QuPath,
+  then the same engine measures the tiles. Described in
   [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md).
 
 QuPath never measures anything; it is a reader and tiler. All quantification
 stays in the Fiji engine so both routes share one validated decision model.
 
-## Start here
+## The five-minute path
 
-- [`PROJECT_STATE.md`](PROJECT_STATE.md): **living handoff** — where everything is,
-  what is validated versus not, what is in flight, and the decisions waiting on
-  the user. Read this first when resuming.
+| # | read | why |
+|---|---|---|
+| 1 | [`PROJECT_STATE.md`](PROJECT_STATE.md) §0–§3 | what exists, what is calibrated, what the numbers are, and the one-token bug that nearly ate them |
+| 2 | [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md) | two markers tested and rejected, with the measurement that killed each |
+| 3 | [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md) | why two tools, and why the handoff is files |
+| 4 | [`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md) banner + §4c | how an operating point was locked from controls only — and why the endpoint it served was still wrong |
 
-- [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md): **why** the two
-  tools are used together, the published pattern this follows
-  (Chiaruttini et al. 2022), where we deliberately differ, and why the handoff
-  is file-based rather than in-process.
+---
 
-## Study endpoint
+## Every document, with its status
 
-- [`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md): the KRT5⁺ ectopic pod
-  endpoint — its damaged-area denominator, the PDPN co-negativity numerator, the
-  AGER-as-airway-detector hazard, every calibration result with its validation
-  status, and the known aggregation bug. **Read before running any batch.**
+### Project state and findings
 
-## Routes
+| document | status | what it is |
+|---|---|---|
+| [`PROJECT_STATE.md`](PROJECT_STATE.md) | **CURRENT** | living handoff: locations, the calibrated result, the corrected endpoint, open debt, decisions waiting |
+| [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md) | **VALIDATED** | AGER and KRT8 tested as discriminators and rejected, with the control-locked enrichment test that did it |
+| [`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md) | **SUPERSEDED as a specification; retained as the calibration record** | the endpoint sign in it is wrong. Read its banner: it lists section by section what still holds. |
 
-- [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md): the whole-slide route —
-  series selection, global tissue detection, tiling with per-tile core ROIs,
-  seam correctness, and tile → slide → mouse aggregation.
+### Routes and architecture
 
-## Interpretation and configuration
+| document | status | what it is |
+|---|---|---|
+| [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md) | **REFERENCE** (claims validated elsewhere) | why the two tools are used together, the published pattern this follows (Chiaruttini et al. 2022), where we deliberately differ |
+| [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) | **VALIDATED** (plumbing) / **PROPOSED** (thresholds) | the whole-slide route: series selection, global tissue detection, tiling, seam correctness, aggregation |
+| [`VISUAL_PANELS.md`](VISUAL_PANELS.md) | **VALIDATED** (v8 rendered) | figure generation as a first-class module, with the reason v1–v7 were all wrong |
 
-- [`MARKER_MORPHOLOGY_GUIDE.md`](MARKER_MORPHOLOGY_GUIDE.md): the authoritative
-  interpretation guide — marker roles, the morphology-first decision hierarchy,
-  sectioning, control policy, and literature basis.
-- [`UNIVERSAL_MARKER_CONFIGURATION.md`](UNIVERSAL_MARKER_CONFIGURATION.md):
-  the reusable marker/panel schema, ROI context vocabulary, and research
-  profiles for acute injury, IPF/fibrosis, and lung-adenocarcinoma studies.
-- [`COMPARTMENT_TAGS_AND_PROGRESSION.md`](COMPARTMENT_TAGS_AND_PROGRESSION.md):
-  every anatomical tag and subcellular analytical role, multi-tag precedence,
-  naming examples, and the complete call progression.
-- [`Z_STACK_ANALYSIS.md`](Z_STACK_ANALYSIS.md): marker-specific Z policies,
-  automatic and fixed slab selection, per-plane QC, and true-3D escalation
-  criteria. A preserved capability of the Fiji engine, not legacy.
+### Interpretation and configuration
 
-## Project
+These four are engine policy. They predate the confocal data and describe how the
+engine *decides*, not what this study *found*.
 
-- [`BRANCHING.md`](BRANCHING.md): branch roles, what is superseded, and the
-  merge-gate responsibilities.
+| document | status | what it is |
+|---|---|---|
+| [`MARKER_MORPHOLOGY_GUIDE.md`](MARKER_MORPHOLOGY_GUIDE.md) | **REFERENCE**; numeric gates are **PROPOSED** pilot defaults | the morphology-first decision hierarchy, per-marker roles, sectioning rules, literature basis |
+| [`COMPARTMENT_TAGS_AND_PROGRESSION.md`](COMPARTMENT_TAGS_AND_PROGRESSION.md) | **REFERENCE** | anatomical tags vs subcellular roles, multi-tag precedence, the full image → call progression |
+| [`UNIVERSAL_MARKER_CONFIGURATION.md`](UNIVERSAL_MARKER_CONFIGURATION.md) | **REFERENCE** (schema) / **PROPOSED** (research profiles) | the reusable marker/panel schema; the IPF and adenocarcinoma profiles have never been run on data in this repo |
+| [`Z_STACK_ANALYSIS.md`](Z_STACK_ANALYSIS.md) | **REFERENCE**; exercised on the ALI pilot only | marker-specific Z policies. **Unused by the current study** — the confocal batch is single-plane. |
 
-## Entry points
+### Project mechanics
 
-- [`../WORKFLOW.md`](../WORKFLOW.md): operational sequence for the
-  **field / confocal route**, plus the shared interpretation model.
-- [`../README.md`](../README.md): installation, configuration, output schema,
-  and statistics.
+| document | status | what it is |
+|---|---|---|
+| [`BRANCHING.md`](BRANCHING.md) | **CURRENT** | branch roles, what was retired and why, the completed Z-stack merge gate |
+
+### Entry points outside `docs/`
+
+- [`../WORKFLOW.md`](../WORKFLOW.md) — operational sequence for the
+  field / confocal route, plus the shared interpretation model.
+- [`../README.md`](../README.md) — installation, configuration, output schema.
+- `../launcher/README.md` — the four launcher routes and the legacy-equivalence
+  harness.
+- `../config/endpoints/dysplastic_over_damaged.json` — **the current endpoint
+  specification.** It is JSON rather than prose on purpose: it is reviewable and
+  diffable, and it carries its own `validation_status`.
 
 ## Archived
 
 Point-in-time audits and pilot records that no longer describe the current
-pipeline have moved to [`../legacy/docs/`](../legacy/docs/README.md). They are
-kept because they are the only record of the validation they document — but
-**none of their numbers are current**, and thresholds quoted there are pilot
-placeholders. The only calibrated parameters are in `ECTOPIC_POD_ENDPOINT.md`.
+pipeline live in [`../legacy/docs/`](../legacy/docs/README.md). They are kept
+because they are the only record of the validation they document — but **none of
+their numbers are current**, and thresholds quoted there are pilot placeholders.
 
 Historical diagrams are archived in
 [`../legacy/figures/`](../legacy/figures/README.md); their intensity-centered

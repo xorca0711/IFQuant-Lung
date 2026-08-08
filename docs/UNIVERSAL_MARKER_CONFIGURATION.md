@@ -1,5 +1,21 @@
 # Universal Lung Marker Configuration
 
+> **Status: REFERENCE (schema) / PROPOSED (research profiles).**
+>
+> * The **panel/registry schema** in sections 3 and 5 is implemented: the engine
+>   reads it, and the built-in LEFT and RIGHT panels used by the current study are
+>   expressed in it.
+> * The **research-context profiles** in section 4 — acute injury, IPF/fibrosis,
+>   lung adenocarcinoma — are **proposed designs. None has been run on data in
+>   this repository.** They are a statement of how a panel *would* be assembled,
+>   not a record of one that was.
+> * The marker catalogue is broader than anything this study measured. The
+>   markers with real data behind them are DAPI, KRT5, AGER, T1α/PDPN (LEFT
+>   panel) and ProSPC, mRAGE, KRT8 (RIGHT panel) — and of those, only KRT5 has a
+>   calibrated threshold.
+>
+> This document predates the confocal data. Last checked: 2026-08-08.
+
 This document turns marker selection into a reusable research workflow for
 different microscopes, panels, species, and lung-disease questions. The
 pipeline measures declared staining patterns; it does not infer a diagnosis or

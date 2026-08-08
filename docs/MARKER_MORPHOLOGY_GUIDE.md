@@ -1,5 +1,22 @@
 # Marker Morphology and Decision Hierarchy
 
+> **Status: REFERENCE** — this is engine policy, and it describes behaviour that
+> `IF_Quant_Pipeline.groovy` implements. **The numeric gates in section 3 are
+> PROPOSED pilot defaults**, not validated cutoffs, and most of the marker
+> catalogue here has never been run on data in this repository.
+>
+> What has been checked against real data, and where:
+>
+> * `IFQ_KRT5_THRESHOLD = 300`, from confocal uninfected controls — see
+>   [`PROJECT_STATE.md`](PROJECT_STATE.md) §3.
+> * KRT8 tested as a discriminator and **rejected** — see
+>   [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md) §2. The KRT8 caution in section
+>   4 below was right, and is now backed by a measurement.
+> * AGER/T1α remain `adaptive_otsu_exploratory` by design.
+>
+> Section 7's pilot table is explicitly historical. This document predates the
+> confocal data. Last checked: 2026-08-08.
+
 This document is the authoritative interpretation guide for
 `IF_Quant_Pipeline.groovy`. The final marker call is morphology-first. Mean
 intensity is retained for audit, but it does not authorize a positive or
@@ -160,6 +177,12 @@ club-cell ancestry after injury. tdTomato denotes recombination history, not
 current cell identity.
 
 #### KRT8
+
+> **Tested and found non-discriminating on this dataset.** A control-locked
+> enrichment test gave R = 0.80–1.25 at every operating point, and the two
+> infected animals *bracket* the two controls — between-section staining variance
+> exceeds the biological signal. The caution below was correct; the measurement
+> is in [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md) §2.
 
 KRT8 is a cytoplasmic intermediate-filament network. A positive cell therefore
 requires connected extranuclear/perinuclear support rather than a bright

@@ -1,5 +1,30 @@
 # Compartment Tags, Analytical Roles, and Call Progression
 
+> **Status: REFERENCE** — the vocabulary and the call progression described here
+> are implemented in `IF_Quant_Pipeline.groovy`. This is how the engine decides,
+> not what this study found.
+>
+> One consequence is visible in the current data and worth knowing before reading
+> any output. The 260808 confocal fields were analysed with the neutral region
+> name `tissue`, which matches **no** anatomical keyword, so `compartment` is
+> recorded as `unassigned` and `region_tags` is empty. AGER and T1α declare
+> `expectedCompartment: alveolar`, so their per-cell calls behave exactly as the
+> table below specifies. In a representative field
+> (`D:\IFQ_Runs\confocal_260808_fixed`):
+>
+> * `AGER_context_resolved_positive_count = 0`,
+>   `AGER_context_unresolved_positive_count = 145`,
+>   `AGER_final_indeterminate_fraction_of_total_cells = 0.96`;
+> * `KRT5_context_policy = not_required`, so KRT5 resolves normally
+>   (652 positives of 3485 evaluable).
+>
+> That is the asymmetry working as designed, not a bug — but it does mean **the
+> AGER and T1α per-cell calls in this batch are not biological negatives** and
+> must not be pooled as if they were. The KRT5 *area* endpoint has no compartment
+> requirement and is unaffected.
+>
+> Last checked: 2026-08-08.
+
 The pipeline uses two different kinds of “compartment.” They answer different
 questions and must not be substituted for each other:
 

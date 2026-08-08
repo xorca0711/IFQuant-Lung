@@ -1,18 +1,54 @@
-# Active Quantification and Marker Morphology Workflow
+# Workflow — SUPERSEDED as an entry point
 
-> **Scope.** This document covers the **field / confocal route** — small
-> calibrated images fed directly to the Fiji measurement engine — and the marker
-> interpretation model, which is shared by every route.
+**Status: not maintained. Recommended for deletion once two sections are moved
+into `docs/`.** Nothing below this banner has been edited; it is preserved
+verbatim so the two unique sections can be relocated without loss.
+
+This file is the third overlapping narrative in a repository that needs one
+entry point and one reference set. Concretely:
+
+| Section here | Where it already lives |
+|---|---|
+| Priority antibody panels, marker roles, universal marker hierarchy | [`README.md`](README.md) "Panels and marker configuration", `docs/UNIVERSAL_MARKER_CONFIGURATION.md` |
+| Decision authority, three-state semantics, morphology gates, marker-specific interpretation, sectioning, literature basis | `docs/MARKER_MORPHOLOGY_GUIDE.md` |
+| Minimal Fiji batch configuration, threshold and control policy | [`README.md`](README.md) "How to run", "Configuration reference", "Threshold-tuning workflow" |
+| Statistical unit | [`README.md`](README.md) "Statistics: n is mice" |
+| Legacy boundary | [`legacy/README.md`](legacy/README.md), `docs/BRANCHING.md` |
+
+**Unique content, and the reason this file has not simply been deleted:**
+"Exported decision fields" (the per-cell CSV schema) and "QC acceptance order"
+(the ten-step review sequence) exist nowhere else. They belong in
+`docs/MARKER_MORPHOLOGY_GUIDE.md`.
+
+**Known stale content in the text below** — read it as a historical record, not
+as instructions:
+
+- It links to `IFQuantLauncher-v1.7.2.exe` in the repository root. That binary is
+  now in `legacy/launchers/`; the current launcher is v1.8.0 with four routes.
+- Its branch table lists `codex/*` lines as current. They were consolidated onto
+  `main` on 2026-08-07; see `docs/BRANCHING.md`.
+- It predates the KRT5 calibration (`IFQ_KRT5_THRESHOLD = 300`, from uninfected
+  controls), the `blackBackground` segmentation fix, and the endpoint sign
+  correction to KRT5⁺PDPN⁺.
+- Its ALI validation tables are software-validation runs with adaptive
+  exploratory thresholds, as they state. They are not biological results.
+
+> **Original scope note.** This document covers the **field / confocal route** —
+> small calibrated images fed directly to the Fiji measurement engine — and the
+> marker interpretation model, which is shared by every route.
 >
 > For **whole-slide** input (Olympus `.vsi` slide scans), QuPath opens and tiles
 > the slide first and the tiles then enter the same engine described here. That
 > front end is documented in
 > [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md).
 >
-> For the KRT5⁺ ectopic pod endpoint and its denominator, see
-> [`docs/ECTOPIC_POD_ENDPOINT.md`](docs/ECTOPIC_POD_ENDPOINT.md).
+> For the KRT5⁺ pod endpoint and its denominator, see
+> [`docs/ECTOPIC_POD_ENDPOINT.md`](docs/ECTOPIC_POD_ENDPOINT.md) — noting that
+> the endpoint sign there was corrected after this file was written.
 
-This is the primary operational and interpretation reference for the
+---
+
+This was the primary operational and interpretation reference for the
 morphology-first measurement engine. Final marker calls are determined by
 role-appropriate spatial morphology. Mean intensity is retained for audit, but
 it does not authorize a positive or negative call.

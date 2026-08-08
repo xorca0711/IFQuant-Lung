@@ -1,5 +1,22 @@
 # Layer-aware Z-stack analysis
 
+> **Status: REFERENCE — implemented, exercised on the ALI pilot only, and NOT
+> used by the current study.**
+>
+> `IFQ_PROJECTION=layer_aware` exists in the engine and was exercised during the
+> ALI organoid pilot that preceded this study (the global-Otsu vs local-Phansalkar
+> result in "Environment settings" is from that pilot and is real). The merge gate
+> that promoted it is recorded in [`BRANCHING.md`](BRANCHING.md).
+>
+> **It is dormant for the lung study.** The 260808-CW confocal acquisitions are
+> single-plane (`SizeZ == 1`), and the whole-slide route rejects any series with
+> `SizeZ != 1` outright. Nothing in the current results passed through this code
+> path. The automatic Z ranges described here remain **pilot settings**: a
+> confirmatory study must freeze explicit ranges before use.
+>
+> Kept because it is a preserved engine capability with a written policy, not
+> because it is in use. Last checked: 2026-08-08.
+
 ## Scope
 
 `IFQ_PROJECTION=layer_aware` adds a marker-specific 2.5D workflow without

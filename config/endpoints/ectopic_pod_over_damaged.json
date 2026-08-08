@@ -1,4 +1,8 @@
 {
+  "RETRACTED": "This spec has the numerator SIGN INVERTED and mis-quotes its own reference. It is KEPT as the preserved record of the specification error, cited by README.md and docs/PROJECT_STATE.md. Do not run it.",
+  "superseded_by": "dysplastic_over_damaged",
+  "superseded_on": "2026-08-08",
+  "superseded_reason": "Lin et al. 2024 Fig 2A-B specify KRT5+PDPN+ over (PDPN- OR KRT5+), not KRT5+PDPN- over a computed damaged area. PDPN is expressed BY dysplastic cells, so requiring PDPN-negativity excluded the population being measured.",
   "schema_version": "1.0.0",
   "endpoint_id": "ectopic_pod_over_damaged",
   "title": "Ectopic KRT5+ pod area over damaged alveolar area",

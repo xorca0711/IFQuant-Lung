@@ -1772,10 +1772,20 @@ def resolveTissueRois(String imgPath, ImagePlus dapi, cfg) {
   // `Fill Holes` during nucleus segmentation, which erased every nucleus that did
   // not touch the image frame and left only the border-connected rim.
   //
-  // Measured cost of the missing token on the 260808-CW confocal batch: nucleus
-  // density 185/mm^2 recorded against 16422/mm^2 corrected, an 89x undercount,
-  // with 100% of candidate components border-touching in all 79 fields. A replay
-  // of the buggy path reproduced the shipped mask at IoU = 1.0000.
+  // Measured cost of the missing token on the 260808-CW confocal batch, POOLED
+  // over all 79 fields (total nuclei / total tissue area -- the defensible
+  // batch-level estimator): nucleus density 152.5/mm^2 recorded against
+  // 15393.3/mm^2 corrected, a ~101x undercount. 100% of candidate components were
+  // border-touching in all 79 fields, and a replay of the buggy path reproduced
+  // the shipped mask at IoU = 1.0000.
+  //
+  // ON THE ESTIMATOR, because an earlier version of this comment quoted
+  // 185 -> 16422 (89x): those were SINGLE-FIELD numbers from the diagnostic probe
+  // presented as if they were the batch. Mean-of-per-field over the batch gives
+  // 141.0 -> 15341.4 (109x). All three pairs are internally consistent; only the
+  // pooled pair is quoted now, and the estimator is named wherever it appears.
+  // Derivation: sum(n_nuclei) / sum(region_area_um2) over run_summary.csv of
+  // D:\IFQ_Runs\confocal_260808 and confocal_260808_fixed.
   //
   // Area masks were NOT affected: they are read via setThreshold(128,255,
   // NO_LUT_UPDATE) on pixel values, and Convert to Mask inverts the LUT rather

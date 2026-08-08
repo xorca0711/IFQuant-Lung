@@ -122,6 +122,40 @@ def terms      = spec.numerator.terms
 def op         = spec.numerator.op
 def specPanel  = spec.panel == null ? "" : spec.panel.toString()
 if (op != "AND") failRun("Only op=AND is implemented; found '" + op + "'")
+
+// ---------------------------------------------------------------------------
+// DENOMINATOR GUARD -- refuse a spec whose denominator this script cannot compute.
+//
+// This script divides by region_area_um2, full stop. It has no code that reads
+// spec.denominator, and adding a declarative denominator to a JSON file does not
+// give it any. config/endpoints/dysplastic_over_damaged.json declares
+//     "denominator": { "op": "OR", "terms": [ NOT T1A..., KRT5... ] }
+// because the reference endpoint's denominator is the UNION "damaged alveolar
+// areas (PDPN- and KRT5+)", NOT total tissue.
+//
+// Without this guard, pointing the runner at that spec produces the RIGHT
+// numerator over the WRONG denominator and exits 0. That is strictly more
+// dangerous than refusing, because the output looks correct and carries the
+// corrected endpoint's name. Silence is the failure mode this whole project
+// keeps having; make it loud.
+//
+// A spec with no denominator block, or one that explicitly declares
+// source: "region_area_um2", is the case this script actually implements.
+if (spec.denominator != null) {
+  def denomSource = spec.denominator.source == null ? "" : spec.denominator.source.toString()
+  if (denomSource != "region_area_um2") {
+    failRun("Spec '" + endpointId + "' declares a denominator this evaluator cannot compute.\n" +
+            "  declared : op=" + spec.denominator.op + " over " +
+            (spec.denominator.terms == null ? "(none)" :
+              spec.denominator.terms.collect { (it.negate ? "NOT " : "") + it.mask }.join(" " +
+              spec.denominator.op + " ")) + "\n" +
+            "  computed : region_area_um2 (total analysed region), ALWAYS.\n\n" +
+            "This script implements a relational NUMERATOR only. Evaluating this spec\n" +
+            "would divide the correct numerator by the wrong denominator and exit 0,\n" +
+            "producing a number that carries the corrected endpoint's name and is not\n" +
+            "the corrected endpoint. Implement the union denominator before running it.")
+  }
+}
 if (!areaCol.endsWith("_pod_area_um2") && !areaCol.endsWith("_positive_area_um2"))
   failRun("output.area_column '" + areaCol + "' does not end in _pod_area_um2 or " +
           "_positive_area_um2, so aggregate_to_mouse would SILENTLY DROP it. " +

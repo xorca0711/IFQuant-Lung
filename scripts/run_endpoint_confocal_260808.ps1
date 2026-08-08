@@ -38,7 +38,7 @@ $rc1 = Invoke-FijiScript "$repo\endpoints\export_tissue_region_masks.groovy" "$o
 if ($rc1 -ne 0) { "stage 1 FAILED - see $out\tissue_export.log"; exit 1 }
 
 # ---- stage 2: relational endpoint ------------------------------------------
-$env:IFQ_ENDPOINT_SPEC        = "$repo\config\endpoints\ectopic_pod_over_damaged.json"
+$env:IFQ_ENDPOINT_SPEC        = "$repo\config\endpoints\dysplastic_over_damaged.json"
 $env:IFQ_ANALYSIS_DIR         = "$out\analysis"
 $env:IFQ_ENDPOINT_REGION_MODE = "tissue_mask"
 $env:IFQ_TISSUE_MASK_DIR      = "$out\tissue_masks"
@@ -47,3 +47,9 @@ $env:IFQ_TILES_DIR            = ""          # not used in tissue_mask mode
 
 $rc2 = Invoke-FijiScript "$repo\endpoints\evaluate_endpoints.groovy" "$out\endpoint.log"
 "stage2 exit=$rc2"
+
+# NOTE: as of the denominator guard in evaluate_endpoints.groovy, this run FAILS
+# LOUDLY rather than producing a number. That is intended and is the honest state:
+# the corrected endpoint needs a UNION denominator (PDPN- OR KRT5+) that the
+# evaluator does not implement. It previously pointed at ectopic_pod_over_damaged
+# .json -- the retracted, sign-inverted spec -- and exited 0, which is worse.

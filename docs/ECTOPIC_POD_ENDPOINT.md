@@ -1,13 +1,59 @@
-# Ectopic KRT5+ pod endpoint — definition, hazards, and calibration
+# Ectopic KRT5+ pod endpoint — the calibration record
 
-Status: **damaged-area denominator implemented and mechanically validated;
-airway exclusion NOT implemented; thresholds NOT calibrated.** Written 2026-08-07.
-Supersedes the endpoint described in `docs/WSI_TILING_WORKFLOW.md` §"What this
-measures", which used total tissue area as the denominator.
+> # ⚠ SUPERSEDED AS A SPECIFICATION — RETAINED AS THE CALIBRATION RECORD
+>
+> **The endpoint defined in this document has the wrong sign and the wrong
+> denominator. Do not implement anything from sections 1 or 4d.**
+>
+> This document says the numerator is `KRT5+ AND PDPN−`. Lin et al. 2024
+> (J Clin Invest 134(19):e176828) Fig 2A–B say **`KRT5+PDPN+`**, over a
+> hand-traced **union** `(PDPN− OR KRT5+)`. Section 4d below quotes the paper
+> incorrectly, and the error propagated into the implementation, into
+> `config/endpoints/ectopic_pod_over_damaged.json`, and into the only endpoint
+> numbers that exist. It was caught by reading the primary source rather than
+> the citation of it.
+>
+> **Current specification:** `config/endpoints/dysplastic_over_damaged.json`.
+> **Current state of everything:** [`PROJECT_STATE.md`](PROJECT_STATE.md) §2.
+>
+> The file is kept, unrewritten, because it is the only record of a substantial
+> amount of work that was done correctly — a control-only operating-point lock, a
+> measured retraction, and an executed set of guards — and because a measurement
+> that is sound while pointed at the wrong quantity is worth being able to read.
+>
+> ### Section-by-section verdict
+>
+> | § | subject | verdict |
+> |---|---|---|
+> | 1 | endpoint definition `KRT5+ / damaged alveolar area` | **WRONG SIGN, WRONG DENOMINATOR.** Superseded. The *reasoning* for normalising to damage rather than total tissue still stands. |
+> | 2 | "do not use AGER/PDPN to find airways" | **STILL TRUE and still binding.** The most damaged alveolus is the most AGER-poor, and that is where pods form. |
+> | 3 | Stage 1 two-ROI anatomical partition | **STILL VALID as a mechanism**, still unimplemented for airways (needs hand-drawn annotations). |
+> | 4 | why fixed thresholds are load-bearing | **STILL TRUE.** The `m6` Otsu = 54.6 → 4.95% KRT5 on an uninfected control is the reason nothing adaptive is trusted. |
+> | 4b | first damage-detector parameters (AGER 200, σ 30, cutoff 0.10) | **RETIRED.** Self-labelled: tuned on the outcome. |
+> | 4c | LOCKED damage detector (AGER 150, σ 40 µm, cutoff 0.14) | **DERIVATION SOUND, DETECTOR RETIRED.** The selection rule was declared before any number was read and the controls-only discipline is the part worth keeping. But the reference's denominator is a hand-traced union, not a density detector — so this solves a problem the reference does not have. It is **not** the endpoint denominator. |
+> | 4d | KRT5 numerator, co-negativity, PDPN ceiling t = 200 | **SUPERSEDED.** Contains the mis-quote. The AGER retraction inside it is correct and still stands; see [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md) §1. |
+> | 5 | Stage 1 ROI naming | **STILL TRUE.** |
+> | 6 | mandatory companions | item 1 is **DONE** (`IFQ_KRT5_THRESHOLD = 300`); items 2–4 still stand. |
+> | 7 | open questions | **STILL OPEN**, except the two-ROI RoiSet round trip, which the WSI pilot exercised. |
+> | morphometry | damaged/intact cross-check | **DIRECTIONAL ONLY.** Its MLI is inter-nuclear spacing, not the classical quantity — the document says so. |
+> | 9 | partition QC columns dropped at mouse level | **STILL TRUE and verified empirically.** Unfixed. |
+> | 8 | what this pilot can and cannot claim | **STILL TRUE**, and now sharper: n = 1 per cell, genotype confounded with condition. |
+> | 10 | whole-field region source + the 260808 endpoint run | **MECHANICALLY VALIDATED, WRONG ENDPOINT.** Read its own banner. |
+>
+> Everything below this line is preserved as written on 2026-08-07/08, except for
+> inline correction notes marked **`[CORRECTION 2026-08-08]`**.
 
 ---
 
 ## 1. The endpoint
+
+> **[CORRECTION 2026-08-08]** Superseded. The current definition is
+> `KRT5+ AND PDPN+ area / (PDPN− OR KRT5+) area`, in
+> `config/endpoints/dysplastic_over_damaged.json`. The denominator below —
+> a per-pixel AGER-density damage mask — is **not** what the reference measured;
+> theirs is a hand-traced union of regions. The argument for normalising to
+> damage rather than to total tissue (immediately below) is the part that
+> survives.
 
 ```
 ectopic pod fraction  =   KRT5+ area  /  damaged alveolar area
@@ -143,6 +189,16 @@ manufacture pods in uninfected controls.** AGER thresholds drift too (527 → 74
 from blinded control review **before** any batch run. Until then every call is
 `adaptive_otsu_exploratory` and must be reported as exploratory.
 
+> **[CORRECTION 2026-08-08] Partly resolved — but only on confocal data.**
+> `IFQ_KRT5_THRESHOLD = 300` is now calibrated from the uninfected confocal
+> controls (in-tissue p99.99 = 283 and 255) and both 260808 runs record
+> `KRT5_threshold_source = fixed_predeclared`. It rests on **one** sound control:
+> M6 LEFT is an established section-level staining failure.
+> **AGER and T1A remain uncalibrated on purpose** — they are constitutively
+> expressed, so "the control should be negative" gives no calibration handle, and
+> both still run `adaptive_otsu_exploratory`. The slide-scanner numbers in this
+> section are unaffected by that: they are why the confocal acquisition happened.
+
 There is no secondary-only control section for this dataset. The available
 biological negative is uninfected alveolar parenchyma, which controls for ectopic
 alveolar KRT5 but **not** for airway KRT5. State this as a limitation.
@@ -191,7 +247,18 @@ because Otsu picked higher AGER thresholds on the uninfected slides (690/864 vs
 well infected and uninfected separated, which is exactly the thing the endpoint
 is supposed to measure. They have been superseded. See 4c.
 
-## 4c. LOCKED operating point, derived from controls only
+## 4c. Operating point locked from controls only — method kept, detector RETIRED
+
+> **[CORRECTION 2026-08-08] The detector is RETIRED; the method is not.**
+> Everything in this section was executed as described — the rule was declared
+> before any number was read, the calibration script opened only the two control
+> slides, and worst-of-both was load-bearing. **But the detector answers a
+> question the reference never asked.** Lin et al.'s "damaged alveolar area" is a
+> contiguous region a human traced with an outline spline at low magnification;
+> it is not a per-pixel AGER-density mask. So this operating point is no longer
+> the endpoint denominator and should not be described as central to it. Read
+> this section as a worked example of locking a parameter from controls only —
+> which is what it is good for.
 
 Selection rule, **declared before any number was read**:
 
@@ -219,7 +286,7 @@ Result (worst-of-both control damaged%, i.e. false-positive rate):
 Every α level independently selects **AGER threshold 150**, not the 200 used in
 4b.
 
-### LOCKED: α = 1% → `AGER_THRESHOLD=150`, `DAMAGE_SIGMA_UM=40`, `DAMAGE_CUTOFF=0.14`
+### Selected (α = 1%): `AGER_THRESHOLD=150`, `DAMAGE_SIGMA_UM=40`, `DAMAGE_CUTOFF=0.14` — *no longer the endpoint denominator*
 
 Rationale for α = 1%: a clean specificity spec for "healthy lung reads as
 undamaged", and σ = 40 µm is approximately one alveolar diameter — the
@@ -250,16 +317,49 @@ truth.
 
 ## 4d. The KRT5 numerator: co-negativity, not a bare threshold
 
+> # ⚠ [CORRECTION 2026-08-08] THIS SECTION CONTAINS THE ERROR
+>
+> The sentence below beginning "Fig 2A–B quantifies" **mis-quotes the paper**,
+> and every conclusion in this section that depends on co-*negativity* follows
+> from that mis-quote. Verbatim, Lin et al. 2024 (J Clin Invest 134(19):e176828):
+>
+> * Fig 2A–B: *"quantification of percentages of **KRT5⁺PDPN⁺** areas in PDPN⁻
+>   and KRT5⁺ areas"*
+> * Fig 6E–G: *"percentages of dysplastic cell (**KRT5⁺ PDPN⁺**) areas in damaged
+>   alveolar areas (PDPN⁻ and KRT5⁺)"*
+> * Fig 2E–F: *"Immunofluorescence images of dysplastic cells (**KRT5⁺ PDPN⁺**)
+>   and AT1 (PDPN⁺) cells"*
+> * Methods: *"To quantify KRT5⁺ **or** PDPN⁻ area … measured using **outline
+>   spline** in … Axiovision 4.8"*
+>
+> PDPN is expressed **by** basal/dysplastic cells as well as by AT1, so it does
+> not discriminate them by absence. Requiring PDPN-negativity excluded the very
+> population being measured. The stated rationale below — that co-negativity
+> rejects autofluorescence — was **our inference, not the paper's method**, and
+> it was plausible enough to survive several rounds of measurement.
+>
+> **What still stands in this section:** the demonstration that a bare KRT5
+> threshold cannot reach a 1e-4 false-positive area on slide-scanner data (the
+> false positives are large, bright, connected objects — an autofluorescence
+> signature, not noise); and the RETRACTION of AGER as a co-negativity marker,
+> which was correct for a reason independent of the sign error.
+>
+> **What does not:** the PDPN ceiling t = 200, whose two-sided derivation is a
+> co-*negativity* argument with no transfer to co-*positivity*; and the framing
+> of co-negativity as "what makes the measurement possible".
+>
+> Current spec: `config/endpoints/dysplastic_over_damaged.json`.
+
 ### What the reference actually measures
 
 Lin et al. Fig 1G quantifies "percentages of KRT5+ lung areas in total damaged
 alveolar areas (PDPN− and KRT5+)". Fig 2A–B quantifies "percentages of
 **KRT5+PDPN−** areas in PDPN− and KRT5+ areas" (n = 15 mice/group, two-tailed
-Mann-Whitney).
+Mann-Whitney).  ← **mis-quote; see the correction box above**
 
 So the numerator is **KRT5+ AND PDPN−**, not bare KRT5+ area. That co-negativity
 constraint is not cosmetic — it is what makes the measurement possible on this
-dataset.
+dataset.  ← **superseded**
 
 ### Why a bare KRT5 threshold fails here
 
@@ -332,7 +432,7 @@ At t = 100 — the best-looking value on specificity alone — PDPN− discards
 **Two-sided rule, still control-only:** maximise specificity subject to
 preserving ≥ 90% of genuine airway KRT5.
 
-### PROPOSED (not yet locked): PDPN co-negativity ceiling t = 200
+### PDPN co-negativity ceiling t = 200 — proposed then, RETIRED now
 
 R = 0.55–0.62 (real enrichment) while preserving 90–100% of genuine airway KRT5.
 
@@ -370,8 +470,12 @@ Consequence of the neutral default: AGER and T1A declare
 
 ## 6. Mandatory companions
 
-1. Freeze `IFQ_KRT5_THRESHOLD` from blinded controls first. Nothing about
-   ectopic pods is interpretable before this.
+1. ~~Freeze `IFQ_KRT5_THRESHOLD` from blinded controls first. Nothing about
+   ectopic pods is interpretable before this.~~ **DONE 2026-08-08** on confocal
+   data: `IFQ_KRT5_THRESHOLD = 300`, from the two uninfected controls, recorded
+   as `fixed_predeclared`. Caveat: one of the two controls (M6 LEFT) is a
+   staining failure, so this rests on M4-2 alone and must be re-derived when a
+   second sound control exists.
 2. `IFQ_MIN_INCLUDED_NUCLEI=0` — a small airway region with zero accepted nuclei
    throws inside the region loop and kills the whole tile, alveolar row included.
 3. Fix the `alveolar_core` mis-tag above.
@@ -509,6 +613,13 @@ n = 1 mouse per group cell (het/hom × infected/uninfected). With n = mice as th
 statistical unit, this dataset supports pipeline validation and threshold
 freezing. It does not support a group comparison.
 
+> **[CORRECTION 2026-08-08] Sharper than that.** Genotype is *confounded with
+> condition* in this batch: there is no infected/uninfected pair within a
+> genotype that is not also a different section, and no het/hom pair within a
+> condition that is not the same. **No statistics are possible from this batch at
+> all** — not merely underpowered ones. Any table of four mice is a description
+> of four animals.
+
 Separately: `het` is likely the control rather than a second genotype arm — a
 heterozygous *Ifng*⁺/⁻ often retains enough cytokine to signal normally. Confirm
 the line before interpreting any pod difference.
@@ -516,3 +627,172 @@ the line before interpreting any pod difference.
 A global IFN-γ ligand knockout can also alter viral clearance, so a pod
 difference may be an infection-severity difference. NP staining or NP qPCR is
 needed to exclude this; no image analysis can substitute for it.
+
+
+## 10. Whole-field runs: where the region comes from
+
+> **[CORRECTION 2026-08-08] Mechanically validated; wrong endpoint; wrong
+> denominator.** Everything in this section about *plumbing* was executed and
+> holds: the region-source modes, the reconciliation to a TIFF resolution-tag
+> rounding constant, the containment check, the three executed failure guards,
+> and the aggregation survival check. Read it as validation of the mask-algebra
+> module.
+>
+> What it is **not** is a measurement of the endpoint. Three things to hold in
+> mind while reading the numbers below:
+>
+> 1. **Wrong sign.** `endpoint.log` records
+>    `endpoint : ectopic_pod_over_damaged`, numerator
+>    `KRT5_pod_mask AND NOT T1A_membrane_positive_mask` — the superseded spec.
+> 2. **Wrong denominator.** `evaluate_endpoints.groovy` divides by
+>    `region_area_um2`, i.e. **total analysed tissue**, not damaged area. It reads
+>    `spec.numerator` and never reads `spec.denominator`, so it cannot yet compute
+>    the union denominator the corrected spec declares. The "% " figures in the
+>    table below are therefore *fraction of tissue*, not the endpoint.
+> 3. **Uncalibrated ceiling.** The section says this itself: T1A ran adaptive
+>    Otsu, so the ~50% that co-negativity removes is the size of an uncalibrated
+>    parameter's effect, not a measurement.
+>
+> Also note the source run: `D:\IFQ_Runs\confocal_260808`, i.e. **before** the
+> `blackBackground` fix. That does not invalidate these numbers — they are
+> area-only, and the largest area-fraction change across all 79 fields between
+> the buggy and fixed runs was 0.021 pp — but any count from that run is wrong.
+
+`endpoints/evaluate_endpoints.groovy` must clip the relational numerator to the
+same region the engine measured in. For a tiled whole-slide run that region is
+the per-tile `<stem>_RoiSet.zip`. Whole-field confocal acquisitions have no
+RoiSet, and the guard that made a missing RoiSet fatal is deliberate: an earlier
+bug fell back silently to the unclipped field and corrupted the result.
+
+The region source is therefore now chosen **by name**, never by fallback:
+
+| `IFQ_ENDPOINT_REGION_MODE` | region | missing input |
+|---|---|---|
+| `roiset` (default) | `IFQ_TILES_DIR/<stem>_RoiSet.zip` | FATAL |
+| `tissue_mask` | `IFQ_TISSUE_MASK_DIR/<output_key>/*__<region>__tissue_region_mask.tif` | FATAL |
+| `whole_field` | none - no clipping at all | n/a, but see below |
+
+`roiset` is unchanged, so existing whole-slide behaviour is untouched.
+
+### The engine does not export a tissue mask
+
+This was checked against the 260808 confocal output rather than assumed. Each
+per-field folder contains whole-field marker masks
+(`<sig>__KRT5_pod_mask.tif`, `<sig>__T1A_membrane_positive_mask.tif`, ...) and
+per-region **nuclei** masks (`<sig>__tissue__nuclei_mask.tif`,
+`<sig>__tissue__DAPI_candidate_mask.tif`, ...). Nothing in that folder has the
+tissue *region* as its foreground. In `IF_Quant_Pipeline.groovy` the auto-DAPI
+region exists only as an in-memory `ShapeRoi` and reaches disk solely as the
+scalar `region_area_um2` in `run_summary.csv`.
+
+So `tissue_mask` mode is fed by a companion script,
+`endpoints/export_tissue_region_masks.groovy`, which re-derives the region from
+the same source pixels with the same constants
+(`TISSUE_BLUR_SIGMA_PX=4.0`, `Triangle`, `TISSUE_MIN_AREA_UM2=2000`, binary
+close `iterations=2 count=1`, particles merged with `ShapeRoi.or`) and then
+**proves** it by reconciling the mask's calibrated area against the engine's own
+`region_area_um2`, field by field. It refuses to bless the export if any field
+misses the tolerance, and it refuses outright for any run whose
+`tissue_roi_source` is not `auto_dapi`. It writes outside the analysis
+directory and never touches the source image tree.
+
+### Why clipping is not optional here
+
+On this batch the unclipped whole-field T1alpha area is up to about 4x the
+region-clipped area the engine reported (e.g. field `M4-1_PR8_LEFT_04_G001_0001`:
+48592 um2 whole-field vs 8843 um2 in tissue). Running the endpoint in
+`whole_field` mode on a run whose regions were auto-DAPI would not be a
+conservative approximation - it would be a different measurement over a
+different denominator. `whole_field` mode therefore verifies its own premise:
+the region area it uses must reconcile with `region_area_um2`, which can only
+happen if the engine really did analyse the whole field.
+
+### Output column survives mouse-level aggregation
+
+`spec.output.area_column` is `KRT5ectopic_pod_area_um2`. It ends in
+`_pod_area_um2` and not `_mean_pod_area_um2`, so
+`aggregate_to_mouse.classify_columns()` puts it in `pod_area` and hence in
+`sum_cols` (`aggregate_to_mouse.py:168-186`), and `aggregate_mice()` emits
+`KRT5ectopic_pod_area_um2_total` and `KRT5ectopic_pod_area_frac`
+(`aggregate_to_mouse.py:325-332`). It is not dropped by the section 9 bug.
+
+The QC columns the endpoint script now also writes are prefixed `qc_` precisely
+so that they fall outside every whitelist suffix and cannot be mistaken for
+endpoints if the CSV is joined into a slide summary.
+
+### Measured on the 260808 confocal batch
+
+Run: `scripts/run_endpoint_confocal_260808.ps1`, both stages exit 0.
+Output: `D:\IFQ_Runs\confocal_260808\endpoint_areas.csv`, 39 LEFT-panel fields
+(40 RIGHT-panel rows skipped by `spec.panel`).
+
+Reconstruction fidelity. All 39 tissue masks reproduce the engine's
+`region_area_um2` with relative difference **exactly 0** as measured by
+ImageStatistics inside the exporter. Downstream, `evaluate_endpoints.groovy`
+computes the region area from pixel counts times the calibration stored in the
+mask TIFF, and there the worst relative discrepancy is **3.285148e-07**. That
+number is not a geometry difference: it is the ratio between the TIFF resolution
+tag (`XResolution = 3218121/1000000`, i.e. 0.31074033574250315 um) and the true
+double from the `.oir` (0.310740284701119 um). The ratio is the same constant for
+all 39 region areas and for all 18 non-zero KRT5 areas, so the reconstructed
+pixel sets are identical to the engine's, not merely close.
+
+Containment. `KRT5+ AND NOT T1A+` area <= bare `KRT5+` area held for 39/39
+fields against both this script's own in-region KRT5 area and, independently,
+against the engine's `KRT5_pod_area_um2`. A separate numpy re-implementation of
+the same boolean algebra agreed with the Groovy output to 3.285e-07, i.e. to the
+same calibration constant.
+
+What co-negativity removes, at mouse level (pooled sums, LEFT panel):
+
+| mouse | condition | tissue um2 | KRT5+ | KRT5+T1A- | removed |
+|---|---|---|---|---|---|
+| M2   | PR8        | 1 324 706 | 14.11388 % | **7.20667 %** | 6.907 pp (48.9 % rel) |
+| M4-1 | PR8        | 1 465 188 | 11.97849 % | **6.09052 %** | 5.888 pp (49.2 % rel) |
+| M4-2 | uninfected |   249 836 |  0.00000 % | **0.00000 %** | - |
+| M6   | uninfected |   665 754 |  0.00347 % | **0.00322 %** | 0.00025 pp (7.1 % rel) |
+
+The T1alpha co-negativity requirement removes roughly **half** the KRT5+ area in
+both infected animals (per field: min 7.1 %, median 49.1 %, max 78.2 % over the
+18 fields with any KRT5+ signal; it removed nothing in 0 fields). The
+infected-vs-uninfected separation survives: about 2200-fold and 1900-fold
+against M6, and against M4-2 the control numerator is still exactly zero.
+
+Interpretation limits are unchanged and still binding. `IFQ_T1A_THRESHOLD` was
+never locked - this run used the engine's ADAPTIVE per-region Otsu for T1alpha
+(`T1A_area_threshold_source` is exploratory), so the ~50 % that co-negativity
+removes is a number produced by an uncalibrated ceiling. It is the size of the
+effect the ceiling has, not a validated measurement of ectopic pod area. Locking
+T1alpha from controls at full resolution remains outstanding (section 4d).
+
+Aggregation, verified rather than reasoned. Merging
+`KRT5ectopic_pod_area_um2` into the 39 LEFT rows and running
+`aggregate_to_mouse.py` produced `KRT5ectopic_pod_area_um2_total` and
+`KRT5ectopic_pod_area_frac` in `mouse_level_summary.csv`, matching the table
+above. The column survives.
+
+One cosmetic side effect: the aggregator infers a marker name from the suffix, so
+it also emits `KRT5ectopic_n_pods_total` and `KRT5ectopic_mean_pod_area_um2`,
+both 0, because there is no `KRT5ectopic_n_pods` input. They are meaningless
+placeholders, not measurements - a component count for a relational mask would
+have to be defined before it could be reported.
+
+### Guards, verified by executing them
+
+Each failure path was run, not just written:
+
+| scenario | result |
+|---|---|
+| `roiset` with no RoiSet present | FATAL, exit non-zero, no CSV - original guard intact |
+| `tissue_mask` with no mask exported | FATAL, no CSV, message names the exporter to run |
+| `whole_field` on this auto-DAPI run | FATAL, no CSV, region-area discrepancy 7.426259e-01 |
+
+The `whole_field` result is the point: on a run whose regions were auto-DAPI, the
+whole field is 74 % larger than the region the engine measured, and the mode
+refuses rather than reporting areas over the wrong denominator.
+
+One gap deliberately left alone. In `roiset` mode, if the RoiSet exists but
+contains no ROI whose name matches the `region` value, that (image, region) is
+still measured unclipped - it now logs a WARNING but does not fail. That is
+pre-existing behaviour on the validated whole-slide path and changing it needs a
+look at how Stage 1 names partition ROIs, so it was not changed here.
