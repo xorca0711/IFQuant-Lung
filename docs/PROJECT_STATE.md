@@ -1,7 +1,89 @@
 # Project state — living handoff
 
-Updated 2026-08-08 ~00:10 KST. **Update this whenever work is parked.**
+Updated 2026-08-08 ~18:40 KST. **Update this whenever work is parked.**
 It exists so a fresh session can resume without the prior conversation.
+
+---
+
+## 0. Latest session (2026-08-08 evening) — read this first
+
+**Confocal data arrived and the KRT5 threshold is now calibrated.** The whole
+project was blocked on it; it no longer is.
+
+`D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × BOTH panels × ~10 fields
+= 82 analysis fields, 2048², 4ch, single plane, 0.3107 µm/px. The RIGHT panel
+(ProSPC/mRAGE/KRT8) that was deferred to confocal is now in hand.
+
+Confocal removes the slide-scanner autofluorescence floor that made KRT5
+uncalibratable. Pooled in-tissue 488 statistics:
+
+| mouse | condition | p99.9 | p99.99 | max | frac>500 |
+|---|---|---|---|---|---|
+| M4-2 het | uninfected | 211 | 283 | 4095 | 0.00001 |
+| M6 hom | uninfected | 195 | 255 | 1254 | 0.00000 |
+| M2 hom | infected | 4095 | 4095 | 4095 | 0.08112 |
+
+**`IFQ_KRT5_THRESHOLD = 300`**, derived from the two uninfected controls only
+(just above both p99.99, so false-positive area ≤ 1e-4 in each control
+independently). AGER and T1A are deliberately left ADAPTIVE — they are
+constitutively expressed, so "the control should be negative" gives no
+calibration handle, and the engine labels their calls `exploratory_*`.
+
+Run: `D:\IFQ_Runs\confocal_260808\` (script: `scratchpad/run_confocal.ps1`).
+79/82 succeeded. The 3 failures are data, not pipeline: two truncated
+acquisitions (7.3 / 8.2 MB against a uniform 37.7 MB) and one field where DAPI
+tissue detection correctly refused rather than analysing background. 13
+`Map_A01.oir` overviews were skipped by the engine's own guard.
+
+### The result (mouse level, LEFT panel, area-based)
+
+| mouse | condition | KRT5⁺ area | KRT5 pods | T1α area |
+|---|---|---|---|---|
+| M2 (hom) | PR8 | 14.11% | 1080 | 13.4% |
+| M4-1 (het) | PR8 | 11.98% | 1092 | 13.4% |
+| M4-2 (het) | uninfected | 0.000% | 0 | 24.6% |
+| M6 (hom) | uninfected | 0.003% | ~0 (23 µm²) | 28.7% |
+
+Near-binary separation, and T1α area moves the right way (down in infected =
+AT1 loss). **Caveat: n = 1 mouse per genotype × condition cell.** Genotype is
+confounded with condition; no statistics are possible from this batch.
+
+### KNOWN DEFECT — nucleus segmentation under-detects ~50–100×
+
+Measured density is **~140 nuclei/mm²**; lung parenchyma is ~5e3–2e4. The
+candidate count before filtering is only 35–106 per field, so DAPI thresholding
+is failing upstream of the size filter rather than being over-filtered. The
+defaults (`dapiLocalRadiusUm=4.0`, `dapiBackgroundRadiusUm=15.0`,
+`minNucArea=8.0`) were tuned on slide-scanner data.
+
+- **Unaffected** (area-based, no nuclei): `*_positive_area_um2`,
+  `*_positive_area_frac`, `*_pod_area_um2`, `*_n_pods`, `region_area_um2`.
+  The LEFT-panel result above is therefore sound.
+- **Affected — do not report**: every `*_pos_count`, `*_density_per_mm2`,
+  `*_morphology_*`, `*_final_*_cell_count`, `class_*_count`, `n_nuclei`.
+
+Consequence: the **RIGHT panel is currently unusable**, because the registry
+defines area mode only for KRT5/AGER/T1A, so ProSPC and KRT8 have cell-count
+outputs only. Fixing this needs no engine change — the DAPI parameters are
+environment-configurable — but it does need a calibration sweep against
+hand-counted fields.
+
+### Storage and locations
+
+A confocal run is ~7.6 GB: 5.9 GB uncompressed 2048² mask TIFFs, 1.7 GB QC
+PNGs, and 2.7 MB of actual numbers. Masks must be kept
+(`evaluate_endpoints.groovy` does mask algebra on them) but compress ~50–100×.
+
+Results live under `D:\IFQ_Runs\`. The July runs the v1.7.2 launcher had
+written to `C:\Users\dream\Documents\IFQuantResults` (12.0 GB, 14 runs) were
+moved to `D:\IFQ_Runs\archive_202607_pre_revision\`, and the launcher's
+first-run default no longer points at the system drive.
+
+### Launcher v1.8.0 landed (`f7dbb02`)
+
+Four routes (confocal / slide scanner / H&E-disabled / legacy). Route 4 proven
+equal to v1.7.2 by execution: 82 checks, 0 failures, recorded in
+`launcher/legacy_equivalence_report.txt`. See `launcher/README.md`.
 
 ---
 
