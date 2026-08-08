@@ -1,0 +1,274 @@
+# AI handoff — machine-oriented project context
+
+> **Purpose.** A dense, factual context transfer for an AI agent picking up this
+> project with no conversation history. Written to be read start-to-finish.
+> State as of commit `685e8f1`, 2026-08-09.
+> The human-facing entry points are [`../README.md`](../README.md) and
+> [`../WORKFLOW.md`](../WORKFLOW.md); [`PROJECT_STATE.md`](PROJECT_STATE.md) is
+> the living handoff. This file adds what those omit: environment traps,
+> failure modes, and process lessons that are expensive to rediscover.
+
+---
+
+## 1. Identity
+
+| | |
+|---|---|
+| **Repo** | `X:\GitHub\IFQuant-Lung` · GitHub `xorca0711/IFQuant-Lung` |
+| **Domain** | Mouse-lung immunofluorescence quantification |
+| **Study** | IFN-γ *ligand* KO + PR8 influenza; does KO change dysplastic KRT5⁺ repair? |
+| **Reference** | Lin X. et al., *J Clin Invest* 2024;134(19):e176828 (DOI 10.1172/JCI176828) |
+| **Endpoint** | KRT5⁺PDPN⁺ area ÷ damaged alveolar area (PDPN⁻ ∪ KRT5⁺) |
+| **HEAD** | `685e8f1` · `main` == `origin/main` · tags `v1.8.0`, `v1.9.0`, `v2.0.0` |
+
+---
+
+## 2. Architecture ("one engine measures")
+
+```
+.vsi whole slide ──► QuPath 0.7 (reads, tiles, MEASURES NOTHING)
+                          │ tiles/*.ome.tif + *_RoiSet.zip
+.oir/.czi/.nd2 ───────────┴──► Fiji · IF_Quant_Pipeline.groovy
+                                 THE ONLY MEASUREMENT ENGINE
+                                          │
+                                    Python (sums only)
+                                    tile → slide → MOUSE
+```
+
+**Invariants — violating any of these is a design regression:**
+
+1. **Exactly one measurement implementation.** A second engine inside QuPath was
+   built on two branches and rejected (PRs #9, #10): two engines drift.
+2. **QuPath reads and cuts. Python sums. Neither decides.**
+3. **File-based handoff**, because QuPath and Fiji ship incompatible Java
+   versions (Chiaruttini et al. 2022, *Front Comput Sci* 3:780026).
+4. **Statistical unit is the mouse.** Nuclei/fields/sections are not replicates.
+5. **Morphology before intensity.** Marker calls are three-state
+   (positive / negative / **indeterminate**); "indeterminate" is a real answer.
+6. **Display never touches measurement.** Display copies are duplicates.
+
+---
+
+## 3. Environment traps
+
+These caused real failures. Check before assuming.
+
+| Trap | Detail |
+|---|---|
+| **PowerShell 5.1** | No `&&` / `\|\|` / ternary. Heredocs with apostrophes break `git commit -m`; use `git commit -F <file>`. |
+| **BOM kills Groovy** | `Set-Content -Encoding UTF8` writes a BOM; Groovy will not compile. Use `[System.IO.File]::WriteAllText($p,$t,(New-Object System.Text.UTF8Encoding($false)))`. |
+| **Fiji launcher broken on ARM64** | Invoke the JVM directly: `<fiji>\java\**\java.exe --add-opens=java.base/java.lang=ALL-UNNAMED -javaagent:<fiji>\jars\ij1-patcher-*.jar=init -Djava.awt.headless=true -Dplugins.dir=<fiji> -Xmx1g -cp "<fiji>\jars\*;<fiji>\plugins\*" net.imagej.Main --headless --run <script>` |
+| **Memory: 15.6 GB total** | `-Xmx4g` caused paging (19.1 GB committed, 15,831 hard faults). Cap at 1–2 g; **one JVM at a time**. Full-batch renders were OOM-killed (exit 137) repeatedly. |
+| **PowerShell drops `""` args** | Empty-string arguments to native exes vanish, shifting every later positional. Cost an hour on the equivalence harness. |
+| **Safety guard on drive-root paths** | `Remove-Item X:\<dir>` is blocked. The user must delete those. |
+| **git writes to stderr** | PowerShell renders normal git progress as red errors. Check exit codes, not colour. |
+| **`csc.exe`** | `C:\Windows\Microsoft.NET\FrameworkArm64\v4.0.30319\csc.exe`. `/out` and `/target` must precede sources. Use `/main:` when linking the launcher (two entry points). |
+| **QuPath has no groovy-json** | Use `qupath.lib.io.GsonTools`. Fiji *does* ship gson 2.14. |
+
+---
+
+## 4. Data locations
+
+| Path | Contents | Disposable |
+|---|---|---|
+| `D:\Confocal_Images\260808-CW\260808-CW` | **RAW — 391 `.oir`, 82 analysis fields.** Never write here | **NO** |
+| `D:\Confocal_Images\20260806_CW` | 4 `.vsi` + `.ets` (5.3 GB pixel data) | **NO** |
+| `D:\IFQ_Runs\confocal_260808` | pre-fix run — **counts void**, areas valid | yes |
+| `D:\IFQ_Runs\confocal_260808_fixed` | **post-fix run — use this one** | regenerable |
+| `<repo>\.cache\slide_channels` | deleted 2026-08-09; rebuild ~10 min via `scripts/cache_slide_channels.groovy` | yes |
+
+**Batch design:** 4 mice × 2 panels × ~10 fields. LEFT = DAPI/KRT5-488/AGER-555/T1α-647; RIGHT = DAPI/ProSPC-488/AGER-555/KRT8-647. 2048², single Z, 0.3107 µm/px, 12-bit.
+
+---
+
+## 5. Established results
+
+| Result | Value |
+|---|---|
+| `IFQ_KRT5_THRESHOLD` | **300**, control-derived (p99.99 = 283, 255) |
+| KRT5⁺ area, mouse level | M2 14.11 %, M4-1 11.98 % (PR8) vs M4-2 0.000 %, M6 0.003 % |
+| Nucleus density, post-fix | **15,393.3 /mm²** pooled (was 152.5 → ~101× undercount) |
+| Tile→slide reconciliation | **2.1e-16** |
+| Launcher legacy equivalence | **84 checks, 0 failures**, runnable from a clone |
+
+**Two claims executable from a clean clone with no data:**
+```
+powershell -ExecutionPolicy Bypass -File ./launcher/run_legacy_equivalence.ps1
+powershell -ExecutionPolicy Bypass -File ./validation/run_demo.ps1
+```
+
+---
+
+## 6. Negative results — do not re-derive
+
+Recorded in [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md). Test: lock a cut from
+controls only (worst-of-both), apply to held-out infected, compute
+R = infected fraction ÷ control fraction beyond the cut. **R ≈ 1 ⇒ rejected.**
+
+| Marker / claim | R | Verdict |
+|---|---|---|
+| AGER as co-negativity marker | 0.99–1.05 | **RETRACTED** — circular; "intact" was *defined* by AGER density |
+| KRT8 as discriminator | 0.80–1.25 at every cut | **REJECTED** — infected animals *bracket* the controls, so between-section staining variance > biological signal |
+| Endpoint as KRT5⁺PDPN**⁻** | — | **WRONG SIGN.** Reference says KRT5⁺PDPN**⁺**; PDPN is expressed *by* dysplastic cells |
+
+---
+
+## 7. Failure modes seen in this project
+
+All of these produced **plausible, wrong output with no error**. Assume more exist.
+
+1. **`blackBackground` global pref flip.** A missing `black` token in
+   `IJ.run(mask,"Options...", …)` wrote `Prefs.blackBackground=false` globally,
+   inverting `Fill Holes` and erasing every nucleus not touching the frame.
+   ~101× undercount, nothing crashed. Diagnosed by replay to **IoU = 1.0000**.
+2. **Filename collision.** Olympus repeats field names across `_Cycle` folders;
+   naming outputs by filename silently overwrote 8 of 80 panels while the log
+   said 80. **Use `run_manifest.json` (`relative_path` → `output_key`).**
+3. **Two mask formats.** `*_pod_mask` / `*_membrane_positive_mask` are uint8
+   0/255; every `tissue__*_nuclei_mask` is a **uint16 label image**. A `>127`
+   test renders nothing when a field has <128 objects. **Use `>0`.**
+4. **Silent column drop.** `aggregate_to_mouse.classify_columns()` uses a closed
+   whitelist (`aggregate_to_mouse.py:184-186`); non-matching columns vanish at
+   mouse level.
+5. **Declared-but-uncomputed spec.** `evaluate_endpoints.groovy` never read
+   `spec.denominator`. A guard now refuses rather than dividing by the wrong
+   thing and exiting 0.
+6. **Caption lied about its own parameters.** Panels printed config values, not
+   resolved ones — every caption read `[0-0]`.
+7. **Otsu is *permissive* for broad markers.** It assumes two comparable-mass
+   modes; a continuum splits near background.
+8. **Disabled guard hid a defect.** `IFQ_MIN_INCLUDED_NUCLEI=0` was set to stop
+   fields vanishing — silencing an alarm that was correctly firing. Restored.
+
+---
+
+## 8. Open items, ranked
+
+1. **Corrected endpoint has never been computed.** The evaluator cannot build the
+   PDPN⁻ ∪ KRT5⁺ union denominator; it now refuses. This is the top blocker.
+2. **DAPI is saturated at acquisition** (in-tissue p90 = 4095, 5–19 % clipped).
+   Fixable only at the microscope — lower 405 gain. Permanently lossy if skipped.
+3. **n = 1 per genotype × condition.** Confounded; no statistics possible.
+   Reference used n = 15/group. **No software change fixes this.**
+4. **KRT5 = 300 rests on one clean control** (M6 has a LEFT-panel AGER staining
+   failure confirmed by the PI — `frac>500` 0.0097 LEFT vs 0.289 RIGHT).
+5. **Routes 1 and 2 never driven end-to-end** through the launcher UI.
+6. **RIGHT panel unusable** — registry gives area mode only to KRT5/AGER/T1α.
+7. Unlanded drafts on `claude/module-drafts` (**never merge**; copy pieces):
+   `spatial/` (complete + smoke test), `morphometry/`, `hierarchy-contract/`,
+   `injury_model_profiles/`.
+
+---
+
+## 9. Hard rules
+
+- **`IF_Quant_Pipeline.groovy` is the frozen engine.** It was unfrozen exactly
+  once, with explicit operator authorisation, for a one-token fix. Do not modify
+  it otherwise; prefer env vars, wrappers, or separate modules.
+- **Never commit image data** (`.vsi/.ets/.nd2/.tif`/tiles/outputs).
+- **Built `.exe` belongs in GitHub Releases**, not git.
+- **Never write to `D:\Confocal_Images`.**
+- **Do not rewrite git history** — `BRANCHING.md` and `launcher/README.md` quote
+  SHAs as runnable instructions. `.git` is 9 MB; a rewrite saves a few MB.
+- **`legacy/launchers/IFQuantLauncher-v1.7.2.exe` must not move.** Its path is
+  hardcoded at `IFQuantLauncher.Routing.cs` `V172ExeArchivePath` and printed to
+  users at runtime with its sha256 `bd8e7176…4a1c4`.
+- **Refuse silent false success.** Fail loudly over producing a plausible number.
+
+---
+
+## 10. Process lessons
+
+Costly, and not visible in the code.
+
+- **Verify before asserting.** Several claims here were wrong on first statement
+  and corrected only when measured: the undercount (89× single-field quoted as
+  batch; pooled truth ~101×), "area unaffected max 0.0154 pp" (KRT5 only; worst
+  across markers 0.0209 pp), and the endpoint sign itself. **Read the primary
+  source before calibrating against it, not after.**
+- **Name the estimator.** Pooled, mean-of-per-field and single-field gave 101×,
+  109× and 89× for the same bug. All internally consistent; shipping several is
+  what looks like sloppiness.
+- **Give parallel agents disjoint file ownership.** Two workflows editing
+  `launcher/*.cs` concurrently produced ambiguous authorship and a broken tree.
+- **Probe on 2–4 items before a full batch.** Three 82-field renders were burned
+  testing one parameter.
+- **Object-level questions need object-level tools.** Seven display versions
+  failed trying to express "true-positive **cell**" with pixel thresholds.
+- **A per-image adaptive display must record what it chose**, or it is
+  unauditable. Uniform *rule* ≠ uniform *effect*: a filter chosen because the
+  content you dislike disappears is selective manipulation
+  (Rossner & Yamada 2004, *J Cell Biol* 166:11), regardless of its name.
+
+---
+
+## 11. Division of labour — what the operator decides
+
+**Read this before proposing anything.** The operator is a wet-lab
+scientist who runs the microscope, prepares the sections, and owns the
+biology. Several of the most consequential corrections in this project came
+from them, not from the code and not from an agent. The pattern is consistent:
+**an AI can measure, but it cannot know what the tissue is.**
+
+### Corrections the operator made that no amount of analysis would have produced
+
+| Call | Why it needed a human |
+|---|---|
+| **"The ProSPC ring at the airway isn't AT2 — those are other basal lineages"** | A morphological/lineage judgement from the image. The pipeline had no concept that a bright, correctly-shaped, correctly-thresholded population could be the wrong *cell type*. |
+| **"AT2 have circular, nuclei-located morphology, not a ring"** | Supplied the discriminating feature. Led directly to the finding that intensity cannot separate them (measured: AT2 p50 = 430, airway p50 = 385) and that the difference is extent, not brightness. |
+| **"M6 has staining issues" (from the PI)** | Section-level QC that no in-image statistic flagged. Confirmed afterwards by data (AGER `frac>500` 0.0097 LEFT vs 0.289 RIGHT, same antibody, same animal) — but the hypothesis came first from the bench. |
+| **"KRT8 should be strict — normal alveolar regions aren't what I want to see"** | Defined the biological target (transitional/DATP state, not baseline epithelium). This framing is what made the enrichment test the right test, which then rejected the marker. |
+| **"Isn't that selective manipulation?"** | Caught a background-subtraction proposal whose radius had been chosen *because the airway disappeared at that value* — the same error as the retired component gate, in a more respectable form. Stopped it before it shipped. |
+| **Pointing to the Lin et al. PDF on disk** | Resolved the endpoint sign. The implementation had computed KRT5⁺PDPN⁻ for the whole project; reading the primary source showed the reference specifies KRT5⁺PDPN⁺ over a hand-traced union. |
+| **Authorising the engine unfreeze** | The `black` token fix required modifying a file that had been frozen by policy. Only the operator could weigh "the freeze protects a bug" against "the validation that justified the freeze was run with the bug present". |
+| **"Comparability comes next"** | A priority ordering for figures that the software could not derive. It resolved ten versions of oscillation between fixed and per-image windows. |
+
+### Direction the operator set
+
+- Study design, panel composition, marker choice, and which channel is the
+  endpoint. **All acquisition parameters** — the DAPI saturation is an
+  acquisition setting only they can change.
+- The instruction to **re-derive thresholds from uninfected controls only**,
+  which is the anti-circularity rule the whole calibration now rests on.
+- Repository direction: consolidation onto `main`, the rename to
+  `IFQuant-Lung`, and the decision that this is a **portfolio piece** — which
+  changed the optimisation target from throughput to legibility and honesty.
+- The launcher's four-route design, including that H&E must be **visible and
+  disabled** rather than hidden.
+
+### Errors the operator caught that agents and I did not
+
+Recorded because it calibrates how much to trust an unreviewed agent result:
+
+- v8 "merge panels" were a **segmentation overlay**, not the requested product.
+- A README tagline that "describes nothing".
+- Replacing mermaid algorithmic diagrams with ASCII boxes — a **downgrade**
+  presented as an improvement.
+- Diagram edges crossing subgraph boundaries and overlapping.
+- Marker channels being **wiped out** by over-aggressive floors, twice.
+- The 555 channel spilling into airspace.
+
+### Escalate to the operator, do not decide alone
+
+Cell-type identity · whether a population is specific staining or artefact ·
+acquisition settings · what a figure must show · which animals or sections are
+usable · anything outward-facing (push, release, deleting tracked history) ·
+unfreezing the engine · trading measurement validity for appearance.
+
+---
+
+## 12. Key files
+
+| Path | Role |
+|---|---|
+| `IF_Quant_Pipeline.groovy` | measurement engine (frozen) — bug fix at ~line 1784 |
+| `qupath_wsi_tile_export.groovy` | Stage 1 tiling |
+| `aggregate_tiles_to_slide.py` / `aggregate_to_mouse.py` | Stage 3 / mouse roll-up |
+| `endpoints/evaluate_endpoints.groovy` | relational endpoints by mask algebra |
+| `config/endpoints/dysplastic_over_damaged.json` | **corrected** spec |
+| `config/endpoints/ectopic_pod_over_damaged.json` | retracted; kept as the record |
+| `panels/MergePanels.java` | merge panels (photograph) |
+| `panels/qc/RenderPanels.java` | QC overlays (analysis result) |
+| `launcher/` | v1.9.0, 4 routes; `run_legacy_equivalence.ps1` |
+| `validation/` | synthetic fixture demonstrating the bug from a clone |
+| `scripts/` | calibration and probe scripts |

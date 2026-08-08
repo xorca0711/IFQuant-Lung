@@ -102,3 +102,7 @@ their numbers are current**, and thresholds quoted there are pilot placeholders.
 Historical diagrams are archived in
 [`../legacy/figures/`](../legacy/figures/README.md); their intensity-centered
 logic no longer matches the morphology-first engine.
+
+## For an AI agent picking this up
+
+[AI_HANDOFF.md](AI_HANDOFF.md) — machine-oriented context transfer: architecture invariants, environment traps, the catalogue of silent-failure modes seen in this project, ranked open items, and the division of labour between the operator and automated work. Read it before proposing changes.
