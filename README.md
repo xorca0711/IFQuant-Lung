@@ -1,141 +1,176 @@
 # IFQuant-Lung
 
-**Turns mouse-lung immunofluorescence images into one number per animal — and keeps the evidence for every step.**
+Measures **dysplastic KRT5⁺ repair area** in influenza-injured mouse lung.
 
-Built for one question: after PR8 influenza injury, does IFN-γ ligand knockout change how much of the lung is repaired by dysplastic KRT5⁺ cells?
+Given 4-channel immunofluorescence — confocal fields (`.oir`/`.czi`/`.nd2`) or
+Olympus whole-slide scans (`.vsi`) — it segments nuclei from DAPI, decides each
+marker per cell as **positive / negative / indeterminate** using spatial
+morphology rather than brightness alone, measures marker-positive **area** at a
+cutoff frozen from control animals, and aggregates fields → section → **one row
+per mouse**, which is the statistical unit.
 
-<table>
-<tr>
-<td width="50%" valign="top">
+**Primary endpoint:** dysplastic KRT5⁺PDPN⁺ area over damaged alveolar area
+(PDPN⁻ ∪ KRT5⁺), after Lin et al. 2024 (*J Clin Invest* 134(19):e176828).
+**Study question:** does IFN-γ *ligand* knockout change that fraction after PR8
+influenza injury?
 
-**For the person at the microscope**
-Windows launcher, four explicit routes, no command line. Refuses to start rather than guess.
-→ [Releases](https://github.com/xorca0711/IFQuant-Lung/releases)
+Every threshold, mask, per-cell decision and rejection reason is written to disk,
+so any reported number can be traced to the pixels and the cutoff that produced
+it — including the ones that turned out to be wrong, which are kept on the record
+in [`docs/NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md).
 
-</td>
-<td width="50%" valign="top">
-
-**For the person checking the result**
-Per-run provenance, per-marker masks, and a written record of what failed.
-→ [What's verified](#whats-verified) · [What isn't](#what-isnt-established)
-
-</td>
-</tr>
-</table>
-
-**New here?** [`WORKFLOW.md`](WORKFLOW.md) explains the pipeline in plain language with diagrams — no code.
+| | |
+|---|---|
+| **Measurement engine** | Fiji · `IF_Quant_Pipeline.groovy` — the only component that measures |
+| **Whole-slide front end** | QuPath 0.7 — reads and tiles; measures nothing |
+| **Aggregation** | Python — sums to slide and mouse; decides nothing |
+| **Operator front end** | `IFQuantLauncher` (C#/WinForms), four explicit routes → [Releases](https://github.com/xorca0711/IFQuant-Lung/releases) |
+| **Algorithmic reference** | [`WORKFLOW.md`](WORKFLOW.md) — routing, decision hierarchy, Z policy, cutoff derivation |
 
 ---
 
 ## Architecture
 
-```
-   .vsi whole slide                          .oir / .czi / .nd2
-   19.3 GB · 57165 × 42154 × 4ch             confocal field · ~38 MB
-   won't fit in 15.6 GB RAM                            │
-            │                                          │
-            ▼                                          │
-   ┌─────────────────────┐                             │
-   │      QuPath 0.7     │                             │
-   │  opens · detects    │  tiles + ROI zips           │
-   │  tissue · cuts 2048 │  ───────────────┐           │
-   │  px tiles           │                 │           │
-   │  MEASURES NOTHING   │                 │           │
-   └─────────────────────┘                 ▼           ▼
-                              ┌──────────────────────────────┐
-                              │  Fiji · IF_Quant_Pipeline    │
-                              │  ── THE ONLY MEASUREMENT ──  │
-                              │  nuclei · 3-state calls      │
-                              │  area masks · per-cell CSV   │
-                              └──────────────┬───────────────┘
-                                             ▼
-                              ┌──────────────────────────────┐
-                              │  Python · adds up, decides   │
-                              │  nothing                     │
-                              │  tile → slide → MOUSE        │
-                              └──────────────┬───────────────┘
-                                             ▼
-                                 run_summary.csv
-                                 slide_level_summary.csv
-                                 mouse_level_summary.csv
-
-   IFQuantLauncher (C#/WinForms) fronts all of this as four explicit routes.
+```mermaid
+flowchart LR
+    subgraph ACQ[Acquisition]
+        V[".vsi whole slide<br/>19.3 GB · 57165 × 42154 × 4ch<br/><i>exceeds 15.6 GB RAM</i>"]
+        C[".oir / .czi / .nd2<br/>confocal field · ~38 MB"]
+    end
+    subgraph ST1["Stage 1 · QuPath 0.7"]
+        Q["open slide · detect tissue once<br/>cut 2048 px tiles + 128 px halo<br/><b>MEASURES NOTHING</b>"]
+        T["tiles/*.ome.tif<br/>tiles/*_RoiSet.zip<br/><i>exact seam handling</i>"]
+    end
+    subgraph ST2["Stage 2 · Fiji"]
+        E["<b>IF_Quant_Pipeline.groovy</b><br/>THE ONLY MEASUREMENT ENGINE<br/>nuclei · three-state marker calls<br/>area masks · per-cell CSV · QC PNG"]
+    end
+    subgraph ST3["Stage 3 · Python"]
+        A["tile → slide reconciliation<br/>slide → mouse roll-up"]
+    end
+    V --> Q --> T --> E
+    C --> E
+    E --> A --> R["run_summary.csv<br/>slide_level_summary.csv<br/><b>mouse_level_summary.csv</b>"]
 ```
 
-**One engine measures. QuPath reads and cuts. Python only sums.**
+**One engine measures. QuPath reads and cuts. Python only sums.** Confocal
+fields and whole-slide tiles enter the *same* engine, so a KRT5⁺ area means the
+same thing on either route.
 
 <details>
-<summary><b>Why it is split this way</b> (click)</summary>
+<summary><b>Why the split, and why not a second engine in QuPath</b></summary>
 
-QuPath is the only half that can open an Olympus `.vsi` — it bundles the JPEG-2000 codec (`ome-jai`) that Fiji's Bio-Formats lacks — and the only half that can tile a slide too large to hold in memory. Fiji hosts the measurement engine.
+QuPath is the only half that opens an Olympus `.vsi` — it bundles the JPEG-2000
+codec (`ome-jai`) that Fiji's Bio-Formats lacks — and the only half that can tile
+an image larger than available memory. Fiji hosts the measurement engine.
 
-The two applications ship **incompatible Java versions**, so the handoff is files on disk rather than an in-process call; this is the pattern described by Chiaruttini et al. 2022 (*Front Comput Sci* 3:780026).
+The two applications ship **incompatible Java versions**, so the handoff is files
+on disk rather than an in-process call; this is the pattern described by
+Chiaruttini et al. 2022 (*Front Comput Sci* 3:780026).
 
-Writing a second measurement engine inside QuPath was considered and **rejected**: two engines drift, and then a result depends on which one produced it.
+A second measurement engine inside QuPath was implemented on two branches and
+**rejected** (PRs #9, #10): two engines drift, and a result then depends on which
+one produced it.
 
 </details>
 
 ---
 
-## What's verified
+## What is validated
 
-Each row says what was checked and what number came out. Nothing here is a plan.
-
-### ▶ You can run this one yourself, right now
+### Reproducible from a clone — no data required
 
 ```bash
 powershell -ExecutionPolicy Bypass -File ./launcher/run_legacy_equivalence.ps1
 ```
 
-**84 checks, 0 failures.** Builds the harness and launcher from source, then diffs what a *real child process* receives under v1.7.2's environment versus the current one. No data, no D: drive, no credentials.
+Builds the harness and launcher from source, then diffs what a **real child
+process** receives under v1.7.2's environment versus the current route 4:
+7 environment fixtures byte-identical, 23 Advanced-box lines decided
+identically, plus a drift guard that re-reads the v1.7.2 source and checks key
+set, assignment order and hardcoded values.
 
-It includes a self-critical check: the embedded engine no longer matches v1.7.2's, and the harness **detects and reports that drift** rather than hiding it.
+**84 checks, 0 failures** — including the self-critical one: the embedded engine
+no longer matches v1.7.2's, and the harness **detects and reports** that drift
+rather than asserting an equality that is no longer true.
 
-### ▶ Measured, on this machine
+### Reproducible from a clone — the segmentation defect, demonstrated
 
-| | Result |
+```bash
+powershell -ExecutionPolicy Bypass -File ./validation/run_demo.ps1
+```
+
+Generates a deterministic synthetic DAPI field (196 interior + 12 frame-touching
+blobs, seed fixed) and runs the **real engine code path** twice — once with the
+`black` token, once without:
+
+```
+WORLD A: 'iterations=2 count=1 black do=Close'
+         Prefs.blackBackground = true before, true after
+         included nuclei = 196  ← all 196 interior blobs recovered
+WORLD B: 'iterations=2 count=1 do=Close'
+         Prefs.blackBackground = true before, FALSE after   ← the global flip
+         included nuclei = 0    ← survivors are exactly the 12 frame-touching blobs
+VERDICT: PASS
+```
+
+The 10 surviving world-B candidates being precisely the border-touching ones
+mirrors the real-data signature (100 % border-touching candidates across all 79
+fields). No microscope data, no `D:` drive.
+
+### Measured on study data
+
+| Claim | Evidence |
 |---|---|
-| **Tile → slide reconciliation** | `sum(region_area_um2)` vs Stage 1 tissue area agree to **2.1e-16** — machine epsilon |
-| **KRT5 cutoff set from controls, not from the data tested** | Fixed at **300** from the two uninfected animals alone (in-tissue p99.99 = 283, 255) → control false-positive area ≤ 1e-4 each. Infected tissue: **8.1 %** above 500 |
-| **A segmentation bug found, quantified, fixed, re-validated** | One missing `black` token set `Prefs.blackBackground = false` **globally**, inverting `Fill Holes` and erasing every nucleus not touching the image frame. Cost, pooled over 79 fields: **152.5 → 15,393.3 nuclei/mm², a ~101× undercount.** Replay reproduced the shipped mask at **IoU = 1.0000**, which is what pins the cause. Area outputs unaffected — worst change **0.0209 pp** |
-| **Two markers rejected on evidence** | Control-locked enrichment, R = infected fraction / control fraction beyond the same cut. **AGER as co-negativity marker: R ≈ 0.99–1.05.** **KRT8 as discriminator: R = 0.80–1.25 at every cut** — the two infected animals *bracket* the two controls |
-| **An endpoint error caught by reading the source paper** | Implementation computed KRT5⁺PDPN**⁻**. Lin et al. 2024 specify KRT5⁺PDPN**⁺** over a hand-traced PDPN⁻ ∪ KRT5⁺ union. PDPN is expressed *by* dysplastic cells, so requiring PDPN-negativity excluded the population being measured |
+| **Tile → slide reconciliation is exact** | Stage 2 `sum(region_area_um2)` vs Stage 1 core tissue area agree to **2.1e-16** — machine epsilon |
+| **KRT5 cutoff derived from controls, not from the data under test** | `IFQ_KRT5_THRESHOLD = 300` from the two uninfected animals alone (in-tissue p99.99 = 283, 255) → control false-positive area ≤ 1e-4 each, independently. Infected tissue: **8.1 %** of area above 500 |
+| **Segmentation defect found, quantified, fixed, re-validated** | A missing `black` token in an ImageJ Binary Options macro string set `Prefs.blackBackground = false` **globally**, inverting `Fill Holes` so every nucleus not touching the image frame was erased. Pooled over 79 fields: **152.5 → 15,393.3 nuclei/mm², ~101× undercount.** Replay of the buggy path reproduced the shipped mask at **IoU = 1.0000**, which is what pins the cause rather than suggesting it. Area outputs unaffected — worst per-field change **0.0209 pp** (T1α) |
+| **Two markers rejected on evidence** | Control-locked enrichment, R = mean(infected fraction beyond cut) ÷ mean(control fraction). **AGER as co-negativity marker: R ≈ 0.99–1.05.** **KRT8 as discriminator: R = 0.80–1.25 at every cut**, the two infected animals *bracketing* the two controls — between-section staining variance exceeds the biological signal |
+| **Endpoint specification error caught against the primary source** | Implementation computed KRT5⁺PDPN**⁻**; Lin et al. specify KRT5⁺PDPN**⁺** over a hand-traced PDPN⁻ ∪ KRT5⁺ union. PDPN is expressed *by* dysplastic cells, so requiring PDPN-negativity excluded the population being measured |
 
-Details: [`docs/NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md) · [`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md) · [`launcher/legacy_equivalence_report.txt`](launcher/legacy_equivalence_report.txt)
+[`docs/NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md) ·
+[`docs/WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md) ·
+[`launcher/legacy_equivalence_report.txt`](launcher/legacy_equivalence_report.txt)
 
 ---
 
-## What isn't established
+## What is not established
 
-> ### ⚠ n = 1 mouse per genotype × condition
-> Genotype is **confounded** with condition. **No statistics are possible from this batch** — any group comparison would be describing one animal. This is a study-design fact that no amount of software fixes.
+> **n = 1 mouse per genotype × condition.** Genotype is confounded with
+> condition. **No statistics are possible from this batch** — any group
+> comparison describes a single animal. This is a study-design constraint, not a
+> software limitation.
 
-| Open item | Where it stands |
+| Open item | Status |
 |---|---|
-| **Corrected endpoint** | Declared as data, **never computed**. The evaluator cannot build the union denominator and now *refuses* rather than returning a plausible wrong number. Every figure quoted anywhere predates the correction |
-| **AGER damage detector** | Calibrated from controls, but answers a question the reference doesn't ask — its denominator is hand-traced, not a density detector. **Retired** as an endpoint component |
-| **KRT5 threshold provenance** | Derived from two controls, one of which (M6) has a LEFT-panel staining failure. In practice it rests on **one clean control** |
-| **RIGHT panel (ProSPC/mRAGE/KRT8)** | Not usable as an endpoint — area mode covers only KRT5/AGER/T1A, so these give cell counts only, and KRT8 failed the enrichment test |
-| **AGER and T1α calls** | Deliberately adaptive; both are constitutively expressed so no "control should be negative" anchor exists. Labelled `exploratory_*` — not confirmatory |
-| **Airway exclusion** | Not implemented; needs hand-drawn annotations |
-| **Aggregation bug** | Five partition QC columns silently dropped at mouse level (`aggregate_to_mouse.py:184-186`, closed whitelist). Primary endpoint unaffected; per-mouse QC lost |
+| **Corrected endpoint** | Declared as data; **never computed.** `evaluate_endpoints.groovy` cannot build the PDPN⁻ ∪ KRT5⁺ union denominator and now **refuses** rather than dividing by total tissue and exiting 0. Every figure quoted anywhere predates the correction |
+| **AGER damage detector** | Calibrated control-only (`AGER 150`, σ 40 µm, cutoff 0.14; held-out infected 6.71 / 4.68 % vs controls 0.93 / 0.18 %) — but the reference denominator is a hand-traced region union, not a density detector. **Retired** as an endpoint component; retained as an internally calibrated proxy |
+| **KRT5 threshold provenance** | Derived from two controls, one of which (M6) has a LEFT-panel AGER staining failure. In practice it rests on **one clean control** |
+| **RIGHT panel (ProSPC/mRAGE/KRT8)** | Not usable as an endpoint: area mode covers only KRT5/AGER/T1A, so these markers yield cell counts only — and KRT8 failed the enrichment test above |
+| **AGER and T1α calls** | Deliberately adaptive; both constitutively expressed, so no negative-control anchor exists. Labelled `adaptive_otsu_exploratory` — not confirmatory |
+| **Airway exclusion** | Not implemented; requires hand-drawn annotations |
+| **Aggregation defect** | Five partition QC columns silently dropped at mouse level (`aggregate_to_mouse.py:184-186`, closed whitelist). Primary endpoint unaffected; per-mouse QC lost |
 
 ---
 
-## What it has measured
+## Measured to date
 
-LEFT panel, 79 of 82 confocal fields, area-based outputs at the locked cutoff. The three failures are **data, not pipeline**: two truncated acquisitions (7.3 / 8.2 MB against a uniform 37.7 MB) and one field where tissue detection refused rather than analyse background.
+LEFT panel, 79 of 82 confocal fields, area outputs at the locked cutoff. The
+three exclusions are **data, not pipeline**: two truncated acquisitions (7.3 and
+8.2 MB against a uniform 37.7 MB) and one field where DAPI tissue detection
+refused rather than analyse background.
 
 | mouse | genotype | condition | KRT5⁺ area | KRT5 pods | T1α area |
 |---|---|---|---|---|---|
 | M2 | hom | PR8 | **14.11 %** | 1080 | 13.4 % |
 | M4-1 | het | PR8 | **11.98 %** | 1092 | 13.4 % |
 | M4-2 | het | uninfected | **0.000 %** | 0 | 24.6 % |
-| M6 | hom | uninfected | **0.003 %** | ~0 | 28.7 % |
+| M6 | hom | uninfected | **0.003 %** | ~0 (23 µm²) | 28.7 % |
 
-Separation is near-binary and T1α moves as expected (AT1 loss after injury).
-
-> **This is four animals, one per cell — a description of four mice, not a comparison of groups.** Cell-count and density columns from the pre-fix run are void; only the area columns survived the `blackBackground` bug, for the mechanical reason given above.
+Separation is near-binary and T1α moves in the expected direction (AT1 loss
+after injury). **Four animals, one per cell — a description of four mice, not a
+comparison of groups.** Cell-count and density columns from the pre-fix run are
+void; only the area columns survived the `blackBackground` defect, for the
+mechanical reason given above.
 
 ---
 

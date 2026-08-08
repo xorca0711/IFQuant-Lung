@@ -62,3 +62,15 @@ group_level_summary.csv
 legacy/test_runs/
 legacy/pilot_output/
 legacy/ref_images_analysis_output/
+
+# Synthetic validation fixture (validation/): the scripts and README are
+# tracked so a fresh clone can reproduce the blackBackground bug demo with no
+# microscope data. Generated runtime outputs (fixture TIFF, world masks, logs)
+# go to validation/out/ and stay ignored. The negations shield the tracked
+# files from the global ignore rules above and from any future broad rule
+# (last matching rule wins); they deliberately match only files directly under
+# validation/, so nothing inside validation/out/ can ever be un-ignored.
+validation/out/
+!validation/*.groovy
+!validation/*.ps1
+!validation/README.md
