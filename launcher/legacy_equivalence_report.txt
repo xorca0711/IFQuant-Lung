@@ -1,7 +1,7 @@
 ﻿Route 4 legacy (v1.7.2) equivalence -- executed, not asserted
-  v1.7.2 source : X:\GitHub\IFQuant-Lung\launcher\IFQuantLauncher.cs
-  v1.8.0 source : C:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\launcher\IFQuantLauncher.cs
-  env probe     : C:\Users\dream\AppData\Local\Temp\claude\X--QuPath\7933abe5-e14c-44b2-aa07-c4127fa41a9e\scratchpad\launcher_final\build\EnvProbe.exe
+  v1.7.2 source : X:\GitHub\IFQuant-Lung\launcher\reference\IFQuantLauncher-v1.7.2.cs
+  v1.8.0 source : X:\GitHub\IFQuant-Lung\launcher\IFQuantLauncher.cs
+  env probe     : C:\Users\dream\AppData\Local\Temp\ifq_legacy_eq_11048\EnvProbe.exe
 
 [a] Oracle transcription of v1.7.2 vs route 4, canonical diff
   PASS  case 1 recommended defaults, panel LEFT: 17 keys, byte-identical
@@ -27,7 +27,7 @@
   PASS  v1.7.2 contains no QuPath / .vsi / IFQ_WSI_ / brightfield reference
 
 [c] The v1.8.0 source cannot quietly stop being legacy
-  PASS  v1.8.0 source declares AssemblyFileVersion 1.8.0.0
+  PASS  the current source declares AssemblyFileVersion 1.9.0.0
   PASS  route 4 is built by LegacyProfile.BuildEnvironment
   PASS  route 4 uses LegacyProfile.CommandLine
   PASS  the v1.8.0 launcher assigns IFQ_MIN_INCLUDED_NUCLEI nowhere (only RunEnvironment.BuildStage2 does, and route 4 does not go through it)
@@ -100,8 +100,13 @@
   PASS  and the nuclei floor the operator typed is one of them
 
 [e] Embedded analysis artefacts
-      pipeline defffe6703e6da10ef7810977cb16473c0f36bf81ffa75fbbf6b81066de140ec
+      pipeline b45e4289d8b7ea0cb6f1cd3185e5aa56c28c7e5ae7cb70d530629b28c32d4e74
       registry 20c6859d8b7d1114b5476eefc90d8c92affa78d9a59d1be11d2449ba98460b37
-  PASS  the artefacts this build embeds are the ones v1.7.2 shipped
+  PASS  embedded artefacts DIFFER from v1.7.2's and the drift is DETECTED
+  PASS  the drift note names the actual embedded pipeline hash
+  PASS  the drift note points at the archived v1.7.2 binary for exact numbers
+      NOTE: embedded artefacts intentionally differ from v1.7.2's.
+      Route 4 reproduces the v1.7.2 ENVIRONMENT and COMMAND LINE
+      exactly; the engine carries subsequent fixes.
 
-checks: 82   failures: 0
+checks: 84   failures: 0

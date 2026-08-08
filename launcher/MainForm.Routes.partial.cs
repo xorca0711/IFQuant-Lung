@@ -37,6 +37,7 @@ namespace IFQuantLauncher
     internal sealed partial class MainForm
     {
         // ---- new controls ---------------------------------------------
+        private GroupBox routeGroup;
         private ComboBox routeBox;
         private Label routeHelpLabel;
         private Label routeUnavailableLabel;
@@ -94,17 +95,25 @@ namespace IFQuantLauncher
         // CONSTRUCTION
         // =================================================================
 
-        /// Called at the end of BuildInterface, once every v1.7.2 control
-        /// exists. Rows 1, 3, 5 and 7 of the root table are reserved for it.
-        private void BuildRouteInterface(TableLayoutPanel root)
+        /// Called near the end of BuildInterface, once every v1.7.2 control
+        /// exists.
+        ///
+        /// It no longer PLACES its group boxes. It builds routeGroup,
+        /// toolsGroup and measurementGroup and leaves them parentless; the
+        /// caller appends them to the configuration columns, so the reading
+        /// order of the whole form is decided by one block of statements
+        /// instead of by which method happened to run first. Only the gate
+        /// summary is placed here, and it goes into the pinned bottom stack,
+        /// because it must never scroll away from the Run button it describes.
+        private void BuildRouteInterface()
         {
             // Held until FinishRouteInitialisation, so restoring settings.ini
             // does not re-evaluate the gate once per control.
             suppressGateRefresh = true;
-            BuildRouteGroup(root);
-            BuildToolsGroup(root);
-            BuildMeasurementGroup(root);
-            BuildGateSummary(root);
+            BuildRouteGroup();
+            BuildToolsGroup();
+            BuildMeasurementGroup();
+            BuildGateSummary();
 
             // H1: panel T is not in the picker unless it is explicitly unlocked.
             RemovePilotPanelFromPicker();
@@ -426,9 +435,9 @@ namespace IFQuantLauncher
             return 0;
         }
 
-        private void BuildRouteGroup(TableLayoutPanel root)
+        private void BuildRouteGroup()
         {
-            GroupBox routeGroup = new GroupBox();
+            routeGroup = new GroupBox();
             routeGroup.Text = "Step 1 — what kind of images are these?";
             routeGroup.Dock = DockStyle.Top;
             routeGroup.AutoSize = true;
@@ -438,7 +447,7 @@ namespace IFQuantLauncher
             table.Dock = DockStyle.Top;
             table.AutoSize = true;
             table.ColumnCount = 2;
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175F));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(175F)));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             routeGroup.Controls.Add(table);
 
@@ -462,7 +471,7 @@ namespace IFQuantLauncher
 
             routeHelpLabel = new Label();
             routeHelpLabel.AutoSize = true;
-            routeHelpLabel.MaximumSize = new Size(980, 0);
+            routeHelpLabel.MaximumSize = new Size(Scaled(980), 0);
             routeHelpLabel.ForeColor = Color.FromArgb(75, 75, 75);
             routeHelpLabel.Padding = new Padding(4, 4, 4, 4);
             table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -471,7 +480,7 @@ namespace IFQuantLauncher
             // Permanently visible, so the greyed entry is never a mystery.
             routeUnavailableLabel = new Label();
             routeUnavailableLabel.AutoSize = true;
-            routeUnavailableLabel.MaximumSize = new Size(980, 0);
+            routeUnavailableLabel.MaximumSize = new Size(Scaled(980), 0);
             routeUnavailableLabel.ForeColor = Color.FromArgb(150, 60, 0);
             routeUnavailableLabel.Padding = new Padding(4, 0, 4, 6);
             routeUnavailableLabel.Text = DescribeUnavailableRoutes();
@@ -514,8 +523,6 @@ namespace IFQuantLauncher
                 "the bundled JVM path starts the same engine directly with the ij1-patcher " +
                 "agent, which is how the whole-slide shard script has always run it. Whichever " +
                 "is used is written into launcher_run.txt.");
-
-            root.Controls.Add(routeGroup, 0, 1);
 
             routeBox.SelectedIndexChanged += delegate { OnRouteSelectionChanged(); };
             tierBox.SelectedIndexChanged += delegate { RefreshGateSummary(); };
@@ -591,7 +598,7 @@ namespace IFQuantLauncher
             OnRouteChanged();
         }
 
-        private void BuildToolsGroup(TableLayoutPanel root)
+        private void BuildToolsGroup()
         {
             toolsGroup = new GroupBox();
             toolsGroup.Text = "Whole-slide tools and locations";
@@ -603,9 +610,9 @@ namespace IFQuantLauncher
             table.Dock = DockStyle.Top;
             table.AutoSize = true;
             table.ColumnCount = 3;
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175F));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(175F)));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95F));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(95F)));
             toolsGroup.Controls.Add(table);
 
             quPathBox = AddBrowseRow(table, 0, "QuPath console executable", false);
@@ -659,8 +666,6 @@ namespace IFQuantLauncher
                 wsiResumeBox, wsiPartitionBox, wsiMaxTilesBox
             };
             fijiOnlyRows = new Control[0];
-
-            root.Controls.Add(toolsGroup, 0, 3);
         }
 
         private TextBox AddBrowseRow(TableLayoutPanel table, int row, string label, bool folder)
@@ -699,7 +704,7 @@ namespace IFQuantLauncher
             }
         }
 
-        private void BuildMeasurementGroup(TableLayoutPanel root)
+        private void BuildMeasurementGroup()
         {
             measurementGroup = new GroupBox();
             measurementGroup.Text =
@@ -716,7 +721,7 @@ namespace IFQuantLauncher
 
             thresholdNoteLabel = new Label();
             thresholdNoteLabel.AutoSize = true;
-            thresholdNoteLabel.MaximumSize = new Size(980, 0);
+            thresholdNoteLabel.MaximumSize = new Size(Scaled(980), 0);
             thresholdNoteLabel.Padding = new Padding(0, 0, 0, 6);
             outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             outer.Controls.Add(thresholdNoteLabel, 0, 0);
@@ -725,9 +730,9 @@ namespace IFQuantLauncher
             thresholdTable.Dock = DockStyle.Top;
             thresholdTable.AutoSize = true;
             thresholdTable.ColumnCount = 4;
-            thresholdTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175F));
-            thresholdTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 235F));
-            thresholdTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110F));
+            thresholdTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(175F)));
+            thresholdTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(235F)));
+            thresholdTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(110F)));
             thresholdTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             outer.Controls.Add(thresholdTable, 0, 1);
@@ -736,8 +741,8 @@ namespace IFQuantLauncher
             floor.Dock = DockStyle.Top;
             floor.AutoSize = true;
             floor.ColumnCount = 3;
-            floor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175F));
-            floor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110F));
+            floor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(175F)));
+            floor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(110F)));
             floor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             outer.Controls.Add(floor, 0, 2);
@@ -752,7 +757,7 @@ namespace IFQuantLauncher
             floor.Controls.Add(minNucleiBox, 1, 0);
             Label floorHelp = new Label();
             floorHelp.AutoSize = true;
-            floorHelp.MaximumSize = new Size(680, 0);
+            floorHelp.MaximumSize = new Size(Scaled(680), 0);
             floorHelp.ForeColor = Color.FromArgb(75, 75, 75);
             floorHelp.Text =
                 "A region with fewer accepted nuclei is dropped, and its tissue area is dropped " +
@@ -775,20 +780,22 @@ namespace IFQuantLauncher
                 "Panel T maps an unrelated skin smFISH sample onto a lung panel shape and its " +
                 "nuclear channel is index 4, not 1. It exists to test the plumbing. Selecting " +
                 "it requires typing a confirmation phrase and stamps the output folder.");
-
-            root.Controls.Add(measurementGroup, 0, 5);
         }
 
-        private void BuildGateSummary(TableLayoutPanel root)
+        private void BuildGateSummary()
         {
             gateSummaryLabel = new Label();
             gateSummaryLabel.AutoSize = true;
-            gateSummaryLabel.MaximumSize = new Size(1180, 0);
-            gateSummaryLabel.Padding = new Padding(6, 6, 6, 6);
+            gateSummaryLabel.Dock = DockStyle.Fill;
+            // No MaximumSize: the bar spans the whole form, so the verdict
+            // wraps at the window edge instead of at a fixed 1180 px.
+            gateSummaryLabel.Padding = new Padding(6, 4, 6, 4);
             gateSummaryLabel.BorderStyle = BorderStyle.FixedSingle;
             gateSummaryLabel.Font = new Font(Font, FontStyle.Bold);
             gateSummaryLabel.Text = "Checking...";
-            root.Controls.Add(gateSummaryLabel, 0, 7);
+            // The pinned bottom stack, not the scrolling pane: the verdict has
+            // to be next to the button it is a verdict about.
+            rootTable.Controls.Add(gateSummaryLabel, 0, RootRowGate);
         }
 
         /// Every control that can change a gate outcome refreshes the live
@@ -1284,7 +1291,7 @@ namespace IFQuantLauncher
 
                 Label status = new Label();
                 status.AutoSize = true;
-                status.MaximumSize = new Size(520, 0);
+                status.MaximumSize = new Size(Scaled(520), 0);
                 status.Anchor = AnchorStyles.Left;
                 thresholdTable.Controls.Add(status, 3, row);
                 thresholdStatusLabels[channel.Token] = status;
@@ -1801,7 +1808,7 @@ namespace IFQuantLauncher
             MinimizeBox = false;
             MaximizeBox = false;
             FormBorderStyle = FormBorderStyle.Sizable;
-            ClientSize = new Size(900, 620);
+            ClientSize = new Size(MainForm.Scaled(900), MainForm.Scaled(620));
             Font = new Font("Segoe UI", 9F);
 
             TableLayoutPanel root = new TableLayoutPanel();
@@ -1826,7 +1833,7 @@ namespace IFQuantLauncher
 
             Label consequence = new Label();
             consequence.AutoSize = true;
-            consequence.MaximumSize = new Size(860, 0);
+            consequence.MaximumSize = new Size(MainForm.Scaled(860), 0);
             consequence.ForeColor = Color.FromArgb(150, 60, 0);
             consequence.Padding = new Padding(0, 8, 0, 8);
             consequence.Text =
@@ -1854,7 +1861,7 @@ namespace IFQuantLauncher
                 prompt.Text = "Type  " + phrase + "  to continue:";
                 row.Controls.Add(prompt);
                 TextBox entry = new TextBox();
-                entry.Width = 260;
+                entry.Width = MainForm.Scaled(260);
                 entry.Tag = phrase;
                 entry.TextChanged += delegate { UpdateOkButton(); };
                 row.Controls.Add(entry);

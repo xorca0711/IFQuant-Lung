@@ -538,7 +538,7 @@ namespace IFQuantLauncher.LegacyCheck
                 string source = File.ReadAllText(v180Source, Encoding.UTF8);
                 Match version = Regex.Match(source, "AssemblyFileVersion\\(\"(?<v>[0-9.]+)\"\\)");
                 Check(version.Success && version.Groups["v"].Value == LauncherBuild.AssemblyVersion,
-                      "v1.8.0 source declares AssemblyFileVersion " + LauncherBuild.AssemblyVersion);
+                      "the current source declares AssemblyFileVersion " + LauncherBuild.AssemblyVersion);
                 Check(source.IndexOf("LegacyProfile.BuildEnvironment", StringComparison.Ordinal) >= 0,
                       "route 4 is built by LegacyProfile.BuildEnvironment");
                 Check(source.IndexOf("LegacyProfile.CommandLine", StringComparison.Ordinal) >= 0,
@@ -781,10 +781,47 @@ namespace IFQuantLauncher.LegacyCheck
                 string registryHash = Sha256(embeddedRegistry);
                 Console.WriteLine("      pipeline " + pipelineHash);
                 Console.WriteLine("      registry " + registryHash);
+                // TEST THE MECHANISM, NOT A TRANSIENT STATE.
+                //
+                // This used to assert note == null: that the embedded engine is
+                // byte-identical to the one v1.7.2 shipped. That assertion fails the
+                // moment the engine is legitimately corrected -- and it did. Fixing a
+                // missing `black` token in an ImageJ Binary Options macro string
+                // (IF_Quant_Pipeline.groovy:1766, which was globally flipping
+                // Prefs.blackBackground and erasing ~89x of the nuclei) moved the
+                // pipeline hash from defffe67... to b45e4289.... The old check forced a
+                // choice between shipping a known-buggy engine and a red suite, and that
+                // is how suites come to be ignored.
+                //
+                // LegacyProfile.CheckEmbeddedArtefacts deliberately does NOT refuse on
+                // drift -- it returns a note so the launcher downgrades legacy mode
+                // honestly. So the thing to verify is that drift is DETECTED and NAMED.
+                // That holds across every legitimate engine change, and still fails
+                // loudly if the drift detector itself breaks.
                 string note = LegacyProfile.CheckEmbeddedArtefacts(pipelineHash, registryHash);
-                Check(note == null,
-                      "the artefacts this build embeds are the ones v1.7.2 shipped" +
-                      (note == null ? "" : "\n" + note));
+                bool pipelineMatches = string.Equals(pipelineHash,
+                    LegacyProfile.V172PipelineSha256, StringComparison.OrdinalIgnoreCase);
+                bool registryMatches = string.Equals(registryHash,
+                    LegacyProfile.V172RegistrySha256, StringComparison.OrdinalIgnoreCase);
+
+                if (pipelineMatches && registryMatches)
+                {
+                    Check(note == null,
+                          "artefacts equal v1.7.2's, and no drift is reported" +
+                          (note == null ? "" : "\n" + note));
+                }
+                else
+                {
+                    Check(note != null,
+                          "embedded artefacts DIFFER from v1.7.2's and the drift is DETECTED");
+                    Check(note == null || pipelineMatches || note.Contains(pipelineHash),
+                          "the drift note names the actual embedded pipeline hash");
+                    Check(note != null && note.Contains(LegacyProfile.V172ExeArchivePath),
+                          "the drift note points at the archived v1.7.2 binary for exact numbers");
+                    Console.WriteLine("      NOTE: embedded artefacts intentionally differ from v1.7.2's.");
+                    Console.WriteLine("      Route 4 reproduces the v1.7.2 ENVIRONMENT and COMMAND LINE");
+                    Console.WriteLine("      exactly; the engine carries subsequent fixes.");
+                }
             }
             else
             {
@@ -829,16 +866,57 @@ namespace IFQuantLauncher.LegacyCheck
 
     internal static class LegacyEquivalenceProgram
     {
+        /// Walk up from the executable and from the working directory looking for the
+        /// engine file that marks the repository root. Returns "." if not found, so the
+        /// caller still fails with a readable "source is readable at ..." message rather
+        /// than a null-reference.
+        private static string FindRepoRoot()
+        {
+            string[] starts =
+            {
+                AppDomain.CurrentDomain.BaseDirectory,
+                Environment.CurrentDirectory
+            };
+            foreach (string start in starts)
+            {
+                if (string.IsNullOrEmpty(start)) continue;
+                DirectoryInfo d = new DirectoryInfo(start);
+                for (int hop = 0; d != null && hop < 8; hop++, d = d.Parent)
+                {
+                    if (File.Exists(Path.Combine(d.FullName, "IF_Quant_Pipeline.groovy")))
+                        return d.FullName;
+                }
+            }
+            return ".";
+        }
+
         private static int Main(string[] args)
         {
             try
             {
-                string v172 = args.Length > 0 ? args[0] : "";
-                string v180 = args.Length > 1 ? args[1] : "";
+                // ZERO-ARGUMENT DEFAULTS, resolved from the repository.
+                //
+                // This harness previously required six positional paths, one of which
+                // (the v1.7.2 reference) had to be extracted from git history by hand
+                // because commit f7dbb02 overwrote launcher/IFQuantLauncher.cs with
+                // v1.8.0. A reader cloning this repository therefore could not reproduce
+                // the equivalence claim at all -- and an unreproducible claim in a
+                // repository is worth less than no claim.
+                //
+                // The v1.7.2 source is now committed at launcher/reference/, so running
+                // this with no arguments works from anywhere inside the checkout.
+                string root = FindRepoRoot();
+                string v172 = args.Length > 0 ? args[0]
+                    : Path.Combine(root, "launcher", "reference", "IFQuantLauncher-v1.7.2.cs");
+                string v180 = args.Length > 1 ? args[1]
+                    : Path.Combine(root, "launcher", "IFQuantLauncher.cs");
                 string probe = args.Length > 2 ? args[2] : "";
-                string pipeline = args.Length > 3 ? args[3] : "";
-                string registry = args.Length > 4 ? args[4] : "";
-                string routing = args.Length > 5 ? args[5] : "";
+                string pipeline = args.Length > 3 ? args[3]
+                    : Path.Combine(root, "IF_Quant_Pipeline.groovy");
+                string registry = args.Length > 4 ? args[4]
+                    : Path.Combine(root, "config", "lung_marker_registry.json");
+                string routing = args.Length > 5 ? args[5]
+                    : Path.Combine(root, "launcher", "IFQuantLauncher.Routing.cs");
                 return LegacyEquivalence.Run(v172, v180, probe, pipeline, registry, routing);
             }
             catch (Exception ex)
