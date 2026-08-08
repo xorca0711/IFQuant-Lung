@@ -54,21 +54,37 @@ those groups. The engine therefore distinguishes two provenances and labels
 every output accordingly.
 
 ```mermaid
-flowchart TD
-    A[Marker channel] --> B{Does a true negative<br/>population exist?}
-    B -->|"Yes — marker absent<br/>from control tissue"| C[Pool CONTROL animals only]
-    C --> D["Take in-tissue upper percentile<br/>(e.g. p99.99)"]
-    D --> E["Worst-of-both-controls,<br/>so neither animal alone<br/>sets a permissive cut"]
-    E --> F["FREEZE · IFQ_&lt;MARKER&gt;_THRESHOLD"]
-    F --> G["threshold_source =<br/><b>fixed_predeclared</b>"]
-    G --> H[Apply to held-out infected]
-    B -->|"No — constitutively<br/>expressed"| I["No calibration anchor exists"]
-    I --> J["Adaptive per-image Otsu"]
-    J --> K["threshold_source =<br/><b>adaptive_otsu_exploratory</b>"]
-    K --> L["Report as EXPLORATORY;<br/>never as a confirmatory result"]
-    H --> M{"Enrichment R = infected frac<br/>÷ control frac beyond cut"}
-    M -->|"R ≫ 1"| N[Marker discriminates]
-    M -->|"R ≈ 1"| O["Marker REJECTED —<br/>record in NEGATIVE_RESULTS.md"]
+flowchart TB
+    START(["Marker channel"]) --> Q0{"Is there a population<br/>where this marker should be<br/><b>absent</b>?"}
+
+    Q0 -->|"NO — constitutively expressed<br/>(AGER, T1α, ProSPC, KRT8)"| NOANCH["No calibration anchor exists.<br/>Nothing to be 'negative' against."]
+    NOANCH --> ADAPT["adaptive per-image Otsu<br/><code>threshold_source =<br/>adaptive_otsu_exploratory</code>"]
+    ADAPT --> EXPL["Label EXPLORATORY.<br/><b>Never report as a result.</b><br/>An adaptive cut moves WITH the data,<br/>so it cannot detect a shift."]
+
+    Q0 -->|"YES — absent from<br/>control tissue (KRT5)"| SPLIT
+
+    subgraph STEP1["① CONTROLS ONLY — infected data not yet opened"]
+        SPLIT["Pool uninfected animals"] --> PCT["in-tissue upper percentile<br/>p99.99 per animal"]
+        PCT --> WORST["<b>worst-of-both</b><br/>take the HIGHER value, so no single<br/>animal can set a permissive cut"]
+    end
+
+    WORST ==> FREEZE{{"FREEZE · write it down<br/>IFQ_KRT5_THRESHOLD = 300<br/><code>threshold_source =<br/>fixed_predeclared</code>"}}
+
+    FREEZE ==>|"the barrier:<br/>the cut can no longer<br/>respond to what follows"| STEP2
+
+    subgraph STEP2["② HELD-OUT INFECTED — measured with a cut that could not be tuned to it"]
+        APPLY["Apply the frozen cut"] --> R{"Enrichment<br/>R = infected fraction ÷ control fraction<br/>beyond the SAME cut"}
+        R -->|"R ≫ 1 across a RANGE of cuts"| GOOD["Marker discriminates"]
+        R -->|"R ≈ 1"| BAD["<b>REJECT the marker.</b><br/>Record in NEGATIVE_RESULTS.md<br/>so it is not re-derived"]
+    end
+
+    CIRC["<b>✗ THE CIRCULAR VERSION</b><br/>look at controls AND infected,<br/>pick the cut that separates them"] -.->|"cut now depends on<br/>the answer you wanted"| POISON["Result is unfalsifiable.<br/>It would 'separate the groups'<br/>even if they were identical."]
+
+    style FREEZE fill:#1b3a5c,color:#fff
+    style CIRC fill:#5c1b1b,color:#fff
+    style POISON fill:#5c1b1b,color:#fff
+    style BAD fill:#4a3a1b,color:#fff
+    style EXPL fill:#4a3a1b,color:#fff
 ```
 
 **Worked example, KRT5.** Uninfected in-tissue p99.99 = 283 (M4-2) and 255 (M6);
@@ -85,20 +101,62 @@ discriminator (R = 0.80–1.25 at every cut). See
 
 ## Statistical unit
 
+### What counts as a replicate
+
 ```mermaid
-flowchart TD
-    N["~2,000 nuclei"] --> F["10 fields"] --> S["1 section"] --> M["<b>1 mouse = 1 row</b>"]
-    M --> ST["Inferential statistics<br/>n = number of MICE"]
-    N -.->|"✗ pseudo-replication"| ST
+flowchart LR
+    subgraph ONE["everything below comes from ONE animal"]
+        direction TB
+        N["~15,400 nuclei/mm²<br/>× ~0.15 mm² tissue<br/>× 10 fields"] --> F["10 fields"]
+        F --> S["1 section"]
+    end
+    S ==> M["<b>1 mouse = 1 ROW</b><br/>fields pooled by area,<br/>not averaged as if independent"]
+    M ==> OK["✓ n = number of MICE"]
+    ONE -.->|"✗ n ≈ 20,000 cells"| WRONG["Pseudo-replication.<br/>Inflates confidence by ~√(cells per mouse),<br/>i.e. produces significance from<br/>a single animal."]
+    style OK fill:#2d4a2b,color:#fff
+    style WRONG fill:#5c1b1b,color:#fff
 ```
 
-Nuclei, fields, regions and sections within one animal are not independent
-biological replicates. `aggregate_to_mouse.py` enforces the roll-up and prints
-the distinct-animal count so it cannot be mistaken.
+Nuclei, fields, regions and sections within one animal are **not independent
+biological replicates** — they share its genotype, its infection, its section,
+its staining batch and its imaging session. `aggregate_to_mouse.py` enforces the
+roll-up and prints the distinct-animal count so the unit cannot be mistaken.
 
-**For the current dataset:** 4 mice, one per genotype × condition cell, so
-genotype is confounded with condition. **No statistics are possible from this
-batch** — the measurements describe four animals.
+### Why this dataset cannot support a comparison
+
+The problem is not only that n is small. It is that the design is **saturated**:
+every cell of the 2 × 2 holds exactly one animal, so *genotype* and *condition*
+cannot be separated from *animal identity*.
+
+```mermaid
+flowchart TB
+    subgraph GRID["genotype × condition — one animal per cell"]
+        direction LR
+        subgraph PR8["PR8 infected"]
+            direction TB
+            A["hom<br/><b>M2</b><br/>KRT5⁺ 14.11 %"]
+            B["het<br/><b>M4-1</b><br/>KRT5⁺ 11.98 %"]
+        end
+        subgraph UNINF["uninfected"]
+            direction TB
+            C["het<br/><b>M4-2</b><br/>KRT5⁺ 0.000 %"]
+            D["hom<br/><b>M6</b><br/>KRT5⁺ 0.003 %<br/><i>+ AGER staining failure</i>"]
+        end
+    end
+    GRID --> Q{"Is the 14.11 vs 11.98 difference<br/>genotype, or is it M2 vs M4-1?"}
+    Q --> ANS["<b>Unanswerable.</b> With one animal per cell<br/>the two explanations are the same thing."]
+    style ANS fill:#5c1b1b,color:#fff
+```
+
+**What the data does support:** the infected/uninfected contrast is near-binary
+(≈12–14 % against ≈0 %) and consistent in direction with T1α loss, so the
+*measurement* is behaving as expected. **What it does not support:** any claim
+about the IFN-γ genotype, which is the study question. That needs replicate
+animals per cell — the reference used **n = 15 per group**.
+
+This is a study-design constraint. No amount of additional fields, cells or
+software rigour changes it, and no analysis in this repository should be written
+as though it does.
 
 ## Active entry points
 
@@ -322,38 +380,39 @@ does not claim 3D cell-boundary reconstruction.
 
 ### Visualization-only channel enhancement
 
+Three consumers read the same projected channel. Only one may influence a
+number, and no arrow crosses between lanes.
+
 ```mermaid
-flowchart TD
-    A["Marker-specific projected channel<br/><i>original calibrated pixels</i>"]
+flowchart TB
+    A(["Marker-specific projected channel<br/><i>original calibrated pixels</i>"])
 
-    A ==>|"NEVER modified"| M["<b>MEASUREMENT BRANCH</b><br/>thresholds · masks · morphology<br/>final calls · run_summary.csv"]
+    A ==>|"① measured · NEVER modified"| M
+    A -->|"② duplicated"| D1
+    A -.->|"③ read-only, offline"| P0
 
-    A --> D1["<b>display copy</b> (duplicate)"]
+    M["<b>MEASUREMENT</b><br/>thresholds · masks · morphology<br/>final calls<br/>run_summary.csv"]
 
-    subgraph ENG["In-run preview · engine · IFQ_EXPORT_DISPLAY_CHANNELS"]
-        D1 --> E1["per-channel percentiles<br/>default p1.0–p99.8, gamma 1.0"]
+    subgraph ENG["② in-run preview · engine"]
+        direction TB
+        D1["display copy"] --> E1["per-channel percentiles<br/>p1.0–p99.8, gamma 1.0"]
         E1 --> E2["map to 8-bit · optional gamma"]
-        E2 --> E3["labelled channel PNGs +<br/>merged composite<br/><i>DISPLAY ONLY – NOT QUANTIFIED</i>"]
-        E3 --> E4{"visual-merge-only run?"}
-        E4 -->|yes| E5["stop: PNGs only<br/>no masks, CSV, manifest"]
-        E4 -->|no| M
+        E2 --> E3["channel PNGs + composite<br/><i>DISPLAY ONLY – NOT QUANTIFIED</i>"]
+        E3 --> E4["visual-merge-only mode stops here:<br/>no masks, CSV or manifest"]
     end
 
-    subgraph PAN["Figure generation · panels/ · offline, post-run"]
+    subgraph PAN["③ figure generation · panels/ · post-run"]
         direction TB
-        P0["reads the SAME .oir + the engine's exported masks"]
-        P0 --> P1{"which product?"}
-        P1 -->|"panels/MergePanels.java"| MP["<b>MERGE PANEL</b> — a photograph<br/>raw fluorescence, nothing deleted"]
-        P1 -->|"panels/qc/RenderPanels.java"| QC["<b>QC OVERLAY</b> — an analysis result<br/>outlines the engine's positive calls"]
-        MP --> W1["per-marker window:<br/>abs · rel · auto"]
-        W1 --> W2["floor = max(fraction of this image's<br/>in-tissue range, absFloor,<br/><b>airspace p99.9</b>)"]
-        W2 --> W3["ceiling = percentile of pixels<br/>ABOVE the floor"]
-        W3 --> W4["caption states the RESOLVED window<br/>+ panel_qc.csv"]
-        QC --> Q1["mask → fill (weight &lt; DAPI)<br/>→ outline drawn LAST"]
+        P0["reads the same .oir<br/>+ the engine's exported masks"] --> P1{"product"}
+        P1 -->|MergePanels| MP["<b>MERGE PANEL</b><br/>a photograph<br/><i>deletes nothing</i>"]
+        P1 -->|qc/RenderPanels| QC["<b>QC OVERLAY</b><br/>an analysis result<br/><i>outlines engine calls</i>"]
+        MP --> W1["window: abs · rel · auto"]
+        W1 --> W2["floor = max of<br/>· fraction of in-tissue range<br/>· absFloor<br/>· <b>airspace p99.9</b>"]
+        W2 --> W3["ceiling = percentile of<br/>pixels ABOVE the floor"]
+        QC --> Q1["fill at weight &lt; DAPI,<br/>outline drawn LAST"]
+        W3 --> W4["caption states the RESOLVED<br/>window · panel_qc.csv"]
         Q1 --> W4
     end
-
-    A -.->|"read-only"| P0
 
     style M fill:#1b3a5c,color:#fff
     style MP fill:#2d4a2b,color:#fff
