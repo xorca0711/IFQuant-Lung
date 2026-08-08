@@ -1,8 +1,93 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.7.2.exe` is a Windows Forms front end for
-`IF_Quant_Pipeline.groovy`. The executable embeds the exact Groovy pipeline and
-marker registry present at build time. It does not reimplement image analysis.
+`IFQuantLauncher-v1.8.0.exe` is a Windows Forms front end for the analysis
+pipeline. It embeds the exact Groovy engine, marker registry, QuPath tiling
+script and Python reconciliation script present at build time. **It does not
+reimplement image analysis.** Every number it produces comes from
+`IF_Quant_Pipeline.groovy`, which is frozen.
+
+## What changed in v1.8.0
+
+v1.7.2 assumed one kind of input: a folder of confocal/field images measured by
+Fiji. v1.8.0 makes the *kind of image* an explicit first choice, because the
+correct chain of tools differs per kind and choosing wrongly produces numbers
+that look fine and are not.
+
+The old behaviour did not go away — it is route 4, and it is verified equal to
+v1.7.2 by execution rather than by assertion (see **Legacy equivalence** below).
+
+## The four routes
+
+Route is the first thing selected, before any folder. Each route declares its
+own stage list, its own required tools, and its own hazard policy; the launcher
+refuses to start a run it cannot describe.
+
+| # | Route | Tools | Produces |
+|---|---|---|---|
+| 1 | **IF — confocal / field images** | Fiji only | `run_summary.csv` (+ `.xlsx`, `run_manifest.json`), one row per (image, region) |
+| 2 | **IF — slide scanner (`.vsi` whole slide)** | QuPath → Fiji → Python | tiles → per-tile measurements → `stats/slide_level_summary.csv` |
+| 3 | **H&E / brightfield** | — | **not available in this build** |
+| 4 | **Fiji-only legacy mode** | Fiji only | byte-for-byte the v1.7.2 environment and command line |
+
+**Route 2 is the important architectural point.** QuPath reads and tiles the
+slide; the *same* frozen Fiji engine measures the tiles; stage 3 reconciles
+tiles back to one slide. QuPath never measures anything. The handoff is
+file-based because the two applications ship incompatible Java versions
+(Chiaruttini et al. 2022, *Front Comput Sci* 3:780026).
+
+Route 2 also **hard-blocks** an omitted threshold. Routes 1 and 4 only flag it.
+The difference is deliberate: a field run with adaptive thresholds is a
+defensible exploratory measurement, whereas a slide run silently re-derives a
+threshold on each of ~370 tiles, which is not one measurement at all.
+
+### Route 3 is visible and deliberately unselectable
+
+It appears in the list, greyed, with a written reason. That is a design choice,
+not an oversight. Hiding it would invite someone to point route 1 at an H&E
+slide, and **that would not fail** — the fluorescence engine assumes signal is
+bright on a dark background, which is inverted for H&E. It would produce a
+complete, plausible, wrong `run_summary.csv`.
+
+Re-enabling is one line:
+
+```csharp
+// launcher/IFQuantLauncher.Routing.cs
+public static readonly bool BrightfieldRouteEnabled = false;   // this build
+```
+
+It is `static readonly`, not `const`, so the branches are *not* folded away at
+compile time and the disabled paths stay reachable and testable. Flipping it
+makes the route selectable but does not conjure an engine: `BuildStage2` still
+refuses with a named cause, so a half-finished re-enable fails at the Run
+button instead of producing an empty run.
+
+An unknown route id fails closed on every axis — no tools assumed present, an
+omitted threshold treated as a hard stop, nothing written.
+
+## Legacy equivalence (route 4)
+
+Route 4 exists so that analyses run before v1.8.0 stay reproducible. It is
+checked by a harness that *executes* both versions rather than asserting about
+them — `launcher/legacy_equivalence_report.txt`, 82 checks, 0 failures:
+
+- **Environment**: 7 fixture cases (defaults, all-non-default, each conditional
+  key, both at once, an Advanced overlay that shadows a base key, and values
+  containing spaces/quotes/non-ASCII) produce byte-identical variable sets.
+- **Process level**: the *child process* environment is compared, not just the
+  dictionary — inherited `IFQ_*` variables are stripped, and the child receives
+  no `IFQ_MIN_INCLUDED_NUCLEI`, which v1.7.2 never wrote.
+- **Drift guard**: the harness re-reads the real v1.7.2 source and confirms the
+  key set, the assignment *order*, the hardcoded values, and that v1.7.2
+  contains no QuPath/`.vsi`/brightfield reference. If someone edits the legacy
+  profile to match a changed v1.7.2, this fails.
+- **Advanced box**: 23 input lines, accepted/refused identically by both.
+
+To re-run it, the v1.7.2 source must be restored from git history — the working
+tree now holds v1.8.0:
+
+```bash
+git show 072f28b:launcher/IFQuantLauncher.cs > /tmp/IFQuantLauncher-v1.7.2.cs
+```
 
 ## Build
 
@@ -12,163 +97,44 @@ From the repository root:
 powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
 ```
 
-The build reads the assembly version and writes versioned artifacts directly
-to the repository root:
+Three source files are compiled into one self-contained `AnyCPU` executable
+with no external dependencies; the same file supports Windows ARM64 and x64 and
+needs no .NET SDK on the analysis system. The build **runs** `--self-test` and
+a UI smoke test, and discards the binary on failure. (v1.7.2 shipped a
+self-test and never ran it.)
 
-- `IFQuantLauncher-v1.7.2.exe`
-- `IFQuantLauncher-v1.7.2.sha256.txt`
+Artifacts are written to the repository root and are **not committed** —
+`.exe` and its `.sha256.txt` sidecar belong in GitHub Releases:
 
-The executable is compiled as `AnyCPU`. The same file supports Windows ARM64
-and Windows x64; no .NET SDK installation is required on the analysis system.
+- `IFQuantLauncher-v1.8.0.exe`
+- `IFQuantLauncher-v1.8.0.sha256.txt`
+
+The build prints the SHA-256 of the exe and of each embedded artefact, so a
+shipped binary can be traced to the exact engine it carries.
 
 ## Runtime requirements
 
-- Windows ARM64 or Windows x64 with .NET Framework 4.x;
-- a Fiji installation containing Bio-Formats and the plugins required by the
-  selected segmentation mode;
-- original images accessible through a local, mapped, or network folder.
+- Windows ARM64 or x64 with .NET Framework 4.x
+- Fiji with Bio-Formats and the plugins for the selected segmentation mode
+- QuPath 0.7+ for route 2 only
+- Python 3 for route 2 stage 3 only
+- images reachable through a local, mapped, or network folder
 
-## Launcher workflow
+## Panel assignment
 
-1. Select the folder containing the original confocal files.
-2. Select the Fiji executable or its installation folder.
-3. Select an output parent folder.
-4. Leave the staining panel on **AUTO** when the complete marker combination is
-   present in image or folder names. AUTO assigns every matching analytical
-   image independently, so multiple recognized panels and validated marker
-   subsets can share one batch. An explicit `samplesheet.csv` panel is used
-   first. Otherwise, the marker names select a built-in preset and its fixed
-   acquisition channel order. AUTO does not identify stains from fluorescence
-   colors, intensity, or image content. Any unknown image stops before Fiji
-   starts, and nonstandard channel order requires a validated custom panel.
-   The confirmation dialog lists each allocated panel and image count.
-5. For a first pilot, set **Image limit** to `1`; otherwise `0` means all
-   matching images. The recommended settings can normally remain unchanged.
-6. Click **Create visual merge panels** to generate the merged marker
-   presentation for the configured image scope, if desired. With **Image
-   limit** set to `0`, every matching image is processed. This separate
-   operation creates merged and supporting enhanced channel PNGs only; it does
-   not segment cells or create quantitative outputs.
-7. Click **Review and run analysis**, verify the plain-language run summary,
-   and click **OK**. The full run exports the same enhanced per-channel and
-   merged views for every analyzed image in addition to quantitative results.
+Leave the staining panel on **AUTO** when the complete marker combination is
+present in image or folder names. AUTO assigns every matching analytical image
+independently, so multiple recognized panels and validated marker subsets can
+share one batch. An explicit `samplesheet.csv` panel is used first; otherwise
+the marker names select a built-in preset and its fixed acquisition channel
+order.
 
-The **First-time help** button explains every required choice. Script-oriented
-settings and custom panel files are hidden under **Show advanced study
-options**; new users should leave that section closed. **Restore recommended
-settings** safely resets processing choices without changing the experiment's
-folders or staining panel.
+AUTO does **not** identify stains from fluorescence colours, intensity, or
+image content. Any unknown image stops the run before Fiji starts, and a
+nonstandard channel order requires a validated custom panel. The confirmation
+dialog lists each allocated panel and its image count.
 
-All compartment-dependent cell markers use the same safe asymmetry. In an
-ambiguous/unassigned field, strict localization-correct marker evidence can be
-retained as an exploratory context-unresolved positive, but absence remains
-indeterminate. A negative requires an independently assigned compatible ROI,
-and a known incompatible ROI remains indeterminate. Context-unresolved
-positives cannot authorize compound lineage/state classes. For panel E, AcTub
-additionally requires a uniquely nucleus-owned, high-intensity, locally dense,
-2–150 µm² apical ciliary component; regional ciliary area remains the primary
-20x measurement.
+## Aggregation is not optional
 
-For `ALI1`, `ALI2`, and `ALI3`, channel 4 is the primary experimental endpoint
-(p63, AcTub, or MUC5AC respectively). ALI tdTOM uses a more permissive
-candidate-pixel threshold to tolerate reporter/acquisition variation, but its
-final cell call still requires the same morphology, ownership, and context
-gates.
-
-The launcher opens maximized by default. Its contents are DPI-aware and
-scrollable so the **Run Fiji analysis**, readiness status, and log remain
-reachable on displays using enlarged Windows scaling.
-
-## Progress and completion states
-
-The progress area distinguishes these states:
-
-- **Starting**: Fiji and the embedded pipeline are being prepared.
-- **Running**: the current image number and filename are shown. The Groovy
-  pipeline emits `[IFQ_PROGRESS] current/total` events for the launcher.
-- **Finalizing**: images are finished and summary files are being verified.
-- **Complete**: Fiji exited successfully, `run_manifest.json` says `complete`,
-  and both `run_summary.csv` and `run_summary.xlsx` exist. Microscope
-  `Map_A##.oir` acquisitions may be listed as deliberate non-analysis skips
-  without making the run fail.
-- **Stopped with a problem**: Fiji terminated or required outputs are missing;
-  inspect the visible log and `run_manifest.json`.
-- **Cancelled**: the user terminated Fiji. Partial files are diagnostic only
-  and must not be aggregated.
-
-For the visual-merge-only operation, the same progress area reports
-preparation, the current source image, and PNG verification. Success requires
-at least one visual merge panel, Fiji exit code 0, and no unexpected output
-file types. No summary button is enabled because this mode intentionally
-creates no `run_summary.csv` or workbook.
-
-The launcher creates a new timestamped folder for every run. It will never set
-`IFQ_ALLOW_NONEMPTY_OUTPUT=true`, and it always sets
-`IFQ_MORPHOLOGY_PRIMARY=true`.
-
-The adjacent **Create visual merge panels** button sets the protected internal
-`IFQ_DISPLAY_PREVIEW_ONLY=true` mode and forces enhanced display export. It
-uses the current panel selection, Z-stack handling, filename filter, recursive
-setting, and image limit. An image limit of `0` processes all matching images.
-It stops after PNG creation and writes no masks, cell tables, summary
-CSV/Excel, parameter JSON, Z-profile table, analysis manifest, or
-`launcher_run.txt`.
-
-The launcher sets `IFQ_EXPORT_DISPLAY_CHANNELS=true` for full analyses. Every
-analyzed image therefore receives enhanced per-channel and merged companion
-views in its result folder. Display percentiles and optional gamma remain
-reproducible expert/panel settings; all enhanced files are labeled
-`DISPLAY ONLY - NOT QUANTIFIED` and never feed back into quantification.
-
-The completed folder contains the normal Fiji pipeline outputs plus
-`launcher_run.txt`, which records:
-
-- launcher version;
-- Fiji executable and exit code;
-- pipeline and registry SHA-256 hashes;
-- the exact `IFQ_*` environment used for the run.
-
-`run_summary.csv` remains the primary machine-readable region-level summary.
-`run_summary.xlsx` opens on **Image Positive Counts**, with one aligned row per
-image/region showing total cells plus every marker's final-positive cell count
-and fraction of that image/region's total cells. **Run Summary** retains the
-complete audit fields, and **Skipped Inputs** records deliberate exclusions. A
-run is shown as complete only when Fiji exits successfully, the manifest
-status is `complete`, and both summary files exist.
-
-For a full AUTO run, `auto_panel_assignments.csv` records the exact
-`relative_path` to panel allocation used for every image. The manifest and
-summary retain the panel on every image/region row. Marker columns are aligned
-across panels; cells are blank for markers absent from that image's allocated
-panel rather than being interpreted as negative. Statistical aggregation must
-remain stratified by compatible panel and endpoint.
-
-The validated ALI mapping subsets are:
-
-- `ALI1_MAP`: C1 DAPI, C2 SCGB3A2-488, C3 tdTOM;
-- `ALI23_MAP`: C1 DAPI, C2 KRT5-488, C3 tdTOM.
-
-These presets are selected for known 4× mapping acquisitions whose folder name
-still mentions a non-acquired 647 marker. The absent p63, AcTub, or MUC5AC
-channel is not analyzed and cannot generate a negative call.
-
-When an installation folder is selected, the launcher detects the Windows
-architecture and chooses Fiji in this order:
-
-- ARM64: `fiji-windows-arm64.exe`, then x64-compatible fallbacks;
-- x64: `fiji-windows-x64.exe` or `ImageJ-win64.exe`, then generic fallbacks.
-
-Selecting the executable directly always takes precedence. Fiji plugins that
-ship native libraries must still match the chosen Fiji/Java architecture.
-
-## Safety and interpretation
-
-- Existing `IFQ_*` values inherited from Windows are cleared before each run,
-  preventing stale thresholds or directories from leaking into a new analysis.
-- Core directory, panel, projection, and decision-authority variables cannot be
-  overridden from the Advanced box.
-- Cancelling retains partial outputs for diagnosis; those outputs must not be
-  aggregated.
-- The launcher is research software. Marker thresholds and morphology gates
-  still require control-derived validation as described in
-  [`../WORKFLOW.md`](../WORKFLOW.md).
+Every route produces per-image or per-tile rows. Those are **not** the
+statistical unit. Run `aggregate_to_mouse.py` before any test; n = mice.

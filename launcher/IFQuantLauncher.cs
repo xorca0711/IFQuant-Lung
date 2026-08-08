@@ -13,14 +13,15 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using IFQuantLauncher.Routing;
 
 [assembly: AssemblyTitle("IF Quant Launcher")]
 [assembly: AssemblyDescription("Windows launcher for the Fiji morphology-primary IF quantification pipeline")]
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.7.2.0")]
-[assembly: AssemblyFileVersion("1.7.2.0")]
+[assembly: AssemblyVersion("1.8.0.0")]
+[assembly: AssemblyFileVersion("1.8.0.0")]
 
 namespace IFQuantLauncher
 {
@@ -36,13 +37,55 @@ namespace IFQuantLauncher
                 return;
             }
 
+            // Builds the whole window, forces layout, walks every route and
+            // exits without showing anything. It exists because the v1.8.0
+            // layout inserts four new rows into the v1.7.2 table and because
+            // route 3's non-selectability is a UI behaviour: neither can be
+            // checked by a pure-logic test. Exit 0 = the interface constructs
+            // and the route veto holds.
+            if (args != null && args.Length > 0 &&
+                string.Equals(args[0], "--ui-smoke", StringComparison.OrdinalIgnoreCase))
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                try
+                {
+                    using (MainForm form = new MainForm())
+                    {
+                        // The form must really be SHOWN. Control.Visible reports
+                        // EFFECTIVE visibility, so on a form that was never shown
+                        // every child reads false and every visibility assertion
+                        // passes vacuously in one direction and fails in the
+                        // other. Minimised + fully transparent + off the taskbar
+                        // is shown without being seen.
+                        form.WindowState = FormWindowState.Minimized;
+                        form.ShowInTaskbar = false;
+                        form.Opacity = 0;
+                        form.Show();
+                        Application.DoEvents();
+                        Environment.ExitCode = form.UiSmokeTest();
+                        form.Hide();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("UI SMOKE FAILED: " + ex);
+                    Environment.ExitCode = 60;
+                }
+                return;
+            }
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
         }
     }
 
-    internal sealed class MainForm : Form
+    // partial: the route selector, the threshold grid, the fail-closed gate
+    // wiring and the route-2 stage runner live in MainForm.Routes.partial.cs.
+    // Everything in THIS half is v1.7.2 behaviour and is deliberately left as
+    // it was, so the field/confocal path stays compatible.
+    internal sealed partial class MainForm : Form
     {
         private TextBox inputBox;
         private TextBox fijiBox;
@@ -144,6 +187,7 @@ namespace IFQuantLauncher
             ApplyFirstRunDefaults();
             UpdateAdvancedVisibility();
             UpdatePanelHelp();
+            FinishRouteInitialisation();
 
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
@@ -176,13 +220,16 @@ namespace IFQuantLauncher
             root.AutoScroll = true;
             root.Padding = new Padding(12);
             root.ColumnCount = 1;
-            root.RowCount = 7;
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            // v1.7.2 had 7 rows. v1.8.0 reserves rows 1, 3, 5 and 7 for the
+            // route selector, the whole-slide tools, the threshold grid and the
+            // live gate summary, all built by MainForm.Routes.partial.cs.
+            //   0 intro           1 route            2 required locations
+            //   3 slide tools     4 analysis         5 measurement
+            //   6 advanced        7 gate summary     8 actions
+            //   9 progress       10 log
+            root.RowCount = 11;
+            for (int reserved = 0; reserved < 10; reserved++)
+                root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             Controls.Add(root);
 
@@ -202,7 +249,7 @@ namespace IFQuantLauncher
             pathsGroup.Dock = DockStyle.Top;
             pathsGroup.AutoSize = true;
             pathsGroup.Padding = new Padding(10);
-            root.Controls.Add(pathsGroup, 0, 1);
+            root.Controls.Add(pathsGroup, 0, 2);
 
             TableLayoutPanel paths = new TableLayoutPanel();
             paths.Dock = DockStyle.Top;
@@ -237,7 +284,7 @@ namespace IFQuantLauncher
             runGroup.Dock = DockStyle.Top;
             runGroup.AutoSize = true;
             runGroup.Padding = new Padding(10);
-            root.Controls.Add(runGroup, 0, 2);
+            root.Controls.Add(runGroup, 0, 4);
 
             TableLayoutPanel settings = new TableLayoutPanel();
             settings.Dock = DockStyle.Top;
@@ -368,7 +415,7 @@ namespace IFQuantLauncher
             advancedContainer.RowCount = 2;
             advancedContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             advancedContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.Controls.Add(advancedContainer, 0, 3);
+            root.Controls.Add(advancedContainer, 0, 6);
 
             showAdvancedBox = new CheckBox();
             showAdvancedBox.Text = "Show advanced study options";
@@ -421,7 +468,7 @@ namespace IFQuantLauncher
             actions.AutoSize = true;
             actions.FlowDirection = FlowDirection.LeftToRight;
             actions.Padding = new Padding(0, 8, 0, 6);
-            root.Controls.Add(actions, 0, 4);
+            root.Controls.Add(actions, 0, 8);
 
             Button helpButton = new Button();
             helpButton.Text = "First-time help";
@@ -487,7 +534,7 @@ namespace IFQuantLauncher
             progressPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             progressPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             progressPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.Controls.Add(progressPanel, 0, 5);
+            root.Controls.Add(progressPanel, 0, 9);
 
             statusLabel = new Label();
             statusLabel.Text = "Ready — choose the three required locations and staining panel";
@@ -520,7 +567,11 @@ namespace IFQuantLauncher
             logBox.WordWrap = false;
             logBox.Font = new Font("Consolas", 9F);
             logBox.MinimumSize = new Size(0, 140);
-            root.Controls.Add(logBox, 0, 6);
+            root.Controls.Add(logBox, 0, 10);
+
+            // v1.8.0: the route selector and everything that depends on it.
+            // Built last, so every v1.7.2 control it reads already exists.
+            BuildRouteInterface(root);
         }
 
         private TextBox AddPathRow(TableLayoutPanel table, int row, string label, bool folder, bool executable)
@@ -1066,10 +1117,59 @@ namespace IFQuantLauncher
                     fijiBox.Text = defaultFiji;
             }
             if (string.IsNullOrWhiteSpace(outputBaseBox.Text))
+                outputBaseBox.Text = ChooseDefaultOutputBase();
+        }
+
+        /// First-run default for the output folder.
+        ///
+        /// v1.7.2 hardcoded MyDocuments\IFQuantResults, which is on the system
+        /// drive. One confocal batch is several GB and a whole-slide route 2 run
+        /// is tens of GB, so that default fills C: after a handful of runs and
+        /// the failure surfaces as a half-written run, not as a clear message.
+        ///
+        /// So: prefer a fixed drive that can actually hold the output, and
+        /// prefer one already being used for results. This only ever fills an
+        /// empty box, and the value is visible in the UI before anything starts,
+        /// so it proposes a location rather than imposing one.
+        private static string ChooseDefaultOutputBase()
+        {
+            string fallback = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "IFQuantResults");
+
+            try
             {
-                outputBaseBox.Text = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                    "IFQuantResults");
+                DriveInfo best = null;
+                DriveInfo bestExisting = null;
+
+                foreach (DriveInfo d in DriveInfo.GetDrives())
+                {
+                    // Fixed only: a removable drive may be absent next session,
+                    // and a network drive's free space is not ours to spend.
+                    if (!d.IsReady || d.DriveType != DriveType.Fixed) continue;
+
+                    if (best == null || d.AvailableFreeSpace > best.AvailableFreeSpace)
+                        best = d;
+
+                    if (Directory.Exists(Path.Combine(d.RootDirectory.FullName, "IFQ_Runs")) &&
+                        (bestExisting == null ||
+                         d.AvailableFreeSpace > bestExisting.AvailableFreeSpace))
+                        bestExisting = d;
+                }
+
+                // An existing IFQ_Runs is a deliberate choice by whoever set this
+                // machine up; honour it ahead of raw free space.
+                DriveInfo chosen = bestExisting != null ? bestExisting : best;
+                if (chosen == null) return fallback;
+
+                return Path.Combine(chosen.RootDirectory.FullName, "IFQ_Runs");
+            }
+            catch (Exception)
+            {
+                // Drive enumeration can throw on an unusual mount. A default is
+                // a convenience, never a correctness requirement, so degrade to
+                // the v1.7.2 location rather than failing to open the window.
+                return fallback;
             }
         }
 
@@ -1101,10 +1201,22 @@ namespace IFQuantLauncher
                 return;
             }
 
-            if (!(previewOnly ? ConfirmDisplayPreview(config) : ConfirmRun(config)))
+            if (!(previewOnly ? ConfirmDisplayPreview(config) : ConfirmRouteRun(config)))
                 return;
 
             Directory.CreateDirectory(config.OutputDirectory);
+            try
+            {
+                // H4, for real this time: the folder now exists, so check what
+                // is in it rather than what was in it a moment ago.
+                PreStartAssertions.AssertOutputDirectoryEmpty(config.OutputDirectory);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Cannot start",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             SaveSettings();
             logBox.Clear();
             lastRunDirectory = config.OutputDirectory;
@@ -1116,10 +1228,16 @@ namespace IFQuantLauncher
             SetProgressPreparing();
 
             AppendLog("IF Quant Launcher " + Assembly.GetExecutingAssembly().GetName().Version);
+            AppendLog("Route:  " + RouteCatalog.Describe(config.Request.Route).DisplayName);
             AppendLog("Windows architecture: " + GetWindowsArchitecture());
             AppendLog("Input:  " + config.InputDirectory);
             AppendLog("Output: " + config.OutputDirectory);
             AppendLog("Fiji:   " + config.FijiExecutable);
+            AppendLog("Start:  " + config.InvocationDescription);
+            if (config.Gate.Exploratory)
+                AppendLog(
+                    "EXPLORATORY: at least one analysis channel has no fixed threshold and " +
+                    "will use per-region adaptive Otsu. Nothing from this run may be aggregated.");
             AppendLog(config.PanelWasAutoDetected
                 ? "Panels: " + string.Join(
                     ", ",
@@ -1134,20 +1252,33 @@ namespace IFQuantLauncher
             AppendLog(previewOnly
                 ? "Mode:   visual merge panels only; configured image scope; no quantification"
                 : "Mode:   full analysis with a visual merge panel for every analyzed image");
+            // Route 2 is a chain of processes, not one; it has its own runner.
+            if (config.Request.Route == ImageRoute.IfSlideScanner && !previewOnly)
+            {
+                StartSlideScannerRun(config);
+                return;
+            }
+
             AppendLog("Starting Fiji...");
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = config.FijiExecutable;
-            psi.Arguments = "--headless --console --run " + QuoteArgument(config.ScriptPath);
+            // v1.7.2 built this string inline. It is now built by
+            // FijiCommand/LegacyProfile so the legacy equivalence harness can
+            // execute the same code the launcher runs.
+            psi.Arguments = config.FijiArguments;
             psi.WorkingDirectory = config.RuntimeDirectory;
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
             psi.RedirectStandardOutput = true;
             psi.RedirectStandardError = true;
 
-            ClearIfqEnvironment(psi.EnvironmentVariables);
-            foreach (KeyValuePair<string, string> item in config.Environment)
-                psi.EnvironmentVariables[item.Key] = item.Value;
+            // v1.7.2 stripped and applied inline here. It is now one call into
+            // EnvironmentApply so the legacy equivalence harness can execute the
+            // very same code path -- and it takes the SEAL, not the dictionary,
+            // so this line cannot start a process whose environment was never
+            // re-checked against the record.
+            EnvironmentApply.Apply(psi, config.Stage2Seal);
 
             Process process = new Process();
             process.StartInfo = psi;
@@ -1241,9 +1372,24 @@ namespace IFQuantLauncher
 
             string panelKey = config.Environment["IFQ_PANEL"];
             string panelDescription;
-            if (!PanelDescriptions.TryGetValue(panelKey, out panelDescription))
-                panelDescription = "Custom validated panel: " + panelKey;
-            return panelDescription;
+            if (PanelDescriptions.TryGetValue(panelKey, out panelDescription))
+                return panelDescription;
+
+            // A custom panel now has a real channel list rather than being an
+            // opaque key, so the review says what it will actually measure.
+            PanelDef custom = ResolveSelectedPanel();
+            if (custom != null && custom.IsCustom)
+            {
+                StringBuilder text = new StringBuilder();
+                text.Append(panelKey).Append(" — ").Append(custom.SourceDescription)
+                    .Append("\r\n");
+                foreach (ChannelDef channel in custom.Channels)
+                    text.Append("  channel ").Append(channel.Idx).Append(": ")
+                        .Append(channel.Marker).Append(" (").Append(channel.Role)
+                        .Append(channel.AreaMarker ? ", AREA ENDPOINT" : "").Append(")\r\n");
+                return text.ToString().TrimEnd();
+            }
+            return "Custom validated panel: " + panelKey;
         }
 
         private bool ConfirmDisplayPreview(RunConfiguration config)
@@ -1269,59 +1415,41 @@ namespace IFQuantLauncher
             return result == DialogResult.OK;
         }
 
-        private bool ConfirmRun(RunConfiguration config)
-        {
-            string panelKey = config.Environment["IFQ_PANEL"];
-            string limit = config.Environment["IFQ_MAX_IMAGES"] == "0"
-                ? "all matching images"
-                : "up to " + config.Environment["IFQ_MAX_IMAGES"] + " image(s)";
-            bool includesPanelT = string.Equals(panelKey, "T", StringComparison.OrdinalIgnoreCase) ||
-                (config.AutoPanelCounts != null && config.AutoPanelCounts.ContainsKey("T"));
-            string warning = includesPanelT
-                ? "\r\n\r\nWARNING: Panel T is a plumbing test and its positivity results are not biologically meaningful."
-                : "";
-            bool includesPanelE = string.Equals(panelKey, "E", StringComparison.OrdinalIgnoreCase) ||
-                (config.AutoPanelCounts != null && config.AutoPanelCounts.ContainsKey("E"));
-            bool includesPanelALI2 = string.Equals(panelKey, "ALI2", StringComparison.OrdinalIgnoreCase) ||
-                (config.AutoPanelCounts != null && config.AutoPanelCounts.ContainsKey("ALI2"));
-            if ((includesPanelE || includesPanelALI2) &&
-                !string.Equals(config.Environment["IFQ_WHOLE_FIELD_COMPARTMENT"], "airway", StringComparison.OrdinalIgnoreCase))
-            {
-                warning +=
-                    "\r\n\r\nAcTub context note: without an independently assigned airway ROI, " +
-                    "only nuclei meeting the strict bright, locally dense, size-bounded apical ciliary-component rule can be exploratory positive. " +
-                    "All other AcTub calls remain indeterminate, not negative.";
-            }
-
-            DialogResult result = MessageBox.Show(
-                this,
-                "Please confirm this analysis:\r\n\r\n" +
-                "Input:\r\n" + config.InputDirectory + "\r\n\r\n" +
-                "Marker-channel allocation:\r\n" +
-                DescribePanelAllocation(config) + "\r\n\r\n" +
-                (config.PanelWasAutoDetected
-                    ? "Panel selection: automatically detected from " +
-                      config.PanelDetectionImageCount + " matching analytical image path(s).\r\n" +
-                      "Each image will use its allocated panel independently. " +
-                      "Confirm that every stated acquisition channel order is correct.\r\n\r\n"
-                    : "Panel selection: manual/custom. Confirm the acquisition channel order.\r\n\r\n") +
-                "Nucleus detection: " + config.Environment["IFQ_SEGMENTER"] + "\r\n" +
-                "Z-stack handling: " + config.Environment["IFQ_PROJECTION"] + "\r\n" +
-                "Enhanced marker views: exported for every analyzed image (display-only; not quantified)\r\n" +
-                "Files: " + limit + "\r\n\r\n" +
-                "New result folder:\r\n" + config.OutputDirectory + warning +
-                "\r\n\r\nStart Fiji analysis now?",
-                "Review analysis settings",
-                MessageBoxButtons.OKCancel,
-                MessageBoxIcon.Question);
-            return result == DialogResult.OK;
-        }
+        // v1.7.2's ConfirmRun was replaced by ConfirmRouteRun/BuildReviewText in
+        // MainForm.Routes.partial.cs, which shows the route, the per-channel
+        // threshold source and the gate findings, and swaps the plain OK/Cancel
+        // box for a typed-phrase dialog when the run will be flagged.
 
         private RunConfiguration ReadAndValidateConfiguration(bool previewOnly)
         {
-            string input = inputBox.Text.Trim();
-            if (!Directory.Exists(input))
-                throw new InvalidOperationException("The original image folder does not exist:\r\n" + input);
+            // Route 3 can only be reached here by a caller that bypassed both
+            // the picker veto and the gate. Refuse before touching anything.
+            if (SelectedRoute == ImageRoute.HeBrightfield &&
+                !LauncherBuild.BrightfieldRouteEnabled)
+                throw new InvalidOperationException(
+                    RouteCatalog.Describe(ImageRoute.HeBrightfield).DisplayName + "\r\n\r\n" +
+                    LauncherBuild.BrightfieldDisabledReason);
+
+            // Route 2 measures the tiles stage 1 writes, not a folder the user
+            // picked; the "original image folder" row is hidden for it.
+            string input;
+            if (SelectedRoute == ImageRoute.IfSlideScanner)
+            {
+                string stage1Root = wsiOutputBox.Text.Trim();
+                if (stage1Root.Length == 0)
+                    throw new InvalidOperationException(
+                        "Choose the stage 1 output root. The tiles measured in stage 2 are read " +
+                        "from its tiles\\ subfolder.");
+                input = Path.Combine(Path.GetFullPath(stage1Root), "tiles");
+                Directory.CreateDirectory(input);
+            }
+            else
+            {
+                input = inputBox.Text.Trim();
+                if (!Directory.Exists(input))
+                    throw new InvalidOperationException(
+                        "The original image folder does not exist:\r\n" + input);
+            }
 
             string fiji = ResolveFijiExecutable(fijiBox.Text.Trim());
             if (fiji == null)
@@ -1354,6 +1482,13 @@ namespace IFQuantLauncher
             PanelDetectionResult autoDetection = null;
             if (panelWasAutoDetected)
             {
+                if (SelectedRoute == ImageRoute.IfSlideScanner)
+                    throw new InvalidOperationException(
+                        "AUTO panel detection is not offered on the whole-slide route. Stage 1 " +
+                        "writes the panel into every tile's samplesheet row before Fiji sees a " +
+                        "tile, and 'panel' is a grouping key downstream, so two panels for one " +
+                        "animal would silently split it into two rows. Select the panel " +
+                        "explicitly.");
                 if (panelConfig.Length > 0)
                     throw new InvalidOperationException(
                         "AUTO detects built-in panels only. Choose the custom panel key explicitly when a custom panel JSON is selected.");
@@ -1378,50 +1513,105 @@ namespace IFQuantLauncher
                     "Panel S2 contains YAP nuclear-to-cytoplasmic analysis and requires either Z-stack handling = single " +
                     "or layer_aware, which assigns YAP a single-plane policy. Confirm the intended plane in the saved Z profile.");
 
-            Dictionary<string, string> advanced = ParseAdvancedEnvironment(advancedBox.Text);
             RuntimePaths runtime = RuntimeBundle.EnsureExtracted();
             string autoPanelMapPath = autoDetection == null ? null :
                 WriteAutoPanelMap(autoDetection, runtime.RuntimeDirectory);
+
+            // ---------------------------------------------------------
+            // v1.8.0: the fail-closed gate runs BEFORE anything is created
+            // on disk, so a blocked run leaves no trace at all.
+            // ---------------------------------------------------------
+            ImageRoute route = SelectedRoute;
+            RunRequest request = ReadRunRequest();
+            request.Route = route;
+            request.PanelKey = panelKey;          // AUTO already resolved above
+            request.PreviewOnly = previewOnly;
+            GateResult gate = EvaluateGate(request);
+            if (gate.Blocked)
+            {
+                List<string> reasons = new List<string>();
+                foreach (GateFinding finding in gate.OfSeverity(Severity.Block))
+                    reasons.Add("• " + finding.Message);
+                throw new InvalidOperationException(
+                    "This run was refused before anything was created:\r\n\r\n" +
+                    string.Join("\r\n\r\n", reasons.ToArray()));
+            }
 
             string runStem = SanitizeFileName(runNameBox.Text.Trim());
             if (runStem.Length == 0)
                 runStem = "IFQ_run";
             if (previewOnly)
                 runStem += "_visual_merge_panels";
+            // H5: a flagged run says so in its folder name, which survives the
+            // folder being moved, renamed in a lab notebook, or zipped up.
+            foreach (string stamp in gate.FolderStamps())
+                runStem += stamp;
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             string outputDirectory = MakeUniqueDirectory(Path.Combine(outputBase, runStem + "_" + timestamp));
 
-            Dictionary<string, string> env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            env["IFQ_INPUT_DIR"] = Path.GetFullPath(input);
-            env["IFQ_OUTPUT_DIR"] = outputDirectory;
-            env["IFQ_PANEL"] = panelKey;
-            env["IFQ_MARKER_REGISTRY"] = runtime.RegistryPath;
-            if (!string.IsNullOrWhiteSpace(autoPanelMapPath))
-                env["IFQ_PANEL_MAP_PATH"] = autoPanelMapPath;
-            if (panelConfig.Length > 0)
-                env["IFQ_PANEL_CONFIG"] = Path.GetFullPath(panelConfig);
-            env["IFQ_RECURSIVE"] = recursiveBox.Checked ? "true" : "false";
-            env["IFQ_INCLUDE_REGEX"] = includeRegex;
-            env["IFQ_MAX_IMAGES"] =
-                Decimal.ToInt32(maxImagesBox.Value).ToString(CultureInfo.InvariantCulture);
-            env["IFQ_SEGMENTER"] = ChoiceKey(segmenterBox);
-            env["IFQ_PROJECTION"] = ChoiceKey(projectionBox);
-            env["IFQ_SINGLE_PLANE"] = Decimal.ToInt32(singlePlaneBox.Value).ToString(CultureInfo.InvariantCulture);
-            // Both operations export a disposable visualization branch. In a
-            // full run, quantification still consumes only the untouched
-            // calibrated projections; the enhanced 8-bit PNGs are never fed
-            // back into segmentation, thresholds, masks, or marker calls.
-            env["IFQ_EXPORT_DISPLAY_CHANNELS"] =
-                DisplayChannelExportSetting(previewOnly);
-            env["IFQ_DISPLAY_PREVIEW_ONLY"] = previewOnly ? "true" : "false";
-            env["IFQ_TISSUE_MODE"] = ChoiceKey(tissueModeBox);
-            env["IFQ_COMPARTMENT_MODE"] = ChoiceKey(compartmentModeBox);
-            env["IFQ_WHOLE_FIELD_COMPARTMENT"] = ChoiceKey(wholeCompartmentBox);
-            env["IFQ_ALLOW_NONEMPTY_OUTPUT"] = "false";
-            env["IFQ_MORPHOLOGY_PRIMARY"] = "true";
+            Dictionary<string, string> env;
+            string invocationDescription;
+            string fijiArguments;
+            string legacyNote = null;
 
-            foreach (KeyValuePair<string, string> item in advanced)
-                env[item.Key] = item.Value;
+            if (route == ImageRoute.LegacyFiji172)
+            {
+                // ---- ROUTE 4 -------------------------------------------------
+                // The nineteen v1.7.2 keys, from the transcription in
+                // LegacyProfile, followed by the v1.7.2 Advanced overlay applied
+                // exactly as v1.7.2 applied it. Nothing else. In particular no
+                // IFQ_MIN_INCLUDED_NUCLEI and no IFQ_*_THRESHOLD, because
+                // v1.7.2 wrote neither and both change the numbers.
+                env = LegacyProfile.BuildEnvironment(
+                    input, outputDirectory, panelKey, runtime.RegistryPath,
+                    autoPanelMapPath, panelConfig.Length > 0 ? panelConfig : null,
+                    recursiveBox.Checked, includeRegex,
+                    Decimal.ToInt32(maxImagesBox.Value), ChoiceKey(segmenterBox),
+                    ChoiceKey(projectionBox), Decimal.ToInt32(singlePlaneBox.Value),
+                    previewOnly, ChoiceKey(tissueModeBox), ChoiceKey(compartmentModeBox),
+                    ChoiceKey(wholeCompartmentBox));
+                foreach (KeyValuePair<string, string> item in
+                         ParseAdvancedEnvironment(advancedBox.Text))
+                    env[item.Key] = item.Value;
+
+                fijiArguments = LegacyProfile.CommandLine(runtime.ScriptPath);
+                invocationDescription =
+                    "launcher_exe (v1.7.2): " + Path.GetFileName(fiji) + " " + fijiArguments;
+                legacyNote = LegacyProfile.CheckEmbeddedArtefacts(
+                    runtime.PipelineSha256, runtime.RegistrySha256);
+                if (legacyNote == null)
+                    legacyNote =
+                        "Environment, command line, embedded pipeline and embedded registry all " +
+                        "match v" + LegacyProfile.FrozenVersion + ".";
+            }
+            else
+            {
+                // ---- ROUTES 1 and 2 -----------------------------------------
+                // PanelForRequest, not ResolveSelectedPanel: the gate, this
+                // builder and the launch seal must all be looking at the same
+                // channel list, and after AUTO is resolved the combo no longer
+                // holds the key this request will run under.
+                env = RunEnvironment.BuildStage2(
+                    request, PanelForRequest(request), engineThresholdMarkers,
+                    runtime.RegistryPath, outputDirectory, input, autoPanelMapPath,
+                    previewOnly);
+
+                if (request.Invocation == FijiInvocation.BundledJvm)
+                {
+                    ToolInventory tools = ResolveTools(request);
+                    fijiArguments = FijiCommand.BundledJvmArguments(
+                        tools.FijiDirectory, tools.Ij1PatcherJar, runtime.ScriptPath, "8g");
+                    fiji = tools.JavaExecutable;
+                    invocationDescription =
+                        "bundled_jvm: " + fiji + " " + fijiArguments;
+                }
+                else
+                {
+                    fijiArguments = FijiCommand.LauncherExeArguments(runtime.ScriptPath);
+                    invocationDescription =
+                        "launcher_exe: " + Path.GetFileName(fiji) + " " + fijiArguments;
+                }
+            }
 
             RunConfiguration config = new RunConfiguration();
             config.InputDirectory = Path.GetFullPath(input);
@@ -1436,6 +1626,81 @@ namespace IFQuantLauncher
             config.AutoPanelCounts = autoDetection == null ? null : autoDetection.PanelCounts;
             config.AutoPanelMapPath = autoPanelMapPath;
             config.PreviewOnly = previewOnly;
+            config.Request = request;
+            config.Gate = gate;
+            config.FijiArguments = fijiArguments;
+            config.InvocationDescription = invocationDescription;
+            config.LegacyArtefactNote = legacyNote;
+
+            if (route == ImageRoute.IfSlideScanner)
+            {
+                ToolInventory tools = ResolveTools(request);
+                config.QuPathExecutable = tools.QuPathExecutable;
+                config.PythonExecutable = tools.PythonExecutable;
+                config.Stage1ScriptPath = runtime.Stage1ScriptPath;
+                config.Stage3ScriptPath = runtime.Stage3ScriptPath;
+                config.Stage1Environment = RunEnvironment.BuildStage1(request, panelKey);
+            }
+
+            // -------------------------------------------------------------
+            // THE LAUNCH CHOKE POINT.
+            //
+            // Every process this run will start gets a seal here, and nothing
+            // downstream can start a process without one: EnvironmentApply.Apply
+            // takes a RunSeal and RunSeal's constructor is private. The seal
+            // re-derives, from the FINAL merged environment, which channels are
+            // genuinely frozen, and throws if that disagrees with the record
+            // this run is about to write.
+            //
+            // H1/H3/H4 moved inside it, so they too are checked against the
+            // environment that will actually be handed to the process rather
+            // than against the UI that produced it. The Advanced key set is
+            // passed for one rule: on route 4 IFQ_MIN_INCLUDED_NUCLEI is legal
+            // in the environment if and only if the operator typed it, because
+            // v1.7.2's Advanced box was the only way to set the nuclei floor.
+            // -------------------------------------------------------------
+            List<string> advancedKeys =
+                new List<string>(ParseAdvancedEnvironment(advancedBox.Text).Keys);
+            PanelDef sealPanel = PanelForRequest(request);
+
+            SealInput stage2 = new SealInput();
+            stage2.Stage = LaunchStage.Stage2Fiji;
+            stage2.Request = request;
+            stage2.Panel = sealPanel;
+            stage2.EngineThresholdMarkers = engineThresholdMarkers;
+            stage2.Gate = gate;
+            stage2.Environment = env;
+            stage2.OutputDirectory = outputDirectory;
+            stage2.AdvancedKeys = advancedKeys;
+            config.Stage2Seal = RunSeal.Issue(stage2);
+
+            if (route == ImageRoute.IfSlideScanner)
+            {
+                SealInput stage1 = new SealInput();
+                stage1.Stage = LaunchStage.Stage1QuPath;
+                stage1.Request = request;
+                stage1.Panel = sealPanel;
+                stage1.EngineThresholdMarkers = engineThresholdMarkers;
+                stage1.Gate = gate;
+                stage1.Environment = config.Stage1Environment;
+                stage1.OutputDirectory = null;   // stage 1 writes its own root
+                stage1.AdvancedKeys = advancedKeys;
+                config.Stage1Seal = RunSeal.Issue(stage1);
+
+                // Stage 3 reads no IFQ_* at all. It still gets a seal, because
+                // "this stage needs no environment" is a claim worth checking
+                // once rather than a reason to skip the choke point.
+                SealInput stage3 = new SealInput();
+                stage3.Stage = LaunchStage.Stage3Python;
+                stage3.Request = request;
+                stage3.Panel = sealPanel;
+                stage3.EngineThresholdMarkers = engineThresholdMarkers;
+                stage3.Gate = gate;
+                stage3.Environment = new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
+                stage3.AdvancedKeys = advancedKeys;
+                config.Stage3Seal = RunSeal.Issue(stage3);
+            }
             return config;
         }
 
@@ -1474,17 +1739,13 @@ namespace IFQuantLauncher
             return values;
         }
 
-        private static void ClearIfqEnvironment(StringDictionary environment)
-        {
-            List<string> stale = new List<string>();
-            foreach (string key in environment.Keys)
-            {
-                if (key != null && key.StartsWith("IFQ_", StringComparison.OrdinalIgnoreCase))
-                    stale.Add(key);
-            }
-            foreach (string key in stale)
-                environment.Remove(key);
-        }
+        // v1.7.2's ClearIfqEnvironment used to be re-exported here as a private
+        // shim so the route-2 stage runner could strip-and-copy inline. That was
+        // a second way into a child process's environment, which is precisely
+        // the shape of both defect rounds, so the shim is gone: everything now
+        // goes through EnvironmentApply.Apply, which takes a RunSeal. The
+        // stripping itself still lives in EnvironmentApply.ClearIfq, which the
+        // legacy equivalence harness executes directly.
 
         private void HandleFijiLine(string line, bool isError)
         {
@@ -1828,32 +2089,62 @@ namespace IFQuantLauncher
             logBox.AppendText((message ?? "") + Environment.NewLine);
         }
 
+        /// <summary>
+        /// H5. Three independent carriers of "this run is exploratory", because
+        /// any single one can be lost: the folder NAME (stamped in
+        /// ReadAndValidateConfiguration), launcher_run.txt, and a marker file.
+        ///
+        /// The marker file is written HERE, after the engine has exited, and
+        /// never before it starts. H4 means the engine aborts on a non-empty
+        /// IFQ_OUTPUT_DIR, so a marker file written up front would break every
+        /// exploratory run it was meant to label.
+        /// </summary>
         private static void WriteLauncherRecord(RunConfiguration config, int exitCode, string status)
         {
             try
             {
-                StringBuilder record = new StringBuilder();
-                record.AppendLine("IF Quant Launcher run record");
-                record.AppendLine("launcher_version=" + Assembly.GetExecutingAssembly().GetName().Version);
-                record.AppendLine("recorded_at=" + DateTimeOffset.Now.ToString("o", CultureInfo.InvariantCulture));
-                record.AppendLine("windows_architecture=" + GetWindowsArchitecture());
-                record.AppendLine("fiji_executable=" + config.FijiExecutable);
-                record.AppendLine("fiji_exit_code=" + exitCode);
-                record.AppendLine("manifest_status=" + status);
-                record.AppendLine("pipeline_sha256=" + ComputeSha256(config.ScriptPath));
-                record.AppendLine("registry_sha256=" + ComputeSha256(config.RegistryPath));
-                record.AppendLine();
-                record.AppendLine("[environment]");
-                foreach (KeyValuePair<string, string> item in config.Environment.OrderBy(delegate(KeyValuePair<string, string> pair) { return pair.Key; }))
-                    record.AppendLine(item.Key + "=" + item.Value);
+                string record = RunRecord.Build(
+                    config.Request, config.Gate, config.Environment,
+                    Convert.ToString(Assembly.GetExecutingAssembly().GetName().Version,
+                                     CultureInfo.InvariantCulture),
+                    GetWindowsArchitecture(), config.FijiExecutable,
+                    config.InvocationDescription, exitCode, status,
+                    ComputeSha256(config.ScriptPath), ComputeSha256(config.RegistryPath),
+                    config.LegacyArtefactNote);
+                if (config.Stage1Environment != null)
+                {
+                    StringBuilder stage1 = new StringBuilder(record);
+                    stage1.AppendLine();
+                    stage1.AppendLine("[stage1_environment]");
+                    foreach (KeyValuePair<string, string> item in
+                             config.Stage1Environment.OrderBy(
+                                 delegate(KeyValuePair<string, string> pair) { return pair.Key; }))
+                        stage1.AppendLine(item.Key + "=" + item.Value);
+                    record = stage1.ToString();
+                }
                 File.WriteAllText(
                     Path.Combine(config.OutputDirectory, "launcher_run.txt"),
-                    record.ToString(),
+                    record,
                     new UTF8Encoding(false));
             }
             catch
             {
                 // The Fiji outputs remain authoritative if this convenience record cannot be written.
+            }
+
+            try
+            {
+                if (config.Gate != null && config.Gate.Exploratory &&
+                    Directory.Exists(config.OutputDirectory))
+                    File.WriteAllText(
+                        Path.Combine(config.OutputDirectory,
+                                     FailClosedGate.ExploratoryMarkerFileName),
+                        RunRecord.ExploratoryMarkerText(config.Request, config.Gate),
+                        new UTF8Encoding(false));
+            }
+            catch
+            {
+                // The folder-name stamp and launcher_run.txt still carry it.
             }
         }
 
@@ -2142,6 +2433,33 @@ namespace IFQuantLauncher
         public string AutoPanelMapPath;
         public bool PreviewOnly;
         public Dictionary<string, string> Environment;
+
+        // ---- v1.8.0 ----
+        public RunRequest Request;
+        public GateResult Gate;
+        /// The exact argument string handed to the engine. For route 4 this is
+        /// LegacyProfile.CommandLine and nothing else.
+        public string FijiArguments;
+        public string InvocationDescription;
+        public string LegacyArtefactNote;
+        // Route 2 only
+        public string QuPathExecutable;
+        public string PythonExecutable;
+        public string Stage1ScriptPath;
+        public string Stage3ScriptPath;
+        public Dictionary<string, string> Stage1Environment;
+
+        // ---- the launch choke point ----
+        //
+        // One seal per process this run will start. A seal is the ONLY thing
+        // EnvironmentApply.Apply accepts, and RunSeal's constructor is private,
+        // so a stage that has no seal here simply cannot be started. That is
+        // deliberate: the previous two defect rounds were both a caller reaching
+        // the child environment without passing validation, and adding a field
+        // to this class is not enough to do that any more.
+        public RunSeal Stage1Seal;
+        public RunSeal Stage2Seal;
+        public RunSeal Stage3Seal;
     }
 
     internal sealed class RuntimePaths
@@ -2149,12 +2467,22 @@ namespace IFQuantLauncher
         public string RuntimeDirectory;
         public string ScriptPath;
         public string RegistryPath;
+        public string Stage1ScriptPath;
+        public string Stage3ScriptPath;
+        public string PipelineSha256;
+        public string RegistrySha256;
     }
 
     internal static class RuntimeBundle
     {
         private const string ScriptResource = "IFQuant.IF_Quant_Pipeline.groovy";
         private const string RegistryResource = "IFQuant.lung_marker_registry.json";
+        // v1.8.0: route 2 needs stage 1 and stage 3 on an analysis machine that
+        // has no repository checkout, for the same reason v1.7.2 embedded the
+        // pipeline. Both are optional at run time so a Fiji-only build of this
+        // launcher still starts.
+        private const string Stage1Resource = "IFQuant.qupath_wsi_tile_export.groovy";
+        private const string Stage3Resource = "IFQuant.aggregate_tiles_to_slide.py";
 
         public static RuntimePaths EnsureExtracted()
         {
@@ -2172,11 +2500,737 @@ namespace IFQuantLauncher
             ExtractResource(ScriptResource, script);
             ExtractResource(RegistryResource, registry);
 
+            string stage1 = Path.Combine(root, "qupath_wsi_tile_export.groovy");
+            string stage3 = Path.Combine(root, "aggregate_tiles_to_slide.py");
+            if (!TryExtractResource(Stage1Resource, stage1)) stage1 = null;
+            if (!TryExtractResource(Stage3Resource, stage3)) stage3 = null;
+
             RuntimePaths paths = new RuntimePaths();
             paths.RuntimeDirectory = root;
             paths.ScriptPath = script;
             paths.RegistryPath = registry;
+            paths.Stage1ScriptPath = stage1;
+            paths.Stage3ScriptPath = stage3;
+            paths.PipelineSha256 = ComputeSha256(script);
+            paths.RegistrySha256 = ComputeSha256(registry);
             return paths;
+        }
+
+        /// <summary>
+        /// The v1.8.0 half of --self-test. Exit codes 30-45 so they never
+        /// collide with v1.7.2's 10-28. Every check here is a property the
+        /// build must not ship without; build.ps1 runs this and discards the
+        /// binary on a non-zero result.
+        /// </summary>
+        private static int RouteSelfTest(string pipelineText, RuntimePaths paths)
+        {
+            // 30 R3 is present in the catalog, and its availability, its reason
+            //    and its stage list all agree with LauncherBuild's flag.
+            //
+            //    This check used to open with `if (BrightfieldRouteEnabled)
+            //    return 30;`, which meant flipping the one line advertised to
+            //    the user as "re-enabling it is one line" made --self-test
+            //    return 30 and build.ps1 delete the binary. Every assertion here
+            //    is now written against the flag's VALUE, so the claim is true.
+            RouteSpec he = RouteCatalog.Describe(ImageRoute.HeBrightfield);
+            if (he.Available != LauncherBuild.BrightfieldRouteEnabled) return 30;
+            if (!he.Available && string.IsNullOrEmpty(he.UnavailableReason)) return 30;
+            if (he.Available && !string.IsNullOrEmpty(he.UnavailableReason)) return 30;
+            if (he.Available && he.Stages.Count == 0) return 30;
+            if (!he.Available && he.Stages.Count != 0) return 30;
+            if (RouteCatalog.All().Length != 4) return 30;
+
+            // 31 R3 fails closed in the environment builder: no partial
+            //    environment, no run, a named reason.
+            RunRequest heRequest = new RunRequest();
+            heRequest.Route = ImageRoute.HeBrightfield;
+            heRequest.PanelKey = "LEFT";
+            heRequest.WsiInput = Path.GetTempPath();
+            heRequest.WsiOutput = Path.GetTempPath();
+            bool refused = false;
+            try
+            {
+                RunEnvironment.BuildStage2(
+                    heRequest, null, null, "r", "o", Path.GetTempPath(), null, false);
+            }
+            catch (InvalidOperationException) { refused = true; }
+            catch (NotImplementedException) { refused = true; }
+            if (!refused) return 31;
+
+            // 31b R3 also fails closed in the STAGE 1 builder, which is the one
+            //     a brightfield wiring reaches first: route 3 is the only route
+            //     besides 2 that declares RequiresQuPath. It had no guard at all
+            //     and returned a complete seven-variable stage-1 environment.
+            bool stage1Refused = false;
+            try { RunEnvironment.BuildStage1(heRequest, "LEFT"); }
+            catch (InvalidOperationException) { stage1Refused = true; }
+            catch (NotImplementedException) { stage1Refused = true; }
+            if (!stage1Refused) return 31;
+
+            // 32 R3 is blocked by the gate even with everything else perfect,
+            //    and while the flag is off the block names the route itself
+            //    rather than happening to trip over some other rule.
+            GateResult heGate = FailClosedGate.Evaluate(heRequest, null, null, null);
+            if (!heGate.Blocked || heGate.NeedsConfirmation) return 32;
+            if (!LauncherBuild.BrightfieldRouteEnabled && !HasCode(heGate, "ROUTE_NOT_AVAILABLE"))
+                return 32;
+
+            // 33 the panel table and the threshold whitelist really parse.
+            Dictionary<string, PanelDef> panels = PanelRegistry.ParseFromPipeline(pipelineText);
+            HashSet<string> thresholdMarkers =
+                PanelRegistry.ParseThresholdMarkerTokens(pipelineText);
+            PanelDef left;
+            if (!panels.TryGetValue("LEFT", out left)) return 33;
+            if (left.AnalysisChannels.Count != 3) return 33;
+            if (!thresholdMarkers.Contains("KRT5") || !thresholdMarkers.Contains("T1A")) return 33;
+            // The engine declares LEFT's podoplanin channel as "T1A", so the
+            // variable is IFQ_T1A_THRESHOLD. IFQ_PDPN_THRESHOLD does nothing.
+            bool sawT1A = false;
+            foreach (ChannelDef channel in left.AnalysisChannels)
+                if (channel.ThresholdEnvName == "IFQ_T1A_THRESHOLD") sawT1A = true;
+            if (!sawT1A) return 33;
+
+            // 34 H1: no panel is a block, panel T is a block until unlocked.
+            RunRequest bare = new RunRequest();
+            bare.Route = ImageRoute.IfConfocal;
+            bare.OutputBase = "out";
+            if (!FailClosedGate.Evaluate(bare, null, thresholdMarkers, null).Blocked) return 34;
+            bare.PanelKey = "T";
+            if (!FailClosedGate.Evaluate(bare, null, thresholdMarkers, null).Blocked) return 34;
+            bare.PilotPanelsUnlocked = true;
+            GateResult pilot = FailClosedGate.Evaluate(bare, null, thresholdMarkers, null);
+            if (pilot.Blocked || !pilot.RequiredPhrases.Contains(FailClosedGate.PilotPhrase)) return 34;
+
+            // 35 H2: a blank threshold is exploratory on R1 and blocked on R2.
+            RunRequest r1 = NewLeftRequest(ImageRoute.IfConfocal);
+            GateResult g1 = FailClosedGate.Evaluate(r1, left, thresholdMarkers, null);
+            if (g1.Blocked || !g1.Exploratory ||
+                !g1.RequiredPhrases.Contains(FailClosedGate.ExploratoryPhrase) ||
+                g1.FolderStamps().Count == 0) return 35;
+            RunRequest r2 = NewLeftRequest(ImageRoute.IfSlideScanner);
+            r2.WsiInput = "in"; r2.WsiOutput = "out";
+            if (!FailClosedGate.Evaluate(r2, left, thresholdMarkers, null).Blocked) return 35;
+
+            // 36 H2: every channel frozen clears the flag; a bad value blocks.
+            RunRequest frozen = NewLeftRequest(ImageRoute.IfConfocal);
+            foreach (ChannelDef channel in left.AnalysisChannels)
+                frozen.Thresholds[channel.Token] = "500";
+            GateResult frozenGate = FailClosedGate.Evaluate(frozen, left, thresholdMarkers, null);
+            if (frozenGate.Blocked || frozenGate.Exploratory ||
+                frozenGate.NeedsConfirmation) return 36;
+            frozen.Thresholds[left.AnalysisChannels[0].Token] = "0";
+            if (!FailClosedGate.Evaluate(frozen, left, thresholdMarkers, null).Blocked) return 36;
+
+            // 37 H3: the floor is written explicitly, and a non-zero value is
+            //    refused on a panel with an area endpoint.
+            Dictionary<string, string> env = RunEnvironment.BuildStage2(
+                NewLeftRequest(ImageRoute.IfConfocal), left, thresholdMarkers,
+                "registry", "out", Path.GetTempPath(), null, false);
+            if (!env.ContainsKey("IFQ_MIN_INCLUDED_NUCLEI")) return 37;
+            if (env["IFQ_MIN_INCLUDED_NUCLEI"] != "0") return 37;
+            RunRequest floored = NewLeftRequest(ImageRoute.IfConfocal);
+            floored.MinIncludedNuclei = 3;
+            if (left.AreaMarkers.Count > 0 &&
+                !FailClosedGate.Evaluate(floored, left, thresholdMarkers, null).Blocked)
+                return 37;
+
+            // 38 H4: IFQ_ALLOW_NONEMPTY_OUTPUT is hardcoded false and a
+            //    non-empty output folder throws before any process starts.
+            if (env["IFQ_ALLOW_NONEMPTY_OUTPUT"] != "false") return 38;
+            string probe = Path.Combine(
+                Path.GetTempPath(), "IFQuantLauncher-h4-" + Guid.NewGuid().ToString("N"));
+            bool h4Threw = false;
+            try
+            {
+                Directory.CreateDirectory(probe);
+                File.WriteAllText(Path.Combine(probe, "stale.csv"), "x");
+                try { PreStartAssertions.AssertOutputDirectoryEmpty(probe); }
+                catch (InvalidOperationException) { h4Threw = true; }
+            }
+            finally
+            {
+                if (Directory.Exists(probe)) Directory.Delete(probe, true);
+            }
+            if (!h4Threw) return 38;
+
+            // 39 H5: an exploratory run is marked in the folder name, in the
+            //    record, and in the marker file.
+            string record = RunRecord.Build(
+                r1, g1, env, "1.8.0.0", "X64", "fiji.exe", "launcher_exe", 0, "complete",
+                "a", "b", null);
+            if (record.IndexOf("run_classification=EXPLORATORY_DO_NOT_AGGREGATE",
+                               StringComparison.Ordinal) < 0) return 39;
+            if (record.IndexOf("adaptive_otsu_exploratory", StringComparison.Ordinal) < 0) return 39;
+            if (RunRecord.ExploratoryMarkerText(r1, g1)
+                    .IndexOf("DO NOT AGGREGATE", StringComparison.Ordinal) < 0) return 39;
+
+            // 40 route 4 reproduces the recorded v1.7.2 fixture exactly.
+            if (LegacyProfile.Fingerprint(LegacyProfile.Fixture()) != V172FixtureFingerprint)
+                return 40;
+            Dictionary<string, string> legacy = LegacyProfile.Fixture();
+            if (legacy.Count != 17) return 40;            // 19 keys, 2 conditional
+            if (legacy.ContainsKey("IFQ_MIN_INCLUDED_NUCLEI")) return 40;
+            foreach (string key in legacy.Keys)
+                if (key.EndsWith("_THRESHOLD", StringComparison.Ordinal)) return 40;
+            if (LegacyProfile.CommandLine("S") != "--headless --console --run \"S\"") return 40;
+
+            // 41 route 4 refuses to be built by the route 1/2 builder.
+            RunRequest legacyRequest = NewLeftRequest(ImageRoute.LegacyFiji172);
+            bool legacyRefused = false;
+            try
+            {
+                RunEnvironment.BuildStage2(
+                    legacyRequest, left, thresholdMarkers, "r", "o", Path.GetTempPath(),
+                    null, false);
+            }
+            catch (InvalidOperationException) { legacyRefused = true; }
+            if (!legacyRefused) return 41;
+
+            // 42 the advanced box can no longer hide a typo or a no-op.
+            RunRequest typo = NewLeftRequest(ImageRoute.IfConfocal);
+            typo.AdvancedText = "IFQ_KRT_5_THRESHOLD=400";
+            if (!FailClosedGate.Evaluate(typo, left, thresholdMarkers, null).Blocked) return 42;
+            typo.AdvancedText = "IFQ_MIN_INCLUDED_NUCLEI=5";
+            if (!FailClosedGate.Evaluate(typo, left, thresholdMarkers, null).Blocked) return 42;
+            typo.AdvancedText = "IFQ_RING_EXPAND_UM=";
+            if (!FailClosedGate.Evaluate(typo, left, thresholdMarkers, null).Blocked) return 42;
+
+            // 43 the whole-slide stage scripts really were embedded.
+            if (paths.Stage1ScriptPath == null || !File.Exists(paths.Stage1ScriptPath)) return 43;
+            if (paths.Stage3ScriptPath == null || !File.Exists(paths.Stage3ScriptPath)) return 43;
+            string stage1Text = File.ReadAllText(paths.Stage1ScriptPath, Encoding.UTF8);
+            if (stage1Text.IndexOf("IFQ_WSI_INPUT", StringComparison.Ordinal) < 0) return 43;
+
+            // ---------------------------------------------------------------
+            // 44 H2 CANNOT BE BYPASSED BY A PANEL THE LAUNCHER CANNOT RESOLVE.
+            //    v1.8.0.0 guarded the whole H2 block on `panel != null`, so a
+            //    custom panel key + a custom panel JSON + confirmatory tier +
+            //    zero thresholds went GREEN and recorded THRESHOLDS_FROZEN.
+            // ---------------------------------------------------------------
+            RunRequest unresolved = NewLeftRequest(ImageRoute.IfConfocal);
+            unresolved.PanelKey = "MYCUSTOM";
+            unresolved.PanelConfigJson = @"C:\fixture\custom_panel.json";
+            unresolved.Tier = RunTier.Confirmatory;
+            if (!FailClosedGate.Evaluate(unresolved, null, thresholdMarkers, null).Blocked)
+                return 44;
+
+            unresolved.Route = ImageRoute.IfSlideScanner;
+            unresolved.Tier = RunTier.Exploratory;
+            unresolved.WsiInput = "in";
+            unresolved.WsiOutput = "out";
+            if (!FailClosedGate.Evaluate(unresolved, null, thresholdMarkers, null).Blocked)
+                return 44;
+
+            unresolved.Route = ImageRoute.IfConfocal;
+            GateResult unresolvedGate =
+                FailClosedGate.Evaluate(unresolved, null, thresholdMarkers, null);
+            if (unresolvedGate.Blocked) return 44;
+            if (!unresolvedGate.Exploratory) return 44;
+            if (!unresolvedGate.RequiredPhrases.Contains(FailClosedGate.ExploratoryPhrase))
+                return 44;
+            if (!unresolvedGate.FolderStamps().Contains(FailClosedGate.ExploratoryStamp))
+                return 44;
+            string unresolvedRecord = RunRecord.Build(
+                unresolved, unresolvedGate, env, "1.8.0.0", "X64", "fiji.exe", "launcher_exe",
+                0, "complete", "a", "b", null);
+            if (unresolvedRecord.IndexOf("run_classification=EXPLORATORY_DO_NOT_AGGREGATE",
+                                         StringComparison.Ordinal) < 0) return 44;
+
+            // A custom panel that DOES parse gets a real channel list, so it is
+            // supported rather than merely blocked.
+            string customJson =
+                "{\"panels\":{\"MYCUSTOM\":{\"label\":\"probe\",\"channels\":[" +
+                "{\"idx\":1,\"marker\":\"DAPI\",\"role\":\"nuclear\"}," +
+                "{\"idx\":2,\"marker\":\"KRT5\",\"role\":\"cyto\",\"areaMarker\":true}]}}}";
+            Dictionary<string, string> defaultRoles = MarkerRoleDefaults.ParseFromRegistry(
+                File.ReadAllText(paths.RegistryPath, Encoding.UTF8));
+            CustomPanelParse customParse = CustomPanelRegistry.Parse(
+                customJson, defaultRoles, new List<string>(panels.Keys), left.ChannelsAreThresholdable);
+            if (!customParse.Ok) return 44;
+            PanelDef custom;
+            if (!customParse.Panels.TryGetValue("MYCUSTOM", out custom)) return 44;
+            if (custom.AnalysisChannels.Count != 1) return 44;
+            if (custom.AreaMarkers.Count != 1) return 44;
+            if (custom.AnalysisChannels[0].ThresholdEnvName != "IFQ_KRT5_THRESHOLD") return 44;
+            RunRequest customRequest = NewLeftRequest(ImageRoute.IfConfocal);
+            customRequest.PanelKey = "MYCUSTOM";
+            customRequest.PanelConfigJson = @"C:\fixture\custom_panel.json";
+            GateResult customBlank =
+                FailClosedGate.Evaluate(customRequest, custom, thresholdMarkers, null);
+            if (customBlank.Blocked || !customBlank.Exploratory) return 44;
+            customRequest.Thresholds[custom.AnalysisChannels[0].Token] = "480";
+            GateResult customFrozen =
+                FailClosedGate.Evaluate(customRequest, custom, thresholdMarkers, null);
+            if (customFrozen.Blocked || customFrozen.Exploratory ||
+                customFrozen.NeedsConfirmation) return 44;
+            // A channel of the selected panel is always freezable, custom or
+            // not (IF_Quant_Pipeline.groovy:873-882), so the variable must
+            // actually be emitted.
+            Dictionary<string, string> customEnv = RunEnvironment.BuildStage2(
+                customRequest, custom, thresholdMarkers, "reg", "out", Path.GetTempPath(),
+                null, false);
+            if (!customEnv.ContainsKey("IFQ_KRT5_THRESHOLD")) return 44;
+            if (customEnv["IFQ_PANEL"] != "MYCUSTOM") return 44;
+            // Malformed input is a block, never a guess.
+            if (CustomPanelRegistry.Parse("{ not json", defaultRoles, null, true).Ok) return 44;
+            if (CustomPanelRegistry.Parse("{\"panels\":{}}", defaultRoles, null, true).Ok) return 44;
+            if (CustomPanelRegistry.Parse(
+                    "{\"panels\":{\"X\":{\"channels\":[{\"idx\":1,\"marker\":\"NOT_A_MARKER\"}]}}}",
+                    defaultRoles, null, true).Ok) return 44;
+
+            // ---------------------------------------------------------------
+            // 45 ROUTE 4 DOES NOT CALL ITSELF FROZEN.
+            //    It writes no IFQ_*_THRESHOLD by construction, so every channel
+            //    is adaptive unless the v1.7.2 Advanced box froze it. v1.8.0.0
+            //    skipped H2 on route 4 and emitted THRESHOLDS_FROZEN.
+            // ---------------------------------------------------------------
+            RunRequest legacyBlank = NewLeftRequest(ImageRoute.LegacyFiji172);
+            GateResult legacyBlankGate =
+                FailClosedGate.Evaluate(legacyBlank, left, thresholdMarkers, null);
+            if (legacyBlankGate.Blocked || !legacyBlankGate.Exploratory) return 45;
+            if (!legacyBlankGate.FolderStamps().Contains(FailClosedGate.ExploratoryStamp))
+                return 45;
+            string legacyRecord = RunRecord.Build(
+                legacyBlank, legacyBlankGate, LegacyProfile.Fixture(), "1.8.0.0", "X64",
+                "fiji.exe", "launcher_exe", 0, "complete", "a", "b", null);
+            if (legacyRecord.IndexOf("run_classification=EXPLORATORY_DO_NOT_AGGREGATE",
+                                     StringComparison.Ordinal) < 0) return 45;
+            if (legacyRecord.IndexOf("thresholds_frozen=false", StringComparison.Ordinal) < 0)
+                return 45;
+
+            // Freezing every channel through the Advanced box, the only place
+            // route 4 has, must clear the flag.
+            RunRequest legacyFrozen = NewLeftRequest(ImageRoute.LegacyFiji172);
+            StringBuilder legacyAdvanced = new StringBuilder();
+            foreach (ChannelDef channel in left.AnalysisChannels)
+                legacyAdvanced.AppendLine(channel.ThresholdEnvName + "=500");
+            legacyFrozen.AdvancedText = legacyAdvanced.ToString();
+            GateResult legacyFrozenGate =
+                FailClosedGate.Evaluate(legacyFrozen, left, thresholdMarkers, null);
+            if (legacyFrozenGate.Blocked || legacyFrozenGate.Exploratory) return 45;
+            string legacyFrozenRecord = RunRecord.Build(
+                legacyFrozen, legacyFrozenGate, LegacyProfile.Fixture(), "1.8.0.0", "X64",
+                "fiji.exe", "launcher_exe", 0, "complete", "a", "b", null);
+            if (legacyFrozenRecord.IndexOf("run_classification=THRESHOLDS_FROZEN",
+                                           StringComparison.Ordinal) < 0) return 45;
+
+            // ---------------------------------------------------------------
+            // 46 ROUTE 4 ACCEPTS EXACTLY WHAT v1.7.2 ACCEPTED IN ADVANCED.
+            //    v1.7.2's rule: KEY=VALUE, ^IFQ_[A-Z0-9_]+$, non-empty value,
+            //    not one of ITS nineteen protected keys. Nothing else.
+            // ---------------------------------------------------------------
+            RunRequest legacyAdv = NewLeftRequest(ImageRoute.LegacyFiji172);
+            string[] v172Accepts = new string[]
+            {
+                "IFQ_MIN_INCLUDED_NUCLEI=3",      // the v1.7.2 nuclei floor
+                "IFQ_TOTALLY_UNKNOWN_KEY=1",      // v1.7.2 checked shape only
+                "IFQ_WSI_HALO_PX=64",             // a stage 1 name on a Fiji route
+                "IFQ_PDPN_THRESHOLD=400",         // a marker LEFT does not have
+                "IFQ_WSI_PANEL=LEFT"              // v1.8.0-owned, v1.7.2 was not
+            };
+            foreach (string line in v172Accepts)
+            {
+                legacyAdv.AdvancedText = line;
+                if (FailClosedGate.Evaluate(legacyAdv, left, thresholdMarkers, null).Blocked)
+                    return 46;
+            }
+            // ...and still refuses exactly what v1.7.2 refused.
+            string[] v172Refuses = new string[]
+            {
+                "no equals sign here",            // v1.7.2: must use KEY=VALUE
+                "NOT_AN_IFQ_KEY=1",               // v1.7.2: invalid IFQ key
+                "IFQ_RING_EXPAND_UM=",            // v1.7.2: empty value
+                "IFQ_PANEL=T",                    // v1.7.2 protected key
+                "IFQ_ALLOW_NONEMPTY_OUTPUT=true"  // v1.7.2 protected key
+            };
+            foreach (string line in v172Refuses)
+            {
+                legacyAdv.AdvancedText = line;
+                if (!FailClosedGate.Evaluate(legacyAdv, left, thresholdMarkers, null).Blocked)
+                    return 46;
+            }
+            // The floor typed into Advanced reaches the process on route 4,
+            // exactly as it did in v1.7.2, and is named in the run record.
+            legacyAdv.AdvancedText = "IFQ_MIN_INCLUDED_NUCLEI=3";
+            GateResult legacyFloorGate =
+                FailClosedGate.Evaluate(legacyAdv, left, thresholdMarkers, null);
+            if (legacyFloorGate.Blocked) return 46;
+            if (RunRecord.Build(legacyAdv, legacyFloorGate, LegacyProfile.Fixture(), "1.8.0.0",
+                                "X64", "f", "i", 0, "complete", "a", "b", null)
+                    .IndexOf("legacy_min_included_nuclei=3", StringComparison.Ordinal) < 0)
+                return 46;
+            Dictionary<string, string> legacyFloorEnv = LegacyProfile.Fixture();
+            legacyFloorEnv["IFQ_MIN_INCLUDED_NUCLEI"] = "3";
+            try
+            {
+                PreStartAssertions.AssertStage2Environment(
+                    legacyFloorEnv, null, ImageRoute.LegacyFiji172,
+                    new string[] { "IFQ_MIN_INCLUDED_NUCLEI" });
+            }
+            catch (InvalidOperationException) { return 46; }
+            // But the LAUNCHER writing it by itself is still refused.
+            bool launcherWroteFloor = false;
+            try
+            {
+                PreStartAssertions.AssertStage2Environment(
+                    legacyFloorEnv, null, ImageRoute.LegacyFiji172, new string[0]);
+            }
+            catch (InvalidOperationException) { launcherWroteFloor = true; }
+            if (!launcherWroteFloor) return 46;
+
+            // ---------------------------------------------------------------
+            // 47 AN UNDEFINED ROUTE ID FAILS CLOSED EVERYWHERE.
+            //    RouteCatalog.Describe used to fall out of its switch with the
+            //    RouteSpec field initialisers intact: Available=true, no stages,
+            //    no reason. The gate stayed silent, BuildStage2 produced 21
+            //    variables and PreStartAssertions passed.
+            // ---------------------------------------------------------------
+            ImageRoute undefinedRoute = (ImageRoute)7;
+            RouteSpec undefinedSpec = RouteCatalog.Describe(undefinedRoute);
+            if (undefinedSpec.Available) return 47;
+            if (string.IsNullOrEmpty(undefinedSpec.UnavailableReason)) return 47;
+            if (undefinedSpec.Stages.Count != 0) return 47;
+            RunRequest undefinedRequest = NewLeftRequest(undefinedRoute);
+            foreach (ChannelDef channel in left.AnalysisChannels)
+                undefinedRequest.Thresholds[channel.Token] = "500";
+            if (!FailClosedGate.Evaluate(undefinedRequest, left, thresholdMarkers, null).Blocked)
+                return 47;
+            bool undefinedRefused = false;
+            try
+            {
+                RunEnvironment.BuildStage2(
+                    undefinedRequest, left, thresholdMarkers, "r", "o", Path.GetTempPath(),
+                    null, false);
+            }
+            catch (InvalidOperationException) { undefinedRefused = true; }
+            if (!undefinedRefused) return 47;
+            undefinedRefused = false;
+            try { RunEnvironment.BuildStage1(undefinedRequest, "LEFT"); }
+            catch (InvalidOperationException) { undefinedRefused = true; }
+            if (!undefinedRefused) return 47;
+            undefinedRefused = false;
+            try
+            {
+                PreStartAssertions.AssertStage2Environment(env, null, undefinedRoute);
+            }
+            catch (InvalidOperationException) { undefinedRefused = true; }
+            if (!undefinedRefused) return 47;
+
+            // ---------------------------------------------------------------
+            // 48 THE LAUNCH CHOKE POINT.
+            //
+            //    Rounds 1 and 2 were the same defect twice: a path into the
+            //    child environment that did not pass validation. Both validated
+            //    INPUTS, and inputs have callers, and callers are places to
+            //    forget. This validates the OUTPUT -- the final merged
+            //    dictionary -- and it is not skippable, because
+            //    EnvironmentApply.Apply takes a RunSeal and RunSeal has no
+            //    public constructor.
+            // ---------------------------------------------------------------
+            if (typeof(RunSeal).GetConstructors(
+                    BindingFlags.Public | BindingFlags.Instance).Length != 0) return 48;
+
+            RunRequest sealedRequest = NewLeftRequest(ImageRoute.IfConfocal);
+            foreach (ChannelDef channel in left.AnalysisChannels)
+                sealedRequest.Thresholds[channel.Token] = "500";
+            sealedRequest.Tier = RunTier.Confirmatory;
+            GateResult sealedGate =
+                FailClosedGate.Evaluate(sealedRequest, left, thresholdMarkers, null);
+            if (sealedGate.Blocked || sealedGate.Exploratory) return 48;
+            Dictionary<string, string> sealedEnv = RunEnvironment.BuildStage2(
+                sealedRequest, left, thresholdMarkers, "registry", "out",
+                Path.GetTempPath(), null, false);
+
+            RunSeal issued = RunSeal.Issue(
+                NewSealInput(sealedRequest, left, thresholdMarkers, sealedGate, sealedEnv));
+            if (issued == null) return 48;
+            if (!issued.EnvironmentSaysFrozen) return 48;
+            if (issued.Classification != "THRESHOLDS_FROZEN") return 48;
+            if (issued.Value("IFQ_PANEL") != "LEFT") return 48;
+
+            // N1, reconstructed: the record the gate produced BEFORE the N1 fix
+            // (3/3 frozen, KRT5=fixed_predeclared(500)) beside the environment
+            // the Advanced overlay produced (IFQ_KRT5_THRESHOLD=0). The gate fix
+            // is not what catches this here -- the gate is handed its original,
+            // unsuspecting verdict and the seal refuses anyway.
+            string krt5Variable = left.AnalysisChannels[0].ThresholdEnvName;
+            Dictionary<string, string> zeroed = new Dictionary<string, string>(
+                sealedEnv, StringComparer.OrdinalIgnoreCase);
+            zeroed[krt5Variable] = "0";
+            if (!SealRefuses(
+                    NewSealInput(sealedRequest, left, thresholdMarkers, sealedGate, zeroed)))
+                return 48;
+
+            // The subtler half of N1: an override that is still a perfectly
+            // legal cutoff, just not the one the record states. Classification
+            // agrees on both sides; only the per-channel comparison catches it.
+            Dictionary<string, string> shifted = new Dictionary<string, string>(
+                sealedEnv, StringComparer.OrdinalIgnoreCase);
+            shifted[krt5Variable] = "300";
+            if (!SealRefuses(
+                    NewSealInput(sealedRequest, left, thresholdMarkers, sealedGate, shifted)))
+                return 48;
+
+            // A cutoff for a marker that is not a channel of this panel: the
+            // engine ignores it, so the record's [environment] block would show
+            // a cutoff that changed nothing.
+            Dictionary<string, string> foreignMarker = new Dictionary<string, string>(
+                sealedEnv, StringComparer.OrdinalIgnoreCase);
+            foreignMarker["IFQ_PDPN_THRESHOLD"] = "400";
+            if (!SealRefuses(NewSealInput(
+                    sealedRequest, left, thresholdMarkers, sealedGate, foreignMarker)))
+                return 48;
+
+            // A panel swap between the record and the environment.
+            Dictionary<string, string> swapped = new Dictionary<string, string>(
+                sealedEnv, StringComparer.OrdinalIgnoreCase);
+            swapped["IFQ_PANEL"] = "RIGHT";
+            if (!SealRefuses(
+                    NewSealInput(sealedRequest, left, thresholdMarkers, sealedGate, swapped)))
+                return 48;
+
+            // A blocked gate that reached the run path anyway.
+            RunRequest blockedRequest = NewLeftRequest(ImageRoute.IfConfocal);
+            blockedRequest.Tier = RunTier.Confirmatory;
+            GateResult blockedGate =
+                FailClosedGate.Evaluate(blockedRequest, left, thresholdMarkers, null);
+            if (!blockedGate.Blocked) return 48;
+            if (!SealRefuses(NewSealInput(
+                    blockedRequest, left, thresholdMarkers, blockedGate, sealedEnv)))
+                return 48;
+
+            // Stage 3 reads no IFQ_* at all.
+            RunRequest slideRequest = NewLeftRequest(ImageRoute.IfSlideScanner);
+            slideRequest.WsiInput = "in";
+            slideRequest.WsiOutput = "out";
+            SealInput stage3 = NewSealInput(
+                slideRequest, left, thresholdMarkers, sealedGate,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+            stage3.Stage = LaunchStage.Stage3Python;
+            if (RunSeal.Issue(stage3) == null) return 48;
+            stage3.Environment = new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+            stage3.Environment["IFQ_PANEL"] = "LEFT";
+            if (!SealRefuses(stage3)) return 48;
+
+            // Stage 1 must tile under the panel the run is recorded as.
+            SealInput stage1 = NewSealInput(
+                slideRequest, left, thresholdMarkers, sealedGate,
+                RunEnvironment.BuildStage1(slideRequest, "LEFT"));
+            stage1.Stage = LaunchStage.Stage1QuPath;
+            if (RunSeal.Issue(stage1) == null) return 48;
+            Dictionary<string, string> stage1Wrong = RunEnvironment.BuildStage1(
+                slideRequest, "LEFT");
+            stage1Wrong["IFQ_WSI_PANEL"] = "RIGHT";
+            SealInput stage1Bad = NewSealInput(
+                slideRequest, left, thresholdMarkers, sealedGate, stage1Wrong);
+            stage1Bad.Stage = LaunchStage.Stage1QuPath;
+            if (!SealRefuses(stage1Bad)) return 48;
+
+            // ---------------------------------------------------------------
+            // 49 N1 AT THE GATE: the Advanced box may not overwrite a cutoff
+            //    the threshold grid owns. Routes 1 and 2 were LESS strict than
+            //    legacy mode on identical input, because the grid path rejects
+            //    <=0 as H2_THRESHOLD_INVALID and the Advanced path for the SAME
+            //    variable was unchecked.
+            // ---------------------------------------------------------------
+            RunRequest advOverride = NewLeftRequest(ImageRoute.IfConfocal);
+            foreach (ChannelDef channel in left.AnalysisChannels)
+                advOverride.Thresholds[channel.Token] = "500";
+            advOverride.Tier = RunTier.Confirmatory;
+            advOverride.AdvancedText = krt5Variable + "=0";
+            GateResult advOverrideGate =
+                FailClosedGate.Evaluate(advOverride, left, thresholdMarkers, null);
+            if (!advOverrideGate.Blocked) return 49;
+            if (!HasCode(advOverrideGate, "ADV_THRESHOLD_OVERRIDE")) return 49;
+            // Also when the value is perfectly valid: one value, one control.
+            advOverride.AdvancedText = krt5Variable + "=300";
+            if (!FailClosedGate.Evaluate(advOverride, left, thresholdMarkers, null).Blocked)
+                return 49;
+            // ...and route 4 still accepts it, because v1.7.2's Advanced box was
+            // the only place a cutoff could be set at all.
+            RunRequest legacyOverride = NewLeftRequest(ImageRoute.LegacyFiji172);
+            legacyOverride.AdvancedText = krt5Variable + "=300";
+            if (FailClosedGate.Evaluate(legacyOverride, left, thresholdMarkers, null).Blocked)
+                return 49;
+
+            // ---------------------------------------------------------------
+            // 50 N3 A PANEL WITH NO ANALYSIS CHANNEL IS NOT A FROZEN RUN.
+            // ---------------------------------------------------------------
+            CustomPanelParse nuclearOnlyParse = CustomPanelRegistry.Parse(
+                "{\"panels\":{\"NUCONLY\":{\"label\":\"nuclear only\",\"channels\":[" +
+                "{\"idx\":1,\"marker\":\"DAPI\",\"role\":\"nuclear\"}]}}}",
+                defaultRoles, new List<string>(panels.Keys), left.ChannelsAreThresholdable);
+            if (!nuclearOnlyParse.Ok) return 50;
+            PanelDef nuclearOnly;
+            if (!nuclearOnlyParse.Panels.TryGetValue("NUCONLY", out nuclearOnly)) return 50;
+            if (nuclearOnly.AnalysisChannels.Count != 0) return 50;
+
+            RunRequest nuclearRequest = NewLeftRequest(ImageRoute.IfConfocal);
+            nuclearRequest.PanelKey = "NUCONLY";
+            nuclearRequest.PanelConfigJson = @"C:\fixture\custom_panel.json";
+            GateResult nuclearGate =
+                FailClosedGate.Evaluate(nuclearRequest, nuclearOnly, thresholdMarkers, null);
+            if (nuclearGate.Blocked) return 50;
+            if (!nuclearGate.Exploratory) return 50;
+            if (!nuclearGate.FolderStamps().Contains(FailClosedGate.ExploratoryStamp)) return 50;
+            if (!HasCode(nuclearGate, "H2_NO_ANALYSIS_CHANNELS")) return 50;
+            Dictionary<string, string> nuclearEnv = RunEnvironment.BuildStage2(
+                nuclearRequest, nuclearOnly, thresholdMarkers, "registry", "out",
+                Path.GetTempPath(), null, false);
+            if (RunRecord.Build(nuclearRequest, nuclearGate, nuclearEnv, "1.8.0.0", "X64",
+                                "f", "i", 0, "complete", "a", "b", null)
+                    .IndexOf("run_classification=EXPLORATORY_DO_NOT_AGGREGATE",
+                             StringComparison.Ordinal) < 0) return 50;
+
+            nuclearRequest.Tier = RunTier.Confirmatory;
+            if (!FailClosedGate.Evaluate(
+                    nuclearRequest, nuclearOnly, thresholdMarkers, null).Blocked) return 50;
+            nuclearRequest.Tier = RunTier.Exploratory;
+
+            // ...and the seal catches it independently, handed the verdict the
+            // UNFIXED gate produced: Exploratory=false with an empty policy.
+            GateResult pretendFrozen = new GateResult();
+            pretendFrozen.Exploratory = false;
+            if (!SealRefuses(NewSealInput(
+                    nuclearRequest, nuclearOnly, thresholdMarkers, pretendFrozen, nuclearEnv)))
+                return 50;
+            // The same environment with the honest verdict is allowed through.
+            if (RunSeal.Issue(NewSealInput(
+                    nuclearRequest, nuclearOnly, thresholdMarkers, nuclearGate,
+                    nuclearEnv)) == null) return 50;
+
+            // ---------------------------------------------------------------
+            // 51 N4 AUTO IS USABLE, AND ITS REFUSALS ARE TRUE.
+            //    request.PanelKey holds the RESOLVED panel by the time the run
+            //    path evaluates the gate, so H1_PANEL_UNKNOWN fired on a key
+            //    AUTO had just detected from the embedded pipeline.
+            // ---------------------------------------------------------------
+            RunRequest autoRequest = NewLeftRequest(ImageRoute.IfConfocal);
+            autoRequest.PanelWasAuto = true;
+            GateResult autoGate =
+                FailClosedGate.Evaluate(autoRequest, null, thresholdMarkers, null);
+            if (autoGate.Blocked) return 51;
+            if (HasCode(autoGate, "H1_PANEL_UNKNOWN")) return 51;
+            if (!autoGate.Exploratory) return 51;
+            if (!HasCode(autoGate, "H2_AUTO_ADAPTIVE")) return 51;
+            if (!autoGate.RequiredPhrases.Contains(FailClosedGate.ExploratoryPhrase)) return 51;
+
+            // The same, with the key already resolved to a real panel: still
+            // AUTO, still exploratory, still not "unknown panel".
+            autoRequest.PanelKey = "LEFT";
+            GateResult autoResolved =
+                FailClosedGate.Evaluate(autoRequest, null, thresholdMarkers, null);
+            if (autoResolved.Blocked) return 51;
+            if (HasCode(autoResolved, "H1_PANEL_UNKNOWN")) return 51;
+
+            // AUTO plus a custom panel JSON is refused by the GATE now, with the
+            // same reason ReadAndValidateConfiguration throws -- it used to go
+            // amber with Run enabled and throw only after the review dialog.
+            autoRequest.PanelConfigJson = @"C:\fixture\custom_panel.json";
+            GateResult autoCustom =
+                FailClosedGate.Evaluate(autoRequest, null, thresholdMarkers, null);
+            if (!autoCustom.Blocked) return 51;
+            if (!HasCode(autoCustom, "H1_AUTO_WITH_CUSTOM_PANEL")) return 51;
+            autoRequest.PanelConfigJson = null;
+
+            // Confirmatory tier and the whole-slide route both still refuse it.
+            autoRequest.Tier = RunTier.Confirmatory;
+            if (!FailClosedGate.Evaluate(autoRequest, null, thresholdMarkers, null).Blocked)
+                return 51;
+            autoRequest.Tier = RunTier.Exploratory;
+            autoRequest.Route = ImageRoute.IfSlideScanner;
+            autoRequest.WsiInput = "in";
+            autoRequest.WsiOutput = "out";
+            if (!FailClosedGate.Evaluate(autoRequest, null, thresholdMarkers, null).Blocked)
+                return 51;
+
+            // A key that really is unknown must STILL be refused, and by name.
+            RunRequest bogus = NewLeftRequest(ImageRoute.IfConfocal);
+            bogus.PanelKey = "NOT_A_PANEL";
+            GateResult bogusGate =
+                FailClosedGate.Evaluate(bogus, null, thresholdMarkers, null);
+            if (!bogusGate.Blocked || !HasCode(bogusGate, "H1_PANEL_UNKNOWN")) return 51;
+
+            return 0;
+        }
+
+        /// A stage 2 seal input with the fixture defaults the self-test uses.
+        private static SealInput NewSealInput(
+            RunRequest request, PanelDef panel, HashSet<string> engineThresholdMarkers,
+            GateResult gate, Dictionary<string, string> env)
+        {
+            SealInput input = new SealInput();
+            input.Stage = LaunchStage.Stage2Fiji;
+            input.Request = request;
+            input.Panel = panel;
+            input.EngineThresholdMarkers = engineThresholdMarkers;
+            input.Gate = gate;
+            input.Environment = env;
+            input.OutputDirectory = null;
+            input.AdvancedKeys = new string[0];
+            return input;
+        }
+
+        private static bool SealRefuses(SealInput input)
+        {
+            try { RunSeal.Issue(input); return false; }
+            catch (InvalidOperationException) { return true; }
+            catch (ArgumentException) { return true; }
+        }
+
+        private static bool HasCode(GateResult gate, string code)
+        {
+            foreach (GateFinding finding in gate.Findings)
+                if (string.Equals(finding.Code, code, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        /// The fingerprint of the v1.7.2 environment fixture. Produced and
+        /// re-verified by the legacy equivalence harness, which compares
+        /// LegacyProfile against a verbatim transcription of v1.7.2's own
+        /// assignments and against the real v1.7.2 source file.
+        private const string V172FixtureFingerprint =
+            "f95cecdbd22e809980979a83b41a3d610635f49a569af43cad39cad7c7e73940";
+
+        private static RunRequest NewLeftRequest(ImageRoute route)
+        {
+            RunRequest request = new RunRequest();
+            request.Route = route;
+            request.PanelKey = "LEFT";
+            request.OutputBase = "out";
+            request.Tier = RunTier.Exploratory;
+            return request;
+        }
+
+        private static bool TryExtractResource(string resourceName, string destination)
+        {
+            try
+            {
+                Assembly assembly = Assembly.GetExecutingAssembly();
+                using (Stream input = assembly.GetManifestResourceStream(resourceName))
+                {
+                    if (input == null) return false;
+                    using (FileStream output = new FileStream(
+                               destination, FileMode.Create, FileAccess.Write, FileShare.None))
+                        input.CopyTo(output);
+                }
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private static string ComputeSha256(string path)
+        {
+            using (SHA256 algorithm = SHA256.Create())
+            using (FileStream stream = File.OpenRead(path))
+            {
+                byte[] hash = algorithm.ComputeHash(stream);
+                StringBuilder text = new StringBuilder(hash.Length * 2);
+                foreach (byte value in hash)
+                    text.Append(value.ToString("x2", CultureInfo.InvariantCulture));
+                return text.ToString();
+            }
         }
 
         private static void ExtractResource(string resourceName, string destination)
@@ -2311,6 +3365,11 @@ namespace IFQuantLauncher
                 }
                 if (!mixedDetectionOk)
                     return 25;
+
+                // ---- v1.8.0 route-model invariants --------------------------
+                int routeCode = RouteSelfTest(pipelineText, paths);
+                if (routeCode != 0)
+                    return routeCode;
                 if (!File.Exists(paths.RegistryPath) || new FileInfo(paths.RegistryPath).Length < 100)
                     return 12;
                 JavaScriptSerializer json = new JavaScriptSerializer();
