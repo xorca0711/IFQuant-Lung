@@ -162,7 +162,7 @@ one that is 95% tissue would get wildly different cutoffs.
 
 ```powershell
 $env:IFQ_WSI_INPUT  = "D:\Confocal_Images\20260806_CW\20260806_CW"
-$env:IFQ_WSI_OUTPUT = "D:\wsi_stage1"
+$env:IFQ_WSI_OUTPUT = "D:\IFQ_Runs\<run_name>"
 & "X:\QuPath\QuPath-0.7.0 (console).exe" script .\qupath_wsi_tile_export.groovy
 ```
 
@@ -187,8 +187,8 @@ degrades to `context_unresolved` or `indeterminate`. KRT5 has no compartment
 requirement, so the primary pod-area endpoint is unaffected either way.
 
 ```powershell
-$env:IFQ_INPUT_DIR  = "D:\wsi_stage1\<slide>\tiles"
-$env:IFQ_OUTPUT_DIR = "D:\wsi_stage1\<slide>\analysis"
+$env:IFQ_INPUT_DIR  = "D:\IFQ_Runs\<run_name>\<slide>\tiles"
+$env:IFQ_OUTPUT_DIR = "D:\IFQ_Runs\<run_name>\<slide>\analysis"
 $env:IFQ_PANEL = "LEFT"; $env:IFQ_SEGMENTER = "classic"
 $env:IFQ_MIN_INCLUDED_NUCLEI = "0"
 $env:IFQ_KRT5_THRESHOLD = "<calibrated>"
@@ -237,8 +237,8 @@ folder, so sharding needs no further bookkeeping.
 ## 8. Stage 3 — reconciliation
 
 ```powershell
-python .\aggregate_tiles_to_slide.py --slide-root D:\wsi_stage1
-python .\aggregate_to_mouse.py D:\wsi_stage1\stats\slide_level_summary.csv
+python .\aggregate_tiles_to_slide.py --slide-root D:\IFQ_Runs\<run_name>
+python .\aggregate_to_mouse.py D:\IFQ_Runs\<run_name>\stats\slide_level_summary.csv
 ```
 
 Stage 3 exists mainly to make silent loss impossible. It **refuses** to write

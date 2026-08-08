@@ -23,8 +23,8 @@
 
 .EXAMPLE
     .\scripts\Invoke-Stage2Sharded.ps1 `
-        -TilesDir   "D:\wsi_stage1\slideA\tiles" `
-        -OutputRoot "D:\wsi_stage1\slideA" `
+        -TilesDir   "D:\IFQ_Runs\<run_name>\slideA\tiles" `
+        -OutputRoot "D:\IFQ_Runs\<run_name>\slideA" `
         -Shards 5 `
         -Krt5Threshold 400 -AgerThreshold 600 -T1aThreshold 400
 #>

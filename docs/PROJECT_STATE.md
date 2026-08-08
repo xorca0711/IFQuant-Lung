@@ -9,12 +9,13 @@ It exists so a fresh session can resume without the prior conversation.
 
 | | |
 |---|---|
-| repo | `C:\Users\dream\Documents\GitHub\IFQuant-Lung` (renamed from `Fiji_ImageJ_Cell_Counting`) |
+| repo | `X:\GitHub\IFQuant-Lung` (renamed from `Fiji_ImageJ_Cell_Counting`) |
 | GitHub | `xorca0711/IFQuant-Lung` |
 | branch | `main` @ `99bdda9`, tagged **`v2.0.0`** |
 | review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
 | released launcher | `IFQuantLauncher-v1.7.2.exe` — **unchanged, still current** |
 | data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` (4 slides) |
+| pipeline runs | `D:\IFQ_Runs\` — `validated/` and `superseded/`, see its README |
 | channel cache | `X:\ifq_cache` (ds=8, bit-exact, 31× faster than decoding) |
 | QuPath | `X:\QuPath\QuPath-0.7.0 (console).exe` |
 | Fiji | `X:\Fiji` — its `.exe` is **broken on ARM64**; invoke the JVM directly |
