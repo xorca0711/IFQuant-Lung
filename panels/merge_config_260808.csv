@@ -1,0 +1,95 @@
+# Per-image display optimisation for the 260808-CW merge panels.
+# marker,low,high,gamma,color,minAreaUm2,maxAreaUm2,mode,absFloor
+#
+# OBJECTIVE, set by the operator: each panel should look its best on its own
+# terms -- only true-positive cells shown, borders crisp. Cross-image
+# comparability is explicitly NOT the goal; the alternative to this pipeline is
+# retouching every panel by hand to the same place, and an automated pass is the
+# more reproducible of the two PROVIDED it records what it chose. Every
+# per-image parameter lands in display_window_qc.csv beside the panels.
+#
+# mode=auto  per image, inside the DAPI tissue mask:
+#              B  = p10, S = p99.5 of tissue
+#              lo = STRICTEST of { Otsu, B + low*(S-B), absFloor }
+#              hi = the 'high' PERCENTILE OF PIXELS ABOVE lo
+#            hi is deliberately NOT a fraction of (S-B): for a sparse marker
+#            most tissue is background, so p99.5 sits near background and the
+#            window collapses. That bug gave ProSPC windows like [241,454] and
+#            the channel blew out. Anchoring hi to the positive population fixes
+#            it at the root.
+# mode=rel   fractions of this image's tissue range, no Otsu.
+# mode=abs   raw detector units, identical everywhere.
+#
+# absFloor lets a marker stay per-image tuned AND keep a validity guarantee.
+#
+# MEASUREMENT IS UNTOUCHED. Nothing here reaches run_summary.csv. A per-image
+# adaptive display must never be read as an expression level.
+
+# DAPI -- ABSOLUTE, at the v3 values the operator confirmed as correct. This is
+# the microscopy standard: the nuclear scaffold is the brightest thing and does
+# not move per image. Auto mode made it dimmer and image-dependent, which is
+# wrong for a scaffold.
+DAPI,250,2200,1.0,blue,,,abs
+
+# --- markers: one tone down from v6, via a higher floor percentile ---
+
+# KRT5 -- absFloor 300 is the LOCKED measurement threshold (controls p99.99 =
+# 283 / 255). Tuned above it, never below: a pod that renders is a pod counted.
+KRT5,0.08,0.97,1.0,green,,,auto,300
+
+# AGER / mRAGE -- per-image because staining efficiency varies hugely between
+# sections: frac>500 is 0.0097 in M6 LEFT vs 0.289 in M6 RIGHT, same antibody,
+# same animal.
+AGER,0.10,0.97,1.0,red,,,auto,400
+# T1alpha -- floor raised again; 647 read too bright in v4 and v6.
+T1A,0.12,0.97,1.0,white,,,auto,350
+# ProSPC -- the airway lining in this channel is a second population at
+# OVERLAPPING intensity (other basal/club lineages, not AT2), so no floor can
+# remove it. v7 removed it with a connected-component size gate; that gate is
+# RETIRED because deleting image content from something presented as a
+# micrograph is selective manipulation (Rossner & Yamada 2004, J Cell Biol
+# 166:11). Suppressing a population is now the QC OVERLAY's job -- see
+# panels/qc/ -- where it is transparently an analysis result.
+# Consequence, stated plainly: the airway ProSPC signal IS visible in the merge
+# panel, because it is really there.
+ProSPC,0.12,0.97,1.0,green,,,auto,550
+# KRT8 -- strict by request. absFloor 700 clears the control p99 (525 / 633) so
+# a per-image Otsu can never light normal alveoli.
+# NOTE: in v6 the resolved cut was exactly 700 in all 40 RIGHT panels, i.e.
+# Otsu always landed BELOW the guard and the guard did all the work. KRT8 is
+# therefore still effectively absolute. Lowering it would let normal alveolar
+# epithelium appear, which is the thing it exists to prevent.
+KRT8,0.15,0.97,1.0,white,,,auto,600
+# ---------------------------------------------------------------------------
+# absFloor is now MANDATORY for every auto marker, and the renderer warns when
+# one is missing. ProSPC, AGER and T1A previously had none and Otsu put their
+# floors in background: ProSPC resolved to [269,577] on M4-1 RIGHT G001 against
+# a control p50 of 219-263, so the whole channel washed out uniformly.
+#
+# HOW THESE THREE FLOORS WERE CHOSEN -- and how they DIFFER from KRT5/KRT8:
+#   KRT5 (300) and KRT8 (700) are CONTROL-NEGATIVE floors: the marker should be
+#   absent from uninfected tissue, so the control distribution gives a true
+#   false-positive rate.
+#   ProSPC, AGER and T1A are CONSTITUTIVELY EXPRESSED -- AT2 and AT1 cells exist
+#   in every control -- so no such rule is available. Their floors are chosen to
+#   show the BRIGHT MINORITY against the diffuse component, sitting between the
+#   control p90 and p99:
+#     ProSPC  control p90 = 553/601, p99 = 1712/1917  -> 1000
+#     AGER    control p90 = 489/755, p99 =  893/1417  ->  700
+#     T1A     control p90 = 583/515, p99 = 1249/1027  ->  650
+#   These are DISPLAY choices, not calibrated thresholds, and must be described
+#   as such. They set what is drawn; they set nothing that is counted.
+# ---------------------------------------------------------------------------
+# FLOORS LOWERED after over-correction. The previous values (ProSPC 1000,
+# AGER 700, T1A 650, KRT8 700) were derived from POOLED control percentiles and
+# then applied PER IMAGE, where each section's own ceiling is far lower.
+# Measured: ProSPC floor 1000 against a median section p99.5 of 853 -- the floor
+# sat ABOVE the image's ceiling and the channel was erased. KRT8 700 vs 731 was
+# nearly as bad.
+#
+# The airspace background floor now handles SPILL (nothing dimmer than this
+# image's own empty airspace is drawn, no free parameter), so absFloor only has
+# to suppress the IN-TISSUE diffuse component. It can therefore be much lower:
+#   AGER 400, T1A 350, ProSPC 550, KRT8 600.
+# KRT5 stays at 300 because that is the locked MEASUREMENT threshold, not a
+# display choice -- a rendered pod must be a counted pod.

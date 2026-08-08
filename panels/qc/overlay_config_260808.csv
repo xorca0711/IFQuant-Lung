@@ -1,0 +1,56 @@
+# v8 panel configuration, 260808-CW confocal batch.
+# marker,mode,mask_suffix,color,fill_weight,edge_px,low,high
+#
+# PRIORITY ORDER, set by the operator and encoded here:
+#   1 true-positive marked cells appear clearly
+#   2 DAPI at high intensity as the cell-localisation standard
+#   3 other channels a little weaker than DAPI
+#   4 the clearer the border between distinct marked cells, the better
+#   5 comparability, subordinate to 1-4
+#
+# HOW EACH IS MET
+#   1  Markers are drawn from the ENGINE'S OWN masks, so a rendered object is a
+#      counted object -- no independent thresholding, no possible disagreement
+#      between figure and table. Inside a mask, brightness never falls below
+#      MIN_BRIGHT (0.35), so a called-positive cell cannot render invisible.
+#   2  DAPI is mode=scaffold with an ABSOLUTE window at the values the operator
+#      confirmed (250-2200). A localisation reference that moves per image is
+#      not a reference.
+#   3  fill_weight < 1 for every marker; DAPI is 1.0.
+#   4  edge_px draws each object's boundary LAST at full saturation. Borders are
+#      geometry, not contrast, so they survive any overlap or brightness.
+#   5  Comes free: mask membership was decided by fixed, control-derived
+#      thresholds applied identically to every image, so the OBJECTS are
+#      comparable across mice. Only shading inside already-decided objects
+#      adapts per image.
+#
+# NO COMPONENT GATE. v7 deleted the ProSPC airway lining from the image. Under
+# Rossner & Yamada 2004 (J Cell Biol 166:11) that is selective manipulation of
+# image content, categorically worse than a window or gamma change. Retired.
+# The airway is now handled honestly: it is simply not outlined, because the
+# engine did not call it positive. The signal stays visible; the CALL is what
+# the overlay asserts.
+#
+# gamma is 1.0 throughout (no nonlinear transform, so nothing of that kind to
+# disclose). Every parameter actually used lands in panel_qc.csv.
+
+# ---- scaffold: brightest layer, absolute, never per-image ----
+DAPI,scaffold,,blue,1.0,0,250,2200
+
+# ---- LEFT panel ----
+# KRT5 pods are discrete objects and are the endpoint numerator, so they get
+# outlines. The mask is the engine's component-filtered pod mask -- the same
+# mask evaluate_endpoints.groovy uses, so figure and endpoint cannot diverge.
+KRT5,mask,KRT5_pod_mask.tif,green,0.62,2,,
+
+# AGER and T1A are continuous membrane markers covering 13-29% of tissue.
+# Fill only: outlining a mesh that dense is noise, not clarity.
+AGER,mask,AGER_membrane_positive_mask.tif,red,0.50,0,,
+T1A,mask,T1A_membrane_positive_mask.tif,white,0.45,0,,
+
+# ---- RIGHT panel ----
+# No area masks exist for ProSPC/KRT8 (the registry defines area mode only for
+# KRT5/AGER/T1A), but PER-CELL positive masks do -- which is why the RIGHT panel
+# is renderable at all. These are discrete cells, so they get outlines.
+ProSPC,mask,tissue__ProSPC_morphology_positive_nuclei_mask.tif,green,0.62,2,,
+KRT8,mask,tissue__KRT8_morphology_positive_nuclei_mask.tif,white,0.55,2,,
