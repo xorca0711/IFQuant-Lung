@@ -19,26 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-SCOPE NOTE
-
-This licence covers the software and documentation in this repository.
-
-It does NOT cover, and cannot grant rights to:
-
-  * Microscopy image data. No raw or derived image data is included here; it is
-    excluded by .gitignore and remains subject to the originating laboratory's
-    and institution's terms.
-
-  * Third-party components invoked by this software. Fiji/ImageJ, QuPath and
-    Bio-Formats are separately licensed by their own authors and are neither
-    redistributed nor relicensed here. The archived launcher binary under
-    legacy/launchers/ embeds only code from this repository.
-
-  * Unpublished scientific results. Measurements and interpretations in this
-    repository describe an ongoing study. Reuse of the software is permitted
-    under the terms above; reuse of the findings should follow normal academic
-    citation and, where the work is unpublished, prior discussion with the
-    authors.

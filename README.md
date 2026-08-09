@@ -142,7 +142,8 @@ embedded engine has drifted from the version it claims equivalence to.
 An explicitly labelled engineering run of the corrected algebra now exists at
 `D:\IFQ_Runs\confocal_260809_rerun`; it is not a reportable endpoint result.
 
-**Licence:** [MIT](LICENSE). The licence covers the software and documentation only — not image data, not the third-party tools this pipeline invokes (Fiji, QuPath, Bio-Formats), and not the unpublished findings.
+**Licence:** [MIT](LICENSE), with a separate [scope note](LICENSE_SCOPE.md) for
+image data, third-party tools, and unpublished findings.
 
 ---
 
