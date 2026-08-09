@@ -1,6 +1,7 @@
 # Archived launcher binaries
 
-**One binary is kept here. It is not sediment — it is live evidence.**
+This directory keeps launcher binaries that still matter for reproducibility or
+for access to a superseded release.
 
 ## `IFQuantLauncher-v1.7.2.exe`
 
@@ -26,7 +27,13 @@ runtime instruction into a dead reference.
 Do not move or rename it without changing `V172ExeArchivePath` in the same
 commit.
 
-## Everything else was removed
+## `IFQuantLauncher-v1.9.0.exe`
+
+Version 1.9.0 is the previous release. Its executable and SHA-256 sidecar were
+moved here after v1.9.1 replaced it at the repository root. The v1.9.0 release
+corresponds to commit `22afada`.
+
+## Other historical releases were removed
 
 Nine superseded binaries (v1.1 through v1.7.1, plus v1.8.0) and their sidecars
 were deleted from the working tree on 2026-08-09.
@@ -53,7 +60,7 @@ a working tool.
 
 ## Current release
 
-`v1.9.0` — engine fix, responsive layout, legacy-equivalence harness that runs
-from a clean clone. See [Releases](https://github.com/xorca0711/IFQuant-Lung/releases).
-Built artefacts are not tracked in git; `launcher/build.ps1` writes them to the
-repository root, where `.gitignore` excludes them.
+`v1.9.1` adds the post-release GUI repair and validated 20x/2k lung-field
+preset. See [Releases](https://github.com/xorca0711/IFQuant-Lung/releases).
+New build artefacts are not tracked in git by default; `launcher/build.ps1`
+writes them to the repository root, where `.gitignore` excludes them.

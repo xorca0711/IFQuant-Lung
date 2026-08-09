@@ -46,7 +46,7 @@ is not.
 | GitHub | `xorca0711/IFQuant-Lung` |
 | branch | `main` @ `35d27b8`. Launcher tag `v1.9.0` points at `22afada`; the current tip is a post-release documentation baseline. See `BRANCHING.md`. |
 | review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
-| launcher binary | `IFQuantLauncher-v1.9.0.exe` at repo root — **gitignored** (`.gitignore:58`), see section 4 |
+| launcher binary | current `IFQuantLauncher-v1.9.1.exe` at repo root — **gitignored**; previous v1.9.0 archived under `legacy/launchers/`, see section 4 |
 | confocal data | `D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × 2 panels × ~10 fields |
 | slide-scanner data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` — 4 slides (WSI pilot) |
 | pipeline runs | `D:\IFQ_Runs\` — see its README |
@@ -285,10 +285,10 @@ committed one and a ~476-line uncommitted WinForms layout revision on top of it.
 * **Choose a long-term version namespace.** `v1.9.0` correctly tags the launcher
   release at `22afada`, while `v2.0.0` is an older repository tag. The coexistence
   is historically accurate but easy to misread.
-* **The shipped binary is gitignored** (`.gitignore:58`, `/IFQuantLauncher-*.exe`),
-  so it cannot be tied to a commit. Every *retired* launcher back to v1.1 **is**
-  tracked, under `legacy/launchers/`. The current one is the only untracked link
-  in that chain.
+* **The current binary is gitignored** (`.gitignore:58`,
+  `/IFQuantLauncher-*.exe`). The previous v1.9.0 executable and its checksum are
+  archived under `legacy/launchers/`; the current v1.9.1 build remains the only
+  untracked link in that chain.
 * Section `[c]` of the equivalence report is still headed "The **v1.8.0** source
   cannot quietly stop being legacy". Cosmetic, but it is the sort of stale label
   that later reads as evidence about the wrong build.

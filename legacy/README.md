@@ -12,9 +12,9 @@ Git branch:
 
 - `figures/`: earlier workflow and overlay diagrams. These predate the final
   morphology-authoritative three-state hierarchy.
-- `launchers/`: superseded versioned launcher executables and checksums,
-  including v1.1, v1.4.1, v1.5.0, v1.6.0, v1.6.1, v1.6.2, v1.7.0, and v1.7.1.
-  The repository-root v1.7.2 launcher is the current release.
+- `launchers/`: archived launcher executables and checksums. Version 1.7.2 is
+  retained for byte-exact legacy reproduction, and v1.9.0 is the superseded
+  release immediately preceding the current repository-root v1.9.1 launcher.
 - `scripts/README.md`: routes historical script access to the snapshot branch
   and commit history; no legacy script is an active entry point.
 - `test_runs/`: local smoke, baseline, and intermediate Fiji outputs.
