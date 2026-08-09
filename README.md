@@ -11,11 +11,18 @@ KRT5⁺ repair after PR8 influenza injury? Endpoint after Lin et al. 2024
 
 ```mermaid
 flowchart LR
-    V[".vsi whole slide<br/>19.3 GB"] --> Q["<b>QuPath 0.7</b><br/>reads · tiles<br/><i>measures nothing</i>"]
-    C[".oir / .czi / .nd2<br/>confocal field"] --> E
-    Q --> E["<b>Fiji</b><br/>IF_Quant_Pipeline.groovy<br/><b>the only measurement engine</b>"]
-    E --> P["<b>Python</b><br/>tile → slide → mouse<br/><i>sums; decides nothing</i>"]
-    P --> R["mouse_level_summary.csv<br/><i>n = mice</i>"]
+    V[".vsi whole slide<br/>19.3 GB · exceeds RAM"]
+    C[".oir / .czi / .nd2<br/>confocal field"]
+    Q["<b>QuPath 0.7</b><br/>opens · detects tissue<br/><i>measures nothing</i>"]
+    E["<b>Fiji</b><br/>IF_Quant_Pipeline.groovy<br/><b>the only measurement engine</b>"]
+    P["<b>Python</b><br/><i>sums; decides nothing</i>"]
+    R["mouse_level_summary.csv"]
+
+    V -->|"too large to<br/>open in one piece"| Q
+    Q ==>|"2048 px tiles + ROI zips,<br/><b>handed over as files</b><br/>— incompatible Java versions"| E
+    C -->|"small enough to<br/>measure directly"| E
+    E -->|"run_summary.csv<br/>one row per image × region"| P
+    P -->|"pooled by area:<br/>tile → slide → <b>animal</b>"| R
 ```
 
 ---

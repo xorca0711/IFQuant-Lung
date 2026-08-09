@@ -33,9 +33,14 @@ flowchart LR
     subgraph S3["Stage 3 — Python"]
         A["tile → slide reconciliation<br/>slide → mouse roll-up<br/><i>sums; decides nothing</i>"]
     end
-    V --> Q --> T --> E
-    C --> E
-    E --> A --> R["run_summary.csv<br/>slide_level_summary.csv<br/>mouse_level_summary.csv"]
+    R["run_summary.csv<br/>slide_level_summary.csv<br/>mouse_level_summary.csv"]
+
+    V -->|"only QuPath bundles the<br/>JPEG-2000 ome-jai codec"| Q
+    Q -->|"writes to disk"| T
+    T ==>|"<b>the handoff is files</b><br/>incompatible Java versions<br/>forbid an in-process call"| E
+    C -->|"fits in memory —<br/>no tiling stage"| E
+    E -->|"one row per tile × region,<br/>+ masks and QC images"| A
+    A -->|"seams removed via RoiSet;<br/>reconciles to 2.1e-16"| R
 ```
 
 **Why the split.** QuPath alone can open Olympus `.vsi` (it bundles the
