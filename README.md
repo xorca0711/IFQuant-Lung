@@ -127,7 +127,7 @@ embedded engine has drifted from the version it claims equivalence to.
 | **Retracted / superseded** | AGER as a co-negativity marker · KRT8 as a discriminator · the KRT5⁺PDPN⁻ endpoint form |
 | **Not established** | any genotype-level inference · the corrected endpoint (declared, never computed) · routes 1 and 2 end-to-end through the launcher UI |
 
-**Licence:** none is currently declared. See [`DEVELOPMENT.md`](DEVELOPMENT.md).
+**Licence:** [MIT](LICENSE). The licence covers the software and documentation only — not image data, not the third-party tools this pipeline invokes (Fiji, QuPath, Bio-Formats), and not the unpublished findings.
 
 ---
 

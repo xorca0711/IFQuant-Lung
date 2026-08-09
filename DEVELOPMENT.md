@@ -157,11 +157,13 @@ powershell -ExecutionPolicy Bypass -File ./launcher/run_legacy_equivalence.ps1
 
 ---
 
-## Unresolved
+## Licence
 
-**No licence is declared.** This is a deliberate open item rather than an
-oversight, and it should be settled before the repository is treated as
-reusable by others.
+[MIT](LICENSE), covering the software and documentation. Deliberately scoped:
+it does not extend to microscopy image data (none is committed), to the
+third-party tools this pipeline invokes, or to unpublished scientific findings —
+reuse of the code is granted, reuse of the results follows normal academic
+citation.
 
 ---
 
