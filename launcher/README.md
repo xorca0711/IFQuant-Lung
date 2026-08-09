@@ -1,12 +1,12 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.9.0.exe` is a Windows Forms front end for the analysis
+`IFQuantLauncher-v1.9.1.exe` is a Windows Forms front end for the analysis
 pipeline. It embeds the exact Groovy engine, marker registry, QuPath tiling
 script and Python reconciliation script present at build time. **It does not
 reimplement image analysis.** Every number it produces comes from
 `IF_Quant_Pipeline.groovy`, which is frozen.
 
-## What the four routes replaced (introduced v1.8.0; current release v1.9.0)
+## What the four routes replaced (introduced v1.8.0; current source v1.9.1)
 
 v1.7.2 assumed one kind of input: a folder of confocal/field images measured by
 Fiji. v1.8.0 makes the *kind of image* an explicit first choice, because the
@@ -118,8 +118,8 @@ self-test and never ran it.)
 Artifacts are written to the repository root and are **not committed** —
 `.exe` and its `.sha256.txt` sidecar belong in GitHub Releases:
 
-- `IFQuantLauncher-v1.9.0.exe`
-- `IFQuantLauncher-v1.9.0.sha256.txt`
+- `IFQuantLauncher-v1.9.1.exe`
+- `IFQuantLauncher-v1.9.1.sha256.txt`
 
 The build prints the SHA-256 of the exe and of each embedded artefact, so a
 shipped binary can be traced to the exact engine it carries.
@@ -146,6 +146,13 @@ image content. Any unknown image stops the run before Fiji starts, and a
 nonstandard channel order requires a validated custom panel. The confirmation
 dialog lists each allocated panel and its image count.
 
+File scope is pinned above the scrolling configuration pane. For the validated
+260808 lung cohort, **Use validated 20x 2k .oir fields** selects
+`.*20x 2k.*\.oir`, excluding the 4x navigation acquisitions before AUTO panel
+detection. The preset resolves 82 analytical inputs as 42 LEFT and 40 RIGHT
+using the cohort's `samplesheet.csv`; it does not infer markers from image
+appearance.
+
 ## Aggregation is not optional
 
 Every route produces per-image or per-tile rows. Those are **not** the
@@ -153,15 +160,10 @@ statistical unit. Run `aggregate_to_mouse.py` before any test; n = mice.
 
 ## Released binary vs a build from HEAD
 
-The published **v1.9.0** release corresponds to commit `22afada`. Building from a
-later `HEAD` produces a *different* SHA-256, because
-`IF_Quant_Pipeline.groovy` — which the launcher embeds — received a **comment-only
-correction** afterwards (an estimator was named and a single-field figure that had
-been quoted as a batch statistic was replaced).
+The published **v1.9.0** release corresponds to commit `22afada`. Version 1.9.1
+is the post-release GUI repair: file scope is permanently visible and the
+validated 20x/2k lung-field preset removes the need to recover a hidden expert
+regular expression. Building from a later `HEAD` produces a different SHA-256
+because both the launcher source and its embedded pipeline have advanced.
 
-Verified: `git diff 22afada..HEAD -- IF_Quant_Pipeline.groovy` changes
-**0 non-comment lines**. Execution is identical; only the embedded artefact hash
-moves. This is expected for a tagged release and is recorded here so the
-difference does not read as an unexplained mismatch.
-
-To reproduce the released binary exactly, build from `22afada`.
+To reproduce the v1.9.0 release binary exactly, build from `22afada`.

@@ -46,14 +46,12 @@ namespace IFQuantLauncher.Routing
     /// </summary>
     internal static class LauncherBuild
     {
-        // 1.9.0, not 1.8.1. THREE DIFFERENT BINARIES were built and one was published
-// as "v1.8.0" (sha256 cedc0205..., 5360b30e..., 4a39b051...), so that version
-// string no longer identifies unique code and must not be reused. 1.9.0 is a
-// clean break, and it is a minor rather than a patch bump because the embedded
-// engine's behaviour changed materially: the blackBackground fix moved measured
-// nucleus density from ~140/mm2 to ~15,400/mm2.
-        public const string Version = "1.9.0";
-        public const string AssemblyVersion = "1.9.0.0";
+        // 1.9.0, not 1.8.1, ended the historical version collision: three
+        // different binaries had been called v1.8.0. Version 1.9.1 is a real
+        // patch release candidate for the settings-reachability defect; it must
+        // not overwrite or masquerade as the published v1.9.0 binary.
+        public const string Version = "1.9.1";
+        public const string AssemblyVersion = "1.9.1.0";
 
         // =============================================================
         // >>> THE ONE LINE THAT RE-ENABLES ROUTE 3 (H&E / brightfield) <<<

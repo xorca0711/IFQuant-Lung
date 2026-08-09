@@ -250,6 +250,6 @@ for appearance.
 | `config/endpoints/ectopic_pod_over_damaged.json` | retracted; kept as the record |
 | `panels/MergePanels.java` | merge panels (photograph) |
 | `panels/qc/RenderPanels.java` | QC overlays (analysis result) |
-| `launcher/` | v1.9.0, 4 routes; `run_legacy_equivalence.ps1` |
+| `launcher/` | v1.9.1 GUI repair candidate, 4 routes; `run_legacy_equivalence.ps1` |
 | `validation/` | synthetic fixture demonstrating the bug from a clone |
 | `scripts/` | calibration and probe scripts |
