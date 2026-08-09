@@ -2,7 +2,8 @@
 
 > **Purpose.** A dense, factual *technical* context transfer for an AI agent picking up this
 > project with no conversation history. Written to be read start-to-finish.
-> State as of commit `685e8f1`, 2026-08-09.
+> State reconciled 2026-08-09 against baseline `main` commit `35d27b8` and the
+> G-SURF research scheme.
 > The human-facing entry points are [`../README.md`](../README.md) and
 > [`../WORKFLOW.md`](../WORKFLOW.md); [`PROJECT_STATE.md`](PROJECT_STATE.md) is
 > the living handoff, and [`../DEVELOPMENT.md`](../DEVELOPMENT.md) is the
@@ -21,7 +22,8 @@
 | **Study** | IFN-γ *ligand* KO + PR8 influenza; does KO change dysplastic KRT5⁺ repair? |
 | **Reference** | Lin X. et al., *J Clin Invest* 2024;134(19):e176828 (DOI 10.1172/JCI176828) |
 | **Endpoint** | KRT5⁺PDPN⁺ area ÷ damaged alveolar area (PDPN⁻ ∪ KRT5⁺) |
-| **HEAD** | `685e8f1` · `main` == `origin/main` · tags `v1.8.0`, `v1.9.0`, `v2.0.0` |
+| **Baseline HEAD** | `35d27b8` · `main` == `origin/main` before the 2026-08-09 validation work · tags `v1.8.0`, `v1.9.0`, `v2.0.0` |
+| **Research scheme** | [G-SURF](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9) · M4-1 is **het**, matching raw filenames and `samplesheet.csv` |
 
 ---
 
@@ -77,6 +79,7 @@ These caused real failures. Check before assuming.
 | `D:\Confocal_Images\20260806_CW` | 4 `.vsi` + `.ets` (5.3 GB pixel data) | **NO** |
 | `D:\IFQ_Runs\confocal_260808` | pre-fix run — **counts void**, areas valid | yes |
 | `D:\IFQ_Runs\confocal_260808_fixed` | **post-fix run — use this one** | regenerable |
+| `D:\IFQ_Runs\confocal_260809_rerun` | byte-identical independent reproduction; corrected endpoint outputs are **exploratory only** | regenerable |
 | `<repo>\.cache\slide_channels` | deleted 2026-08-09; rebuild ~10 min via `scripts/cache_slide_channels.groovy` | yes |
 
 **Batch design:** 4 mice × 2 panels × ~10 fields. LEFT = DAPI/KRT5-488/AGER-555/T1α-647; RIGHT = DAPI/ProSPC-488/AGER-555/KRT8-647. 2048², single Z, 0.3107 µm/px, 12-bit.
@@ -129,25 +132,37 @@ All of these produced **plausible, wrong output with no error**. Assume more exi
 3. **Two mask formats.** `*_pod_mask` / `*_membrane_positive_mask` are uint8
    0/255; every `tissue__*_nuclei_mask` is a **uint16 label image**. A `>127`
    test renders nothing when a field has <128 objects. **Use `>0`.**
-4. **Silent column drop.** `aggregate_to_mouse.classify_columns()` uses a closed
-   whitelist (`aggregate_to_mouse.py:184-186`); non-matching columns vanish at
-   mouse level.
-5. **Declared-but-uncomputed spec.** `evaluate_endpoints.groovy` never read
-   `spec.denominator`. A guard now refuses rather than dividing by the wrong
-   thing and exiting 0.
-6. **Caption lied about its own parameters.** Panels printed config values, not
+4. **Silent column drop — fixed for partition QC.** Damaged/intact areas and
+   KRT5-in-intact tripwires now have explicit additive classifications and are
+   recomputed at mouse level. New measurement columns still require an explicit
+   pooling rule; never infer semantics from a generic numeric type.
+5. **Declared-but-uncomputed denominator — executor implemented.** The endpoint
+   evaluator now executes declarative AND/OR/NOT expressions for numerator and
+   denominator and emits both areas plus their fraction. It still refuses the
+   real corrected endpoint by default because T1A/PDPN is uncalibrated.
+6. **The tissue exporter duplicated the `blackBackground` bug.** Its fresh-JVM
+   reconstruction differed by 0.456% until the same missing `black` token was
+   restored. A regression test now requires the fixed call; the real rerun then
+   reconciled all 39 LEFT regions (worst rel. diff 3.285e-07).
+7. **Caption lied about its own parameters.** Panels printed config values, not
    resolved ones — every caption read `[0-0]`.
-7. **Otsu is *permissive* for broad markers.** It assumes two comparable-mass
+8. **Otsu is *permissive* for broad markers.** It assumes two comparable-mass
    modes; a continuum splits near background.
-8. **Disabled guard hid a defect.** `IFQ_MIN_INCLUDED_NUCLEI=0` was set to stop
-   fields vanishing — silencing an alarm that was correctly firing. Restored.
+9. **Disabled guard hid a defect and remains an explicit tradeoff.**
+   `IFQ_MIN_INCLUDED_NUCLEI=0` preserves area measurements in sparse regions,
+   but it also allowed the nucleus-segmentation collapse to exit successfully.
+   It is still zero in confocal/WSI area workflows; candidate-acceptance QC and
+   plausibility review are therefore mandatory. Do not describe this guard as
+   restored.
 
 ---
 
 ## 8. Open items, ranked
 
-1. **Corrected endpoint has never been computed.** The evaluator cannot build the
-   PDPN⁻ ∪ KRT5⁺ union denominator; it now refuses. This is the top blocker.
+1. **Corrected endpoint has never been computed defensibly.** The evaluator can
+   now build the PDPN⁻ ∪ KRT5⁺ union denominator, but T1A/PDPN has no locked
+   threshold and the reference used hand-traced regions. Calibration and manual
+   outline validation, not boolean plumbing, are now the top blockers.
 2. **DAPI is saturated at acquisition** (in-tissue p90 = 4095, 5–19 % clipped).
    Fixable only at the microscope — lower 405 gain. Permanently lossy if skipped.
 3. **n = 1 per genotype × condition.** Confounded; no statistics possible.

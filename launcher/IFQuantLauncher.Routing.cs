@@ -2357,6 +2357,59 @@ namespace IFQuantLauncher.Routing
     /// </summary>
     internal static class EnvironmentApply
     {
+        /// <summary>
+        /// Windows environment blocks can legally contain duplicate names that
+        /// differ only by case (for example Path and PATH). .NET Framework's
+        /// ProcessStartInfo.EnvironmentVariables materializes them into a
+        /// case-insensitive StringDictionary and throws before a child can be
+        /// started. Normalize only duplicate spellings in the current process;
+        /// values and all non-duplicate keys are preserved.
+        /// </summary>
+        public static int NormalizeDuplicateKeyCasing()
+        {
+            System.Collections.IDictionary raw = Environment.GetEnvironmentVariables();
+            Dictionary<string, List<string>> spellings =
+                new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> values =
+                new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (System.Collections.DictionaryEntry entry in raw)
+            {
+                string key = entry.Key == null ? null : entry.Key.ToString();
+                if (string.IsNullOrEmpty(key)) continue;
+                string value = entry.Value == null ? "" : entry.Value.ToString();
+                List<string> keys;
+                if (!spellings.TryGetValue(key, out keys))
+                {
+                    keys = new List<string>();
+                    spellings[key] = keys;
+                }
+                keys.Add(key);
+                values[key] = value;
+            }
+
+            int normalized = 0;
+            foreach (KeyValuePair<string, List<string>> group in spellings)
+            {
+                if (group.Value.Count < 2) continue;
+                string canonical = group.Value[0];
+                foreach (string spelling in group.Value)
+                {
+                    if (string.Equals(spelling, "Path", StringComparison.Ordinal))
+                    {
+                        canonical = spelling;
+                        break;
+                    }
+                }
+                string value = values[canonical];
+                foreach (string spelling in group.Value)
+                    Environment.SetEnvironmentVariable(spelling, null);
+                Environment.SetEnvironmentVariable(canonical, value);
+                normalized++;
+            }
+            return normalized;
+        }
+
         /// v1.7.2's ClearIfqEnvironment, verbatim in behaviour: a stale IFQ_*
         /// inherited from the shell must never reach the engine, because the
         /// engine reads every one of them and falls back silently.
@@ -2386,6 +2439,7 @@ namespace IFQuantLauncher.Routing
                     "A run environment may only reach a child process through a RunSeal, " +
                     "which is issued by RunSeal.Issue after the merged environment has been " +
                     "re-checked against the run record. The run was not started.");
+            NormalizeDuplicateKeyCasing();
             ClearIfq(psi.EnvironmentVariables);
             foreach (KeyValuePair<string, string> item in seal.Variables())
                 psi.EnvironmentVariables[item.Key] = item.Value;

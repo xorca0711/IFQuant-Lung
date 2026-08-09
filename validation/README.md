@@ -115,3 +115,22 @@ region-ROI handling. One further honest note: world A's candidate count is 209,
 not 208 -- one extra sub-minimum-size noise/split particle -- which is why the
 verdict is defined on the included (>= 8 um^2, edge-excluded) count against the
 interior ground truth.
+
+## Corrected endpoint algebra fixture
+
+`run_endpoint_demo.ps1` generates four tiny deterministic masks and invokes the
+production `endpoints/evaluate_endpoints.groovy` executor. The fixture asserts:
+
+* numerator `KRT5 AND T1A` = 2 pixels;
+* denominator `NOT T1A OR KRT5` = 6 pixels;
+* fraction = 1/3, while bare KRT5 = 4 pixels and the tissue region = 8 pixels.
+
+Run it with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File validation\run_endpoint_demo.ps1
+```
+
+This validates boolean algebra, output columns, containment guards, refusal of
+uncalibrated parameters, and refusal of retracted specifications. It does not
+calibrate T1A/PDPN or establish a biological endpoint.

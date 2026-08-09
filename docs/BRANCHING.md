@@ -1,7 +1,7 @@
 # Branch roles
 
 > **Status: CURRENT.** Branch topology verified against `git branch -a` and
-> `git tag` on 2026-08-08. The "Completed Z-stack merge gate" section at the
+> `git tag` on 2026-08-09. The "Completed Z-stack merge gate" section at the
 > bottom is a **historical record** of a gate that was passed, not a live
 > checklist.
 
@@ -22,16 +22,18 @@ keep working, but new remotes should use the new name.
 |---|---|---|
 | `v2.0.0` | `dfa3cfa` | "Preserve the superseded QuPath engines and consolidate branch roles" |
 | `v1.8.0` | `f16e8b4` | the four-route launcher |
-| *(none)* | `22afada` | **current `main` tip — untagged.** Launcher v1.9.0. |
+| `v1.9.0` | `22afada` | current published launcher release |
+| *(none)* | `35d27b8` | repository documentation/architecture work after the launcher release |
 
 Two tag series coexist because `v2.0.0` versions the **repository** and `v1.8.0`
 versions the **launcher**. That is confusing, reads as a rollback in `git tag`
 output, and puts the *lower* number on the *later* commit.
 
-The launcher has since shipped **v1.9.0** (`22afada`) without a tag, so the tag
-series is four commits behind the code it is meant to label. Either tag `v1.9.0`
-or stop tagging launchers and version the repository only. See
-[`PROJECT_STATE.md`](PROJECT_STATE.md) §4.
+The launcher is now correctly tagged and published as **v1.9.0** at `22afada`.
+The remaining problem is naming, not missing release state: repository tag
+`v2.0.0` predates launcher tags `v1.8.0` and `v1.9.0`. Future tags should either
+use one repository-wide version or explicit namespaces such as `repo-v*` and
+`launcher-v*`. Existing tags are historical records and must not be rewritten.
 
 Everything else was consolidated onto `main` on 2026-08-07 (PR #11).
 

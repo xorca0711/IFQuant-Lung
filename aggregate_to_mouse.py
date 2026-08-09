@@ -28,12 +28,15 @@ Usage
 -----
   python3 aggregate_to_mouse.py /path/to/analysis_output/run_summary.csv
   python3 aggregate_to_mouse.py run_summary.csv --outdir ./stats
+  python3 aggregate_to_mouse.py run_summary.csv --endpoint-csv endpoint_areas.csv \
+      --endpoint-spec config/endpoints/dysplastic_over_damaged.json
 
 No third-party dependencies (standard library only).
 =====================================================================
 """
 import argparse
 import csv
+import json
 import math
 import os
 import sys
@@ -111,6 +114,57 @@ def validate_rows(header, rows):
         )
 
 
+def merge_endpoint_rows(header, rows, endpoint_path):
+    """Join endpoint measurements to exactly matching run rows.
+
+    Endpoint evaluation is commonly panel-filtered. Return only matched rows so
+    an endpoint computed on LEFT cannot become a plausible zero-valued endpoint
+    on RIGHT during mouse aggregation.
+    """
+    if "output_key" not in header:
+        sys.exit("ERROR: --endpoint-csv requires output_key in run_summary.csv")
+    endpoint_header, endpoint_rows = read_rows(endpoint_path)
+    required = [c for c in ("output_key", "region") if c not in endpoint_header]
+    if required:
+        sys.exit("ERROR: endpoint CSV is missing required columns: " + ", ".join(required))
+    if not endpoint_rows:
+        sys.exit("ERROR: endpoint CSV has no data rows")
+
+    main_by_key = {}
+    for row in rows:
+        key = ((row.get("output_key") or "").strip(), (row.get("region") or "").strip())
+        if key in main_by_key:
+            sys.exit(f"ERROR: duplicate run_summary endpoint join key: {key}")
+        main_by_key[key] = row
+
+    endpoint_by_key = {}
+    for row in endpoint_rows:
+        key = ((row.get("output_key") or "").strip(), (row.get("region") or "").strip())
+        if key in endpoint_by_key:
+            sys.exit(f"ERROR: duplicate endpoint CSV join key: {key}")
+        endpoint_by_key[key] = row
+
+    unmatched = [key for key in endpoint_by_key if key not in main_by_key]
+    if unmatched:
+        sys.exit(
+            f"ERROR: {len(unmatched)} endpoint row(s) do not match run_summary "
+            f"by (output_key, region); examples: {unmatched[:5]}"
+        )
+
+    identity = {"output_key", "image", "region", "region_mode"}
+    measurement_cols = [c for c in endpoint_header if c not in identity]
+    conflicts = [c for c in measurement_cols if c in header]
+    if conflicts:
+        sys.exit("ERROR: endpoint CSV would overwrite run_summary columns: " + ", ".join(conflicts))
+
+    merged = []
+    for key, endpoint_row in endpoint_by_key.items():
+        row = dict(main_by_key[key])
+        for column in measurement_cols:
+            row[column] = endpoint_row.get(column, "")
+        merged.append(row)
+    return list(header) + measurement_cols, merged
+
 def classify_columns(header):
     """Group measurement columns by how they must be pooled."""
     # The plain <marker>_pos_count field is morphology-authoritative. Keep the
@@ -163,6 +217,18 @@ def classify_columns(header):
     ]
     positive_area = [c for c in header if c.endswith("_positive_area_um2")]
     n_components = [c for c in header if c.endswith("_n_components")]
+    # Slide-level partition QC has its own denominator semantics. These columns
+    # are raw additive areas, not region-level fractions, so they are safe to
+    # carry to mouse level by summing and recomputing the fractions below.
+    # Keeping the names explicit prevents a future arbitrary ``*_area_um2``
+    # column from silently acquiring sum semantics.
+    partition_area = [
+        c for c in header if c in {"damaged_area_um2", "intact_area_um2"}
+    ]
+    intact_pod_area = [c for c in header if c.endswith("_pod_area_um2_in_intact")]
+    endpoint_denominator_area = [
+        c for c in header if c.endswith("_denominator_area_um2")
+    ]
     # total pod area only -- exclude the derived per-region MEAN pod size, which
     # also ends in "_pod_area_um2" and would otherwise be summed as an area.
     pod_area = [c for c in header
@@ -183,7 +249,9 @@ def classify_columns(header):
                     set(final_cell_state_count))
     sum_cols = (set(["region_area_um2", "n_nuclei"]) | set(pos_count) |
                 set(pod_area) | set(n_pods) | set(class_count) | state_counts |
-                set(nucleus_qc_count) | set(positive_area) | set(n_components))
+                set(nucleus_qc_count) | set(positive_area) | set(n_components) |
+                set(partition_area) | set(intact_pod_area) |
+                set(endpoint_denominator_area))
     # derived columns we recompute (do NOT sum): fractions, densities, mean pod size, thresholds
     return {
         "pos_count": pos_count,
@@ -194,6 +262,9 @@ def classify_columns(header):
         "nucleus_qc_count": nucleus_qc_count,
         "positive_area": positive_area,
         "n_components": n_components,
+        "partition_area": partition_area,
+        "intact_pod_area": intact_pod_area,
+        "endpoint_denominator_area": endpoint_denominator_area,
         "pod_area": pod_area,
         "n_pods": n_pods,
         "class_count": class_count,
@@ -205,7 +276,7 @@ def marker_of(col, suffix):
     return col[: -len(suffix)]
 
 
-def aggregate_mice(header, rows):
+def aggregate_mice(header, rows, endpoint_relation=None):
     cats = classify_columns(header)
     groups = defaultdict(list)
     for r in rows:
@@ -231,6 +302,51 @@ def aggregate_mice(header, rows):
         total_area_mm2 = total_area_um2 / 1e6
         rec["total_tissue_area_um2"] = total_area_um2
         rec["total_nuclei"] = sums.get("n_nuclei", 0.0)
+
+        # --- WSI damaged/intact partition QC ------------------------------
+        # These values used to stop at slide level because classify_columns()
+        # did not recognize them. Pool the additive areas first, then recompute
+        # every fraction from the mouse-level denominator.
+        if cats["partition_area"]:
+            damaged_area = sums.get("damaged_area_um2", 0.0)
+            intact_area = sums.get("intact_area_um2", 0.0)
+            parenchyma_area = damaged_area + intact_area
+            rec["damaged_area_um2"] = damaged_area
+            rec["intact_area_um2"] = intact_area
+            rec["damaged_fraction_of_parenchyma"] = (
+                damaged_area / parenchyma_area if parenchyma_area > 0 else 0.0
+            )
+        for c in cats["intact_pod_area"]:
+            marker = marker_of(c, "_pod_area_um2_in_intact")
+            area = sums[c]
+            intact_area = sums.get("intact_area_um2", 0.0)
+            rec[c] = area
+            rec[f"{marker}_pod_area_frac_of_intact"] = (
+                area / intact_area if intact_area > 0 else 0.0
+            )
+
+        # --- relational endpoint denominators ----------------------------
+        # Endpoint CSVs can be joined to run_summary before aggregation. A
+        # denominator is additive; its fraction must be rebuilt from pooled
+        # numerator/denominator areas, never averaged across unequal regions.
+        for c in cats["endpoint_denominator_area"]:
+            endpoint = marker_of(c, "_denominator_area_um2")
+            numerator_col = f"{endpoint}_pod_area_um2"
+            denominator_area = sums[c]
+            numerator_area = sums.get(numerator_col, 0.0)
+            rec[c] = denominator_area
+            rec[f"{endpoint}_fraction"] = (
+                numerator_area / denominator_area if denominator_area > 0 else 0.0
+            )
+        if endpoint_relation:
+            numerator_col = endpoint_relation["area_column"]
+            bare_col = endpoint_relation["bare_area_column"]
+            companion_fraction_col = endpoint_relation["numerator_fraction_of_bare_column"]
+            numerator_area = sums.get(numerator_col, 0.0)
+            bare_area = sums.get(bare_col, 0.0)
+            rec[companion_fraction_col] = (
+                numerator_area / bare_area if bare_area > 0 else 0.0
+            )
 
         # --- nucleus-candidate QC totals and pooled fractions ---
         for c in cats["nucleus_qc_count"]:
@@ -407,6 +523,16 @@ def main():
     ap = argparse.ArgumentParser(description="Aggregate per-region run_summary.csv to mouse and group level.")
     ap.add_argument("run_summary", help="path to run_summary.csv from the Fiji pipeline")
     ap.add_argument("--outdir", default=None, help="output folder (default: alongside input)")
+    ap.add_argument(
+        "--endpoint-csv", default=None,
+        help="optional endpoint_areas.csv; joins exact output_key/region matches and "
+             "aggregates only evaluated rows",
+    )
+    ap.add_argument(
+        "--endpoint-spec", default=None,
+        help="endpoint JSON used to recompute its numerator/bare companion fraction; "
+             "requires --endpoint-csv",
+    )
     args = ap.parse_args()
 
     if not os.path.isfile(args.run_summary):
@@ -418,12 +544,35 @@ def main():
     if not rows:
         sys.exit("ERROR: no data rows in run_summary.csv")
     validate_rows(header, rows)
+    if args.endpoint_csv:
+        if not os.path.isfile(args.endpoint_csv):
+            sys.exit(f"ERROR: not found: {args.endpoint_csv}")
+        header, rows = merge_endpoint_rows(header, rows, args.endpoint_csv)
+        validate_rows(header, rows)
 
-    mouse_rows = aggregate_mice(header, rows)
+    endpoint_relation = None
+    if args.endpoint_spec:
+        if not args.endpoint_csv:
+            sys.exit("ERROR: --endpoint-spec requires --endpoint-csv")
+        if not os.path.isfile(args.endpoint_spec):
+            sys.exit(f"ERROR: not found: {args.endpoint_spec}")
+        with open(args.endpoint_spec, encoding="utf-8-sig") as handle:
+            spec = json.load(handle)
+        output = spec.get("output") or {}
+        required_outputs = [
+            "area_column", "bare_area_column", "numerator_fraction_of_bare_column"
+        ]
+        missing_outputs = [name for name in required_outputs if not output.get(name)]
+        if missing_outputs:
+            sys.exit("ERROR: endpoint spec output is missing: " + ", ".join(missing_outputs))
+        endpoint_relation = {name: output[name] for name in required_outputs}
+
+    mouse_rows = aggregate_mice(header, rows, endpoint_relation=endpoint_relation)
     grp_rows = group_stats(mouse_rows)
 
-    mouse_path = os.path.join(outdir, "mouse_level_summary.csv")
-    group_path = os.path.join(outdir, "group_level_summary.csv")
+    prefix = "endpoint_" if args.endpoint_csv else ""
+    mouse_path = os.path.join(outdir, prefix + "mouse_level_summary.csv")
+    group_path = os.path.join(outdir, prefix + "group_level_summary.csv")
     write_csv(mouse_path, mouse_rows)
     write_csv(group_path, grp_rows)
 

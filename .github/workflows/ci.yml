@@ -1,0 +1,60 @@
+name: repository-validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-validation:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Python regression tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Parse JSON configuration
+        shell: pwsh
+        run: |
+          $bad = @()
+          Get-ChildItem -Recurse -Filter '*.json' | ForEach-Object {
+            try { Get-Content -Raw -LiteralPath $_.FullName | ConvertFrom-Json | Out-Null }
+            catch { $bad += "$($_.FullName): $($_.Exception.Message)" }
+          }
+          if ($bad.Count) { throw ($bad -join "`n") }
+
+      - name: Parse PowerShell scripts
+        shell: powershell
+        run: |
+          $errors = @()
+          Get-ChildItem -Recurse -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors) { $errors += $parseErrors }
+          }
+          if ($errors.Count) { $errors | Format-List; exit 1 }
+
+      - name: Build launcher and run embedded self-tests
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
+
+      - name: Run legacy environment equivalence
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File .\launcher\run_legacy_equivalence.ps1
+
+      - name: Confirm clean tracked tree
+        shell: pwsh
+        run: |
+          $changes = git status --short --untracked-files=no
+          if ($changes) { throw "Validation modified tracked files:`n$changes" }

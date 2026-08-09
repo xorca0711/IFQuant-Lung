@@ -82,6 +82,10 @@
 
   "output": {
     "area_column": "KRT5dysplastic_pod_area_um2",
+    "denominator_area_column": "KRT5dysplastic_denominator_area_um2",
+    "fraction_column": "KRT5dysplastic_fraction",
+    "bare_area_column": "KRT5bare_pod_area_um2",
+    "numerator_fraction_of_bare_column": "qc_krt5_pdpn_positive_fraction",
     "aggregation": "SUM",
     "naming_note": [
       "Ends in _pod_area_um2 so aggregate_to_mouse.classify_columns() puts it in",

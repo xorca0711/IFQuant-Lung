@@ -4,8 +4,9 @@
 > older one. Where any other doc in `docs/` disagrees with this file, this file
 > wins and the other doc is stale — say so rather than reconciling silently.
 >
-> Last reconciled against data and code: **2026-08-08**, against
-> `D:\IFQ_Runs\confocal_260808_fixed`, `main` @ `22afada`.
+> Last reconciled against data and code: **2026-08-09**, against
+> `D:\IFQ_Runs\confocal_260809_rerun`, `main` @ `35d27b8`, and the
+> [G-SURF research scheme](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9).
 
 **Update this whenever work is parked.** It exists so a fresh session — or a
 reader with five minutes — can tell what was built, what is validated, and what
@@ -43,12 +44,13 @@ is not.
 |---|---|
 | repo | `X:\GitHub\IFQuant-Lung` (renamed from `Fiji_ImageJ_Cell_Counting`) |
 | GitHub | `xorca0711/IFQuant-Lung` |
-| branch | `main` @ `22afada`. Tags are `v1.8.0` (`f16e8b4`) and `v2.0.0` (`dfa3cfa`); **the current tip is untagged** — see `BRANCHING.md` |
+| branch | `main` @ `35d27b8`. Launcher tag `v1.9.0` points at `22afada`; the current tip is a post-release documentation baseline. See `BRANCHING.md`. |
 | review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
 | launcher binary | `IFQuantLauncher-v1.9.0.exe` at repo root — **gitignored** (`.gitignore:58`), see section 4 |
 | confocal data | `D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × 2 panels × ~10 fields |
 | slide-scanner data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` — 4 slides (WSI pilot) |
 | pipeline runs | `D:\IFQ_Runs\` — see its README |
+| research scheme | [G-SURF / 4W after PR8 infection](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9); M4-1 is confirmed **het** |
 | channel cache | `<repo>\.cache\slide_channels` (ds=8, bit-exact, 24.5× faster than decoding). Gitignored, regenerable in ~10 min via `scripts/cache_slide_channels.groovy`. Override with `IFQ_CACHE_DIR`. |
 | QuPath | `X:\QuPath\QuPath-0.7.0 (console).exe` |
 | Fiji | `X:\Fiji` — its `.exe` is **broken on ARM64**; invoke the JVM directly |
@@ -61,7 +63,8 @@ else was merged or retired on 2026-08-07; see [`BRANCHING.md`](BRANCHING.md).
 | run | what it is | use it for |
 |---|---|---|
 | `D:\IFQ_Runs\confocal_260808` | first confocal run; carries the `blackBackground` bug | **areas only**; every count in it is wrong |
-| `D:\IFQ_Runs\confocal_260808_fixed` | re-run after the fix | **everything** — this is the current run |
+| `D:\IFQ_Runs\confocal_260808_fixed` | re-run after the fix | **trusted result baseline** |
+| `D:\IFQ_Runs\confocal_260809_rerun` | independent 2026-08-09 reproduction | **verification record** — 79-row run summary and both ordinary aggregate CSVs are byte-identical to `confocal_260808_fixed` |
 | `D:\IFQ_Runs\validated` / `superseded` | earlier WSI pilot outputs | provenance |
 | `D:\IFQ_Runs\archive_202607_pre_revision` | 14 July runs (12.0 GB) moved off the system drive | provenance |
 
@@ -89,22 +92,28 @@ PDPN-negativity excluded the population being measured.
 |---|---|
 | `config/endpoints/dysplastic_over_damaged.json` | **CURRENT spec.** Correct sign, union denominator, cites the reference verbatim. |
 | `config/endpoints/ectopic_pod_over_damaged.json` | **SUPERSEDED.** Wrong sign, wrong denominator, mis-quotes the reference. Kept as the record. |
-| `endpoints/evaluate_endpoints.groovy` | **Cannot execute the current spec yet.** It reads `spec.numerator` and always divides by `region_area_um2`. It never reads `spec.denominator`. |
+| `endpoints/evaluate_endpoints.groovy` | **Executor implemented in the 2026-08-09 working tree.** It evaluates declarative `AND`/`OR`/negated terms for both numerator and denominator, emits both areas and the fraction, and rejects retracted specs. |
 
-That last row matters and is the largest open gap: the corrected endpoint is
-**declared but not computable**. The only endpoint numbers that exist
+The algebra is now computable, but the scientific endpoint is still blocked by
+an uncalibrated T1A/PDPN mask and the lack of manual-outline ground truth. The
+executor therefore refuses uncalibrated masks by default; an explicit
+exploratory override exists for engineering validation only. A corrected-algebra
+engineering run exists under `confocal_260809_rerun` (39 LEFT fields; pooled
+fractions M2 7.384278%, M4-1 6.363576%, M4-2 0%, M6 0.000346%), with an
+`EXPLORATORY_ONLY.md` warning. These are not reportable. The earlier endpoint numbers
 (`D:\IFQ_Runs\confocal_260808\endpoint_areas.csv`, `endpoint.log`) were produced
 by the **superseded** spec — `endpoint : ectopic_pod_over_damaged`,
 `numerator: KRT5_pod_mask AND NOT T1A_membrane_positive_mask`, denominator =
 total tissue region, not damaged area. They validated the *machinery*, not the
-*endpoint*.
+*endpoint*. A new deterministic synthetic fixture tests the corrected
+intersection/union algebra exactly.
 
 ### What is actually established
 
 | item | status | evidence |
 |---|---|---|
 | WSI chain Stage 1→2→3 | **VALIDATED** | reconciliation to 2.1e-16; see [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) §10 |
-| mask-algebra endpoint module | **VALIDATED mechanically** | reconstruction rel. diff 3.285e-07 (a TIFF resolution-tag rounding constant), containment 39/39, three failure guards executed |
+| mask-algebra endpoint module | **VALIDATED mechanically** | synthetic numerator 2, denominator 6, fraction 1/3; uncalibrated and retracted specs refused; real-data reconstruction worst rel. diff 3.285e-07 |
 | `IFQ_KRT5_THRESHOLD = 300` | **CALIBRATED**, one sound control | control p99.99 = 283 (M4-2) / 255 (M6); recorded as `fixed_predeclared` in both runs. **M6 LEFT is a staining failure, so this rests on M4-2 alone.** |
 | `IFQ_AGER_THRESHOLD`, `IFQ_T1A_THRESHOLD` | **NOT CALIBRATED** | both run `adaptive_otsu_exploratory`; deliberately so — they are constitutively expressed, so "the control should be negative" gives no handle |
 | AGER damage detector (AGER 150, σ 40 µm, cutoff 0.14) | **RETIRED as the denominator** | it was locked from controls and the derivation is sound, but the reference's denominator is a **hand-traced union**, not a density detector. It solves a problem the reference does not have. |
@@ -269,48 +278,41 @@ and `IFQuantLauncher-v1.9.0.exe` ships beside it with its own SHA-256 file.
 
 ### Still owed
 
-* **The tip is untagged.** Tags stop at `v1.8.0` (`f16e8b4`), four commits behind.
-  `v1.9.0` should be tagged at `22afada`, or the launcher tag series abandoned.
+* **Choose a long-term version namespace.** `v1.9.0` correctly tags the launcher
+  release at `22afada`, while `v2.0.0` is an older repository tag. The coexistence
+  is historically accurate but easy to misread.
 * **The shipped binary is gitignored** (`.gitignore:58`, `/IFQuantLauncher-*.exe`),
   so it cannot be tied to a commit. Every *retired* launcher back to v1.1 **is**
   tracked, under `legacy/launchers/`. The current one is the only untracked link
   in that chain.
-* **`IFQuantLauncher-v1.8.0.exe` is still at the repo root** next to v1.9.0, with
-  nothing marking which is current. It belongs in `legacy/launchers/` with the
-  others — a deletion/move for the orchestrator, not for this document.
 * Section `[c]` of the equivalence report is still headed "The **v1.8.0** source
   cannot quietly stop being legacy". Cosmetic, but it is the sort of stale label
   that later reads as evidence about the wrong build.
 
 ---
 
-## 5. Known bug carried in main
+## 5. Aggregation QC bug — fixed in the 2026-08-09 working tree
 
-Five partition QC columns are **silently dropped** at mouse level —
-`aggregate_to_mouse.classify_columns()` uses a closed whitelist
-(`aggregate_to_mouse.py:184-186`), and anything outside it vanishes with no
-error. The primary endpoint is unaffected; per-mouse QC is lost. The proposed fix
-(`panel = "<PANEL>@<scope>"`) is **not applied** — it changes the shape of
-`slide_level_summary.csv`. Verified empirically; see
-[`ECTOPIC_POD_ENDPOINT.md`](ECTOPIC_POD_ENDPOINT.md) §9.
+Partition QC columns (`damaged_area_um2`, `intact_area_um2`, and intact-region
+pod areas/fractions) were silently dropped at mouse level because
+`classify_columns()` used a closed whitelist. They are now explicitly classified,
+summed, and recomputed from pooled areas. Regression tests cover the classification
+and pooled-fraction math; the output panel shape is unchanged.
 
 ---
 
 ## 6. Decisions waiting on the user
 
-1. **The corrected endpoint needs an executor.** `evaluate_endpoints.groovy`
-   cannot compute a union denominator. Extend it, or accept that the endpoint
-   stays a specification.
-2. **`panel@scope`** — apply the QC-column fix, or leave it?
-3. **Whether the launcher tag series continues.** v1.9.0 shipped untagged; tags
-   stop at v1.8.0. Either tag it or stop tagging launchers and version the repo
-   only.
-4. **Low-exposure 488 control.** KRT5 was acquired at ~949 ms against ~0.5–2 ms
+1. **Calibrate T1A/PDPN and define manual-outline ground truth.** The corrected
+   endpoint algebra runs, but no defensible biological fraction exists without this.
+2. **Whether the launcher and repository share a tag namespace.** `v1.9.0` is a
+   launcher release; `v2.0.0` is an older repository tag.
+3. **Low-exposure 488 control.** KRT5 was acquired at ~949 ms against ~0.5–2 ms
    for the other channels. If the background is an acquisition artefact, that
    fixes the numerator at source.
-5. **Is `het` the control?** A heterozygous *Ifng*⁺/⁻ often signals normally.
+4. **Is `het` the control?** A heterozygous *Ifng*⁺/⁻ often signals normally.
    This defines n and therefore what comparison is even available.
-6. **M6 LEFT staining failure.** AGER frac>500 = 0.0097 in M6 LEFT vs 0.289 in
+5. **M6 LEFT staining failure.** AGER frac>500 = 0.0097 in M6 LEFT vs 0.289 in
    M6 RIGHT — same antibody, same animal. Until that is resolved, `KRT5=300`
    rests on one control.
 
@@ -333,13 +335,10 @@ adopted — and the area-based endpoint never touches nuclei segmentation.
 
 ## 8. Next steps, in order
 
-1. Tag `v1.9.0` at `22afada`, move `IFQuantLauncher-v1.8.0.exe` into
-   `legacy/launchers/`, and decide whether the current binary is tracked
-   (section 4).
-2. Teach `evaluate_endpoints.groovy` the union denominator, or record explicitly
-   that `dysplastic_over_damaged.json` is a specification only (section 2).
-3. Re-derive `IFQ_KRT5_THRESHOLD` once a second sound control exists.
-4. Airway annotation workflow (QuPath GeoJSON → per-tile subtraction). Every
+1. Preserve `confocal_260809_rerun` as the byte-identical reproducibility record.
+2. Calibrate T1A/PDPN and validate the corrected endpoint against hand-drawn
+   outlines; exploratory adaptive-Otsu output must not be treated as a result.
+3. Airway annotation workflow (QuPath GeoJSON → per-tile subtraction). Every
    KRT5 number includes airway basal cells until this exists.
-5. Validate against hand-drawn outlines on a subset — the reference method is
-   manual, so manual outlines are the only available ground truth.
+4. Re-derive `IFQ_KRT5_THRESHOLD` once a second sound control exists.
+5. Re-run launcher route/equivalence validation on every release build.

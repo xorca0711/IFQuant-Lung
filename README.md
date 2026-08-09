@@ -1,5 +1,7 @@
 # IFQuant-Lung
 
+[![repository validation](https://github.com/xorca0711/IFQuant-Lung/actions/workflows/ci.yml/badge.svg)](https://github.com/xorca0711/IFQuant-Lung/actions/workflows/ci.yml)
+
 **A reproducible pipeline for quantifying dysplastic KRT5⁺ repair in
 influenza-injured mouse lung from multiplex immunofluorescence.** Fiji is the
 sole measurement engine; QuPath handles whole-slide reading and tiling; Python
@@ -32,10 +34,12 @@ flowchart LR
 Six results a reviewer can check. Numbers match the artefacts they came from.
 
 **1 · Thresholds locked from controls, before the test data was opened.**
-`IFQ_KRT5_THRESHOLD = 300`, derived from the two uninfected animals alone
+`IFQ_KRT5_THRESHOLD = 300`, derived from the two nominally uninfected animals
 (in-tissue p99.99 = 283 and 255, worst-of-both) → control false-positive area
-≤ 1e-4 in each independently. Infected tissue then measured 8.1 % of area above
-500 — a result the cutoff had no opportunity to manufacture.
+≤ 1e-4 in each independently. However, M6 LEFT has an established staining
+failure, so the calibration currently rests on one sound control (M4-2) and must
+be re-derived. Infected tissue measured 8.1 % of area above 500 — a result the
+cutoff had no opportunity to manufacture.
 
 **2 · A near-binary infected/uninfected separation — descriptive, not
 inferential.**
@@ -43,7 +47,7 @@ inferential.**
 | mouse | genotype | condition | KRT5⁺ area | KRT5 pods |
 |---|---|---|---|---|
 | M2 | hom | PR8 | **14.11 %** | 1080 |
-| M4-1 | het | PR8 | **11.98 %** | 1092 |
+| M4-1 | het | PR8 | **11.98 %** | 1094 |
 | M4-2 | het | uninfected | **0.000 %** | 0 |
 | M6 | hom | uninfected | **0.003 %** | ~0 |
 
@@ -133,9 +137,13 @@ embedded engine has drifted from the version it claims equivalence to.
 | **Descriptive only** | the four-animal KRT5⁺ area table above |
 | **Exploratory** | AGER and T1α calls — both constitutively expressed, so no negative-control anchor exists; labelled `adaptive_otsu_exploratory` |
 | **Retracted / superseded** | AGER as a co-negativity marker · KRT8 as a discriminator · the KRT5⁺PDPN⁻ endpoint form |
-| **Not established** | any genotype-level inference · the corrected endpoint (declared, never computed) · routes 1 and 2 end-to-end through the launcher UI |
+| **Not established** | any genotype-level inference · a defensible corrected endpoint (executor implemented, T1A/PDPN uncalibrated and manual validation absent) · routes 1 and 2 end-to-end through the launcher UI |
 
-**Licence:** [MIT](LICENSE). The licence covers the software and documentation only — not image data, not the third-party tools this pipeline invokes (Fiji, QuPath, Bio-Formats), and not the unpublished findings.
+An explicitly labelled engineering run of the corrected algebra now exists at
+`D:\IFQ_Runs\confocal_260809_rerun`; it is not a reportable endpoint result.
+
+**Licence:** [MIT](LICENSE), with a separate [scope note](LICENSE_SCOPE.md) for
+image data, third-party tools, and unpublished findings.
 
 ---
 
@@ -247,14 +255,13 @@ adaptive Otsu, which on a mostly-background tile reports
 | `config/endpoints/` | Endpoint specifications as reviewable, diffable data — including the superseded one and why it was superseded. |
 | `config/lung_marker_registry.json` | Marker aliases, localisation, analytical-role defaults. Not a whitelist and not a diagnostic classifier. |
 | `launcher/` | C#/WinForms front end, its build script, and the executed legacy-equivalence harness. |
-| `panels/` | Figure rendering (merge panels, QC overlays). New, untracked, not yet validated. |
+| `panels/` | Tracked figure rendering (merge panels, QC overlays). Mask-driven v8 was validated on 80 fields; see [`docs/VISUAL_PANELS.md`](docs/VISUAL_PANELS.md). |
 | `docs/` | Depth: [`PROJECT_STATE.md`](docs/PROJECT_STATE.md) (living handoff), [`NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md), [`ECTOPIC_POD_ENDPOINT.md`](docs/ECTOPIC_POD_ENDPOINT.md), [`WSI_TILING_WORKFLOW.md`](docs/WSI_TILING_WORKFLOW.md), [`QUPATH_FIJI_INTEGRATION.md`](docs/QUPATH_FIJI_INTEGRATION.md), [`MARKER_MORPHOLOGY_GUIDE.md`](docs/MARKER_MORPHOLOGY_GUIDE.md), [`VISUAL_PANELS.md`](docs/VISUAL_PANELS.md). |
 | `legacy/` | Non-authoritative archive. No threshold in it is current. |
 | `WORKFLOW.md` | Superseded as an entry point; see the banner at its top. |
 
-Note on `docs/PROJECT_STATE.md`: parts of it predate the KRT5 calibration and
-the segmentation fix and still describe both as open. Where it disagrees with
-this file, this file is newer.
+`docs/PROJECT_STATE.md` is the living scientific handoff. It was reconciled on
+2026-08-09; if a historical document disagrees with it, the living handoff wins.
 
 ---
 
@@ -298,8 +305,10 @@ justify both. Reading the figure legends verbatim showed the opposite. The
 corrected specification is
 [`config/endpoints/dysplastic_over_damaged.json`](config/endpoints/dysplastic_over_damaged.json);
 it declares the relation as data, records what it supersedes and why, and is
-evaluated by mask algebra rather than by editing the engine. It has not yet been
-run over the data.
+evaluated by mask algebra rather than by editing the engine. The executor now
+implements the intersection/union algebra and refuses uncalibrated parameters by
+default. No corrected value is scientifically reportable until T1A/PDPN is
+calibrated and the result is checked against manual outlines.
 
 ## Panels and marker configuration
 
