@@ -237,11 +237,13 @@ countable, not area-quantifiable, without a registry change.
 
 ---
 
-## 4. Launcher — v1.8.0 landed, v1.9.0 supersedes it
+## 4. Launcher — v1.9.1 GUI repair candidate
 
 Four routes: confocal fields / slide scanner / H&E (deliberately disabled) /
-legacy. v1.8.0 committed at `f7dbb02`; **v1.9.0 at `22afada`** adds a responsive
-WinForms layout and makes the equivalence claim reproducible. See
+legacy. v1.8.0 committed at `f7dbb02`; **published v1.9.0 at `22afada`** adds a
+responsive WinForms layout and makes the equivalence claim reproducible. The
+v1.9.1 source candidate keeps file scope outside the unreliable scrolling pane
+and adds a named preset for the validated 20x/2k lung cohort. See
 `launcher/README.md`.
 
 **Route 4 is proven equal to v1.7.2 by execution, not assertion.**
@@ -273,8 +275,10 @@ counts are not evidence; the adversarial pass is.
 
 Two materially different launcher sources both declared `1.8.0.0` — the
 committed one and a ~476-line uncommitted WinForms layout revision on top of it.
-**Fixed at `22afada`:** the source now declares `AssemblyFileVersion("1.9.0.0")`
-and `IFQuantLauncher-v1.9.0.exe` ships beside it with its own SHA-256 file.
+**Fixed at `22afada`:** the release source declares
+`AssemblyFileVersion("1.9.0.0")`. The GUI repair advances the source to
+`1.9.1.0`, so it does not repeat the earlier collision; a local
+`IFQuantLauncher-v1.9.1.exe` build has its own SHA-256 sidecar.
 
 ### Still owed
 

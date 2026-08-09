@@ -20,8 +20,8 @@ using IFQuantLauncher.Routing;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.9.0.0")]
-[assembly: AssemblyFileVersion("1.9.0.0")]
+[assembly: AssemblyVersion("1.9.1.0")]
+[assembly: AssemblyFileVersion("1.9.1.0")]
 
 namespace IFQuantLauncher
 {
@@ -126,6 +126,8 @@ namespace IFQuantLauncher
         private TableLayoutPanel configLeft;
         private TableLayoutPanel configRight;
         private Label introLabel;
+        private GroupBox inputScopeGroup;
+        private Button validatedLungScopeButton;
         private FlowLayoutPanel actionsPanel;
         private TableLayoutPanel progressStack;
         private bool adjustingConfigPane;
@@ -242,6 +244,7 @@ namespace IFQuantLauncher
             // The shape is now:
             //
             //   header                       AutoSize   (quick start)
+            //   input scope                  AutoSize   (always reachable)
             //   configuration pane           computed   TWO columns, AutoScroll
             //   gate summary                 AutoSize  \
             //   action buttons               AutoSize   |  pinned: these four
@@ -266,6 +269,7 @@ namespace IFQuantLauncher
             rootTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             rootTable.RowCount = RootRowCount;
             rootTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));            // header
+            rootTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));            // input scope
             rootTable.RowStyles.Add(new RowStyle(SizeType.Absolute, ScaledF(320F)));// config
             rootTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));            // gate
             rootTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));            // actions
@@ -285,6 +289,66 @@ namespace IFQuantLauncher
                 "(3) leave panel selection on AUTO when the complete marker panel is named in the file/folder path, then create visual merge panels or run analysis. " +
                 "Recommended settings can normally be left unchanged. Research use only.";
             rootTable.Controls.Add(introLabel, 0, RootRowHeader);
+
+            // File scope is a run-defining input, not an expert afterthought.
+            // Keep it outside the scrolling configuration pane so an operator
+            // can always see which files AUTO must classify. This also gives
+            // the validated lung cohort a named preset instead of requiring a
+            // regular expression to be recalled from documentation.
+            inputScopeGroup = new GroupBox();
+            inputScopeGroup.Text = "Input scope — which microscope files are included";
+            inputScopeGroup.Dock = DockStyle.Top;
+            inputScopeGroup.AutoSize = true;
+            inputScopeGroup.Padding = new Padding(10);
+
+            TableLayoutPanel inputScope = new TableLayoutPanel();
+            inputScope.Dock = DockStyle.Top;
+            inputScope.AutoSize = true;
+            inputScope.ColumnCount = 4;
+            inputScope.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(155F)));
+            inputScope.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            inputScope.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(155F)));
+            inputScope.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            inputScopeGroup.Controls.Add(inputScope);
+
+            includeRegexBox = new TextBox();
+            includeRegexBox.Text = ".*";
+            includeRegexBox.Dock = DockStyle.Fill;
+            AddSetting(inputScope, 0, 0, "Filename filter", includeRegexBox);
+
+            validatedLungScopeButton = new Button();
+            validatedLungScopeButton.Text = "Use validated 20x 2k .oir fields";
+            validatedLungScopeButton.AutoSize = true;
+            validatedLungScopeButton.Dock = DockStyle.Fill;
+            validatedLungScopeButton.Click += delegate
+            {
+                includeRegexBox.Text = @".*20x 2k.*\.oir";
+            };
+            inputScope.Controls.Add(validatedLungScopeButton, 2, 0);
+            inputScope.SetColumnSpan(validatedLungScopeButton, 2);
+
+            maxImagesBox = new NumericUpDown();
+            maxImagesBox.Minimum = 0;
+            maxImagesBox.Maximum = 1000000;
+            maxImagesBox.Value = 0;
+            maxImagesBox.Dock = DockStyle.Fill;
+            AddSetting(inputScope, 1, 0, "Image limit (0 = all)", maxImagesBox);
+
+            recursiveBox = new CheckBox();
+            recursiveBox.Text = "Search subfolders";
+            recursiveBox.Checked = true;
+            recursiveBox.AutoSize = true;
+            recursiveBox.Anchor = AnchorStyles.Left;
+            inputScope.Controls.Add(MakeLabel("Subfolders"), 2, 1);
+            inputScope.Controls.Add(recursiveBox, 3, 1);
+
+            toolTips.SetToolTip(includeRegexBox,
+                "Full-path regular expression. Leave .* to include every supported microscope image.");
+            toolTips.SetToolTip(validatedLungScopeButton,
+                "Selects the independently validated 20x 2k .oir lung fields and excludes 4x navigation acquisitions.");
+            toolTips.SetToolTip(maxImagesBox,
+                "0 analyzes all matching images. Use 1 for a quick pilot run.");
+            rootTable.Controls.Add(inputScopeGroup, 0, RootRowInputScope);
 
             // The scrolling configuration pane and its two columns. Groups are
             // appended to the columns at the END of this method, once the route
@@ -462,25 +526,6 @@ namespace IFQuantLauncher
             AddSetting(settings, 6, 0, "Whole-image tissue type", wholeCompartmentBox);
             AddSetting(settings, 6, 2, "Z-plane (-1 = middle)", singlePlaneBox);
 
-            includeRegexBox = new TextBox();
-            includeRegexBox.Text = ".*";
-            includeRegexBox.Dock = DockStyle.Fill;
-            AddSetting(settings, 7, 0, "Filename filter", includeRegexBox);
-
-            maxImagesBox = new NumericUpDown();
-            maxImagesBox.Minimum = 0;
-            maxImagesBox.Maximum = 1000000;
-            maxImagesBox.Value = 0;
-            maxImagesBox.Dock = DockStyle.Fill;
-            AddSetting(settings, 7, 2, "Image limit (0 = all)", maxImagesBox);
-
-            recursiveBox = new CheckBox();
-            recursiveBox.Text = "Search subfolders";
-            recursiveBox.Checked = true;
-            recursiveBox.AutoSize = true;
-            recursiveBox.Anchor = AnchorStyles.Left;
-            AddWideSetting(settings, 8, "Subfolders", recursiveBox);
-
             panelBox.SelectedIndexChanged += delegate { UpdatePanelHelp(); };
             panelBox.TextChanged += delegate { UpdatePanelHelp(); };
             toolTips.SetToolTip(panelBox, "AUTO assigns each matching image independently from marker names in its file/folder path, then applies that built-in panel's fixed acquisition channel order. Multiple recognized panels may share one run. Unknown images stop for manual review; stains are not inferred from colors or intensity.");
@@ -490,8 +535,6 @@ namespace IFQuantLauncher
             toolTips.SetToolTip(tissueModeBox, "Auto excludes empty background. Whole field is appropriate only when the entire image should be analyzed.");
             toolTips.SetToolTip(compartmentModeBox, "Required protects the negative denominator. Strict marker evidence may be retained when anatomy is unresolved, but a negative requires a compatible compartment; a known incompatible compartment remains indeterminate.");
             toolTips.SetToolTip(wholeCompartmentBox, "Use this only when the whole image contains one known tissue compartment.");
-            toolTips.SetToolTip(includeRegexBox, "Leave .* to include every supported microscope image. This is an expert regular-expression filter.");
-            toolTips.SetToolTip(maxImagesBox, "0 analyzes all matching images. Use 1 for a quick pilot run.");
 
             TableLayoutPanel advancedContainer = new TableLayoutPanel();
             advancedContainer.Dock = DockStyle.Top;
@@ -683,12 +726,13 @@ namespace IFQuantLauncher
         // =================================================================
 
         private const int RootRowHeader = 0;
-        private const int RootRowConfig = 1;
-        private const int RootRowGate = 2;
-        private const int RootRowActions = 3;
-        private const int RootRowProgress = 4;
-        private const int RootRowLog = 5;
-        private const int RootRowCount = 6;
+        private const int RootRowInputScope = 1;
+        private const int RootRowConfig = 2;
+        private const int RootRowGate = 3;
+        private const int RootRowActions = 4;
+        private const int RootRowProgress = 5;
+        private const int RootRowLog = 6;
+        private const int RootRowCount = 7;
 
         /// The log is the only thing a running analysis writes to, so it keeps
         /// a floor of its own and the configuration pane is never allowed to
@@ -818,6 +862,7 @@ namespace IFQuantLauncher
 
             int reserved =
                 PreferredOuterHeight(introLabel, rowWidth) +
+                PreferredOuterHeight(inputScopeGroup, rowWidth) +
                 PreferredOuterHeight(gateSummaryLabel, rowWidth) +
                 PreferredOuterHeight(actionsPanel, rowWidth) +
                 PreferredOuterHeight(progressStack, rowWidth) +
@@ -1183,8 +1228,11 @@ namespace IFQuantLauncher
                 throw new InvalidOperationException(
                     "Automatic panel detection could not identify " + unknown.Count +
                     " of " + analyticalFiles.Count + " matching image(s):\r\n" + examples +
-                    "\r\n\r\nChoose the panel manually or narrow the filename filter. " +
-                    "No image was assigned by color alone.");
+                    "\r\n\r\nNarrow the always-visible Input scope before choosing one panel " +
+                    "manually. For the validated lung cohort, click 'Use validated 20x " +
+                    "2k .oir fields'. Do not choose one manual panel for a folder that " +
+                    "contains both LEFT and RIGHT acquisitions. No image was assigned " +
+                    "by color alone.");
             }
             result.FallbackPanel = result.PanelCounts
                 .OrderByDescending(delegate(KeyValuePair<string, int> pair) { return pair.Value; })

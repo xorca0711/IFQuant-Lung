@@ -184,7 +184,22 @@ namespace IFQuantLauncher
 
             // The v1.7.2 controls must still be present and reachable.
             if (inputBox == null || fijiBox == null || outputBaseBox == null ||
-                panelBox == null || runButton == null || logBox == null) return 63;
+                panelBox == null || runButton == null || logBox == null ||
+                inputScopeGroup == null || includeRegexBox == null ||
+                validatedLungScopeButton == null || maxImagesBox == null ||
+                recursiveBox == null) return 63;
+
+            // File scope must remain outside the scrolling configuration pane.
+            // It is impossible to repair a bad AUTO scan with a control that
+            // the same broken scroll layout prevents the operator from seeing.
+            if (inputScopeGroup.Parent != rootTable ||
+                !IsDescendantOf(includeRegexBox, inputScopeGroup) ||
+                IsDescendantOf(includeRegexBox, configScroll)) return 78;
+            includeRegexBox.Text = ".*";
+            validatedLungScopeButton.PerformClick();
+            if (!string.Equals(includeRegexBox.Text, @".*20x 2k.*\.oir",
+                               StringComparison.Ordinal)) return 78;
+            includeRegexBox.Text = ".*";
 
             // H1: panel T must not be in the picker while pilot panels are locked.
             foreach (object item in panelBox.Items)
@@ -433,6 +448,13 @@ namespace IFQuantLauncher
             RefreshGateSummary();
 
             return 0;
+        }
+
+        private static bool IsDescendantOf(Control control, Control ancestor)
+        {
+            for (Control current = control; current != null; current = current.Parent)
+                if (current == ancestor) return true;
+            return false;
         }
 
         private void BuildRouteGroup()
