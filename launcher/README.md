@@ -76,6 +76,10 @@ them — `launcher/legacy_equivalence_report.txt`, **84 checks, 0 failures**:
 - **Process level**: the *child process* environment is compared, not just the
   dictionary — inherited `IFQ_*` variables are stripped, and the child receives
   no `IFQ_MIN_INCLUDED_NUCLEI`, which v1.7.2 never wrote.
+- **Windows key casing**: before materializing `ProcessStartInfo` the launcher
+  normalizes duplicate case variants such as `Path`/`PATH`. .NET Framework's
+  case-insensitive environment dictionary otherwise throws before the child
+  process starts; values and all non-duplicate keys are preserved.
 - **Drift guard**: the harness re-reads the real v1.7.2 source and confirms the
   key set, the assignment *order*, the hardcoded values, and that v1.7.2
   contains no QuPath/`.vsi`/brightfield reference. If someone edits the legacy

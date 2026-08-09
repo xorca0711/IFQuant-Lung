@@ -39,6 +39,11 @@ param([switch]$KeepBuild)
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
+
+# A Windows environment block may contain both Path and PATH. .NET Framework's
+# ProcessStartInfo.EnvironmentVariables used to throw while materializing that
+# block. Do not sanitize it here: the shipping EnvironmentApply path must prove
+# that it handles the condition itself.
 $work = Join-Path $env:TEMP ("ifq_legacy_eq_" + [System.Diagnostics.Process]::GetCurrentProcess().Id)
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 

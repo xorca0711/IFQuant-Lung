@@ -1,12 +1,38 @@
-$ErrorActionPreference = "Continue"
-$repo = "X:\GitHub\IFQuant-Lung"
-$data = "D:\Confocal_Images\260808-CW\260808-CW"
-$out  = "D:\IFQ_Runs\confocal_260808"
-$fj   = "X:\Fiji"
-$jre  = (Get-ChildItem "$fj\java" -Recurse -Filter java.exe | Select-Object -First 1).FullName
+param(
+  [string]$OutputRoot = "D:\IFQ_Runs\confocal_260808",
+  [string]$DataRoot = "D:\Confocal_Images\260808-CW\260808-CW",
+  [string]$PanelMapPath = "D:\IFQ_Runs\confocal_260808\panel_map.csv"
+)
 
-# the engine requires samplesheet.csv to sit in INPUT_DIR
-Copy-Item "$out\samplesheet.csv" "$data\samplesheet.csv" -Force
+$ErrorActionPreference = "Stop"
+$repo = "X:\GitHub\IFQuant-Lung"
+$data = [System.IO.Path]::GetFullPath($DataRoot)
+$out  = [System.IO.Path]::GetFullPath($OutputRoot)
+$fj   = "X:\Fiji"
+$jreItem = Get-ChildItem "$fj\java" -Recurse -Filter java.exe -ErrorAction SilentlyContinue |
+           Select-Object -First 1
+$patcher = Join-Path $fj "jars\ij1-patcher-2.0.0.jar"
+if (-not $jreItem -or -not (Test-Path -LiteralPath $patcher -PathType Leaf)) {
+  throw "Fiji Java runtime or ij1-patcher is missing under: $fj"
+}
+$jre = $jreItem.FullName
+$panelMap = [System.IO.Path]::GetFullPath($PanelMapPath)
+
+if (-not (Test-Path -LiteralPath "$data\samplesheet.csv" -PathType Leaf)) {
+  throw "The engine requires samplesheet.csv in the input directory: $data"
+}
+if (-not (Test-Path -LiteralPath $panelMap -PathType Leaf)) {
+  throw "Panel map not found: $panelMap"
+}
+if (Test-Path -LiteralPath $out) {
+  $existing = @(Get-ChildItem -LiteralPath $out -Force -ErrorAction SilentlyContinue)
+  if ($existing.Count -gt 0) {
+    throw "Refusing to reuse a non-empty run root: $out"
+  }
+}
+New-Item -ItemType Directory -Path $out -Force | Out-Null
+Copy-Item -LiteralPath "$data\samplesheet.csv" -Destination "$out\samplesheet.csv" -Force
+Copy-Item -LiteralPath $panelMap -Destination "$out\panel_map.csv"
 
 $env:IFQ_INPUT_DIR      = $data
 $env:IFQ_OUTPUT_DIR     = "$out\analysis"
@@ -19,23 +45,31 @@ $env:IFQ_PANEL_MAP_PATH = "$out\panel_map.csv"   # authoritative; every image ne
 $env:IFQ_MARKER_REGISTRY = "$repo\config\lung_marker_registry.json"
 $env:IFQ_SEGMENTER      = "classic"
 $env:IFQ_PROJECTION     = "max"                   # SizeZ=1, so no projection actually runs
-$env:IFQ_MIN_INCLUDED_NUCLEI = "0"                # or sparse fields vanish, losing their area
+# Area-preserving tradeoff: sparse tissue fields remain measurable, but a zero
+# floor cannot catch a nucleus-segmentation collapse. Candidate-acceptance QC
+# and plausibility review are mandatory (docs/AI_HANDOFF.md section 7).
+$env:IFQ_MIN_INCLUDED_NUCLEI = "0"
 
-# KRT5 frozen from the UNINFECTED CONTROLS ONLY.
+# KRT5 frozen from the nominal UNINFECTED CONTROLS ONLY.
 # Pooled in-tissue p99.99 was 283 (M4-2) and 255 (M6); 300 sits just above both,
-# giving a false-positive area fraction <= 1e-4 in each control independently.
-# Infected M2 has 8.1% of tissue above 500, so the separation is 3+ orders.
+# giving a false-positive area fraction <= 1e-4 in each. M6 LEFT is an
+# established staining failure, however, so this calibration rests on the one
+# sound control (M4-2) and must be re-derived. Infected M2 has 8.1% of tissue
+# above 500, so the observed separation is 3+ orders.
 $env:IFQ_KRT5_THRESHOLD = "300"
 
 # AGER and T1A are deliberately LEFT ADAPTIVE. They are constitutively expressed,
 # so "the control should be negative" gives no calibration handle for them. The
 # engine will mark their calls exploratory_* which is the honest label.
 
+$ErrorActionPreference = "Continue"
 & $jre '--add-opens=java.base/java.lang=ALL-UNNAMED' `
-  "-javaagent:$fj\jars\ij1-patcher-2.0.0.jar=init" `
+  "-javaagent:$patcher=init" `
   '-Djava.awt.headless=true' "-Dplugins.dir=$fj" '-Xmx4g' `
   -cp "$fj\jars\*;$fj\plugins\*" net.imagej.Main --headless `
   --run "$repo\IF_Quant_Pipeline.groovy" 2>&1 |
   Out-File "$out\engine.log" -Encoding utf8
 
-"exit=$LASTEXITCODE"
+$engineExit = $LASTEXITCODE
+"exit=$engineExit"
+exit $engineExit

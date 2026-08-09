@@ -322,7 +322,10 @@ wanted.groupBy { it.key }.each { outKey, regs ->
     dapi.setCalibration(cal)
 
     def mask = buildThresholdMask(dapi, TISSUE_BLUR_SIGMA_PX, TISSUE_THRESH_METHOD)
-    IJ.run(mask, "Options...", "iterations=2 count=1 do=Close")
+    // Binary Options is global ImageJ state. Omitting `black` silently writes
+    // Prefs.blackBackground=false and changes the closing/fill polarity, the
+    // same defect fixed in the production engine. Keep this call identical.
+    IJ.run(mask, "Options...", "iterations=2 count=1 black do=Close")
     def rois = particlesToRois(mask, TISSUE_MIN_AREA_UM2, false)
     mask.close()
     if (rois.isEmpty()) failRun(outKey + ": DAPI tissue detection found no region")

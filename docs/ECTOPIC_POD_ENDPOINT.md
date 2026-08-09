@@ -36,7 +36,7 @@
 > | 6 | mandatory companions | item 1 is **DONE** (`IFQ_KRT5_THRESHOLD = 300`); items 2–4 still stand. |
 > | 7 | open questions | **STILL OPEN**, except the two-ROI RoiSet round trip, which the WSI pilot exercised. |
 > | morphometry | damaged/intact cross-check | **DIRECTIONAL ONLY.** Its MLI is inter-nuclear spacing, not the classical quantity — the document says so. |
-> | 9 | partition QC columns dropped at mouse level | **STILL TRUE and verified empirically.** Unfixed. |
+> | 9 | partition QC columns dropped at mouse level | **FIXED 2026-08-09.** Explicit additive classification and pooled-fraction regression tests; panel shape unchanged. |
 > | 8 | what this pilot can and cannot claim | **STILL TRUE**, and now sharper: n = 1 per cell, genotype confounded with condition. |
 > | 10 | whole-field region source + the 260808 endpoint run | **MECHANICALLY VALIDATED, WRONG ENDPOINT.** Read its own banner. |
 >
@@ -644,10 +644,10 @@ needed to exclude this; no image analysis can substitute for it.
 > 1. **Wrong sign.** `endpoint.log` records
 >    `endpoint : ectopic_pod_over_damaged`, numerator
 >    `KRT5_pod_mask AND NOT T1A_membrane_positive_mask` — the superseded spec.
-> 2. **Wrong denominator.** `evaluate_endpoints.groovy` divides by
->    `region_area_um2`, i.e. **total analysed tissue**, not damaged area. It reads
->    `spec.numerator` and never reads `spec.denominator`, so it cannot yet compute
->    the union denominator the corrected spec declares. The "% " figures in the
+> 2. **Wrong denominator in this historical run.** The evaluator used at the
+>    time divided by `region_area_um2`, i.e. **total analysed tissue**, not damaged
+>    area. The 2026-08-09 evaluator now reads the declarative union denominator,
+>    but that does not retroactively change these files. The "% " figures in the
 >    table below are therefore *fraction of tissue*, not the endpoint.
 > 3. **Uncalibrated ceiling.** The section says this itself: T1A ran adaptive
 >    Otsu, so the ~50% that co-negativity removes is the size of an uncalibrated

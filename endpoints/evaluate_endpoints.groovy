@@ -6,8 +6,8 @@
 //   The measurement engine is MARKER-WISE. positiveAreaInRoi() takes exactly
 //   one marker's mask, and every recomputed fraction divides by a single
 //   region_area_um2. So it cannot express a numerator that is a RELATION
-//   between two markers -- and the reference endpoint is exactly that:
-//   "KRT5+PDPN- area", not bare KRT5+ area (Lin et al. 2024, Fig 2A-B).
+//   between two markers -- and the corrected reference endpoint is exactly
+//   that: KRT5+PDPN+ over the PDPN- OR KRT5+ union (Lin et al. 2024).
 //
 //   The engine does, however, save a calibrated binary mask per area marker,
 //   per tile, computed on the whole field BEFORE region clipping. That is
@@ -60,11 +60,16 @@
 //   IFQ_ENDPOINT_AREA_CHECK  = warn | fail. Default fail in tissue_mask and
 //                              whole_field, warn in roiset (that mode predates
 //                              the check and must not start failing on it).
+//   IFQ_ENDPOINT_ALLOW_UNCALIBRATED = false (default). Set true only for a
+//                              labelled exploratory plumbing run when the spec
+//                              contains an uncalibrated parameter.
 //
 // OUTPUT COLUMNS
 //   output_key, image, region, <spec.output.area_column>,
-//   qc_bare_<positive mask>_area_um2_in_region   -- the ceiling the AND cannot exceed
-//   qc_region_area_um2_from_mask                 -- denominator this script actually used
+//   <spec.output.denominator_area_column>, <spec.output.fraction_column>,
+//   <spec.output.bare_area_column>,
+//   <spec.output.numerator_fraction_of_bare_column>,
+//   qc_region_area_um2_from_mask                 -- clipping-region area
 //   qc_region_area_um2_reported                  -- run_summary.region_area_um2
 //   qc_region_area_rel_diff, region_mode
 //   The qc_ prefix keeps these outside every aggregate_to_mouse name whitelist,
@@ -116,53 +121,63 @@ if (REGION_MODE == "tissue_mask" && MASK_DIR.isEmpty())
           "run_summary.region_area_um2.")
 
 def spec = new groovy.json.JsonSlurper().parse(new File(SPEC_PATH))
+if (spec.RETRACTED != null)
+  failRun("Spec is marked RETRACTED and cannot be evaluated: " + spec.RETRACTED)
 def endpointId = spec.endpoint_id
 def areaCol    = spec.output.area_column
+def denomAreaCol = spec.output.denominator_area_column == null ?
+  endpointId + "_denominator_area_um2" : spec.output.denominator_area_column.toString()
+def fractionCol = spec.output.fraction_column == null ?
+  endpointId + "_fraction" : spec.output.fraction_column.toString()
 def terms      = spec.numerator.terms
 def op         = spec.numerator.op
 def specPanel  = spec.panel == null ? "" : spec.panel.toString()
-if (op != "AND") failRun("Only op=AND is implemented; found '" + op + "'")
+def validateExpression = { expr, String label ->
+  if (expr == null || expr.terms == null || expr.terms.isEmpty())
+    failRun(label + " must contain a non-empty terms array")
+  def exprOp = expr.op == null ? "" : expr.op.toString().toUpperCase()
+  if (!(exprOp in ["AND", "OR"]))
+    failRun(label + ".op must be AND or OR; found '" + expr.op + "'")
+  expr.terms.each { t ->
+    if (t.mask == null || t.mask.toString().trim().isEmpty())
+      failRun(label + " contains a term without a mask")
+  }
+  return exprOp
+}
+op = validateExpression(spec.numerator, "numerator")
 
-// ---------------------------------------------------------------------------
-// DENOMINATOR GUARD -- refuse a spec whose denominator this script cannot compute.
-//
-// This script divides by region_area_um2, full stop. It has no code that reads
-// spec.denominator, and adding a declarative denominator to a JSON file does not
-// give it any. config/endpoints/dysplastic_over_damaged.json declares
-//     "denominator": { "op": "OR", "terms": [ NOT T1A..., KRT5... ] }
-// because the reference endpoint's denominator is the UNION "damaged alveolar
-// areas (PDPN- and KRT5+)", NOT total tissue.
-//
-// Without this guard, pointing the runner at that spec produces the RIGHT
-// numerator over the WRONG denominator and exits 0. That is strictly more
-// dangerous than refusing, because the output looks correct and carries the
-// corrected endpoint's name. Silence is the failure mode this whole project
-// keeps having; make it loud.
-//
-// A spec with no denominator block, or one that explicitly declares
-// source: "region_area_um2", is the case this script actually implements.
-if (spec.denominator != null) {
-  def denomSource = spec.denominator.source == null ? "" : spec.denominator.source.toString()
-  if (denomSource != "region_area_um2") {
-    failRun("Spec '" + endpointId + "' declares a denominator this evaluator cannot compute.\n" +
-            "  declared : op=" + spec.denominator.op + " over " +
-            (spec.denominator.terms == null ? "(none)" :
-              spec.denominator.terms.collect { (it.negate ? "NOT " : "") + it.mask }.join(" " +
-              spec.denominator.op + " ")) + "\n" +
-            "  computed : region_area_um2 (total analysed region), ALWAYS.\n\n" +
-            "This script implements a relational NUMERATOR only. Evaluating this spec\n" +
-            "would divide the correct numerator by the wrong denominator and exit 0,\n" +
-            "producing a number that carries the corrected endpoint's name and is not\n" +
-            "the corrected endpoint. Implement the union denominator before running it.")
+def denominator = spec.denominator
+def denomSource = denominator == null || denominator.source == null ?
+  "" : denominator.source.toString()
+boolean denominatorIsRegion = denominator == null || denomSource == "region_area_um2"
+def denomOp = denominatorIsRegion ? "REGION" : validateExpression(denominator, "denominator")
+
+boolean allowUncalibrated = envOr("IFQ_ENDPOINT_ALLOW_UNCALIBRATED", "false").toLowerCase() == "true"
+def unresolvedParameters = []
+if (spec.parameters instanceof Map) {
+  spec.parameters.each { name, value ->
+    if (value instanceof Map) {
+      def status = value.status == null ? "" : value.status.toString().toUpperCase()
+      boolean acceptedStatus = status.startsWith("LOCKED") ||
+        status.startsWith("CALIBRATED") || status.startsWith("FIXED")
+      if (value.value == null || !acceptedStatus)
+        unresolvedParameters << (name + "=" + (value.status == null ? "value_missing" : value.status))
+    }
   }
 }
+if (!unresolvedParameters.isEmpty() && !allowUncalibrated)
+  failRun("Spec '" + endpointId + "' has uncalibrated parameter(s): " +
+          unresolvedParameters.join(", ") + ". Refusing a result. Calibrate them first, or set " +
+          "IFQ_ENDPOINT_ALLOW_UNCALIBRATED=true for an explicitly exploratory plumbing run.")
 if (!areaCol.endsWith("_pod_area_um2") && !areaCol.endsWith("_positive_area_um2"))
   failRun("output.area_column '" + areaCol + "' does not end in _pod_area_um2 or " +
           "_positive_area_um2, so aggregate_to_mouse would SILENTLY DROP it. " +
           "See docs/ECTOPIC_POD_ENDPOINT.md section 9.")
 
 logMsg("endpoint : " + endpointId + "   ->  " + areaCol)
-logMsg("numerator: " + terms.collect { (it.negate ? "NOT " : "") + it.mask }.join(" AND "))
+logMsg("numerator: " + terms.collect { (it.negate ? "NOT " : "") + it.mask }.join(" " + op + " "))
+logMsg("denominator: " + (denominatorIsRegion ? "region_area_um2" :
+  denominator.terms.collect { (it.negate ? "NOT " : "") + it.mask }.join(" " + denomOp + " ")))
 logMsg("region   : mode=" + REGION_MODE + "  area_check=" + AREA_CHECK + "  tol=" + AREA_TOL)
 logMsg("status   : " + spec.validation_status)
 if (REGION_MODE == "whole_field") {
@@ -239,8 +254,8 @@ int nEval = 0, nMissing = 0
 double worstAreaRel = 0.0d
 String worstAreaAt = ""
 
-// The leading non-negated term. Its area over the same region is the ceiling
-// the AND can never exceed, and it is written out as a QC column.
+  // The leading non-negated term. Its area over the same region is a useful
+  // companion measurement and, for an AND numerator, a strict ceiling.
 int baseIdx = -1
 for (int i = 0; i < terms.size(); i++) { if (!terms[i].negate) { baseIdx = i; break } }
 if (baseIdx < 0) failRun("numerator has no positive term; an all-negated AND has no meaningful ceiling")
@@ -251,17 +266,20 @@ byKey.each { outKey, regs ->
   def imgDir = new File(ANALYSIS_DIR, outKey)
   if (!imgDir.isDirectory()) { logMsg("  no output folder for " + img + " (" + outKey + ")"); nMissing++; return }
 
-  // resolve each mask named in the spec. The whole-field AREA masks carry no
+  // Resolve every unique mask named by either expression. The whole-field AREA masks carry no
   // region token; the per-region nuclei masks do, and must not be picked up.
   def maskImps = [:]
   boolean ok = true
-  terms.each { t ->
-    def hits = imgDir.listFiles().findAll { it.name.endsWith("__" + t.mask + ".tif") }
+  def maskNames = [] as LinkedHashSet
+  terms.each { maskNames << it.mask.toString() }
+  if (!denominatorIsRegion) denominator.terms.each { maskNames << it.mask.toString() }
+  maskNames.each { maskName ->
+    def hits = imgDir.listFiles().findAll { it.name.endsWith("__" + maskName + ".tif") }
     if (hits.size() != 1) {
-      logMsg("  " + outKey + ": expected exactly 1 '" + t.mask + "' mask, found " + hits.size())
+      logMsg("  " + outKey + ": expected exactly 1 '" + maskName + "' mask, found " + hits.size())
       ok = false; return
     }
-    maskImps[t.mask] = IJ.openImage(hits[0].getAbsolutePath())
+    maskImps[maskName] = IJ.openImage(hits[0].getAbsolutePath())
   }
   if (!ok) { nMissing++; maskImps.values().each { it?.close() }; return }
 
@@ -277,22 +295,29 @@ byKey.each { outKey, regs ->
       failRun(outKey + ": mask '" + k + "' is " + v.getWidth() + "x" + v.getHeight() + ", expected " + w + "x" + h)
   }
 
-  // boolean AND over the (optionally negated) masks, plus -- for the
-  // containment invariant -- the leading POSITIVE term on its own.
-  boolean[] num = new boolean[w*h]
-  java.util.Arrays.fill(num, true)
-  boolean[] base = new boolean[w*h]
-  for (int ti = 0; ti < terms.size(); ti++) {
-    def t = terms[ti]
-    def ip = maskImps[t.mask].getProcessor()
-    boolean isBase = (ti == baseIdx)
-    for (int i = 0; i < num.length; i++) {
-      boolean on = (ip.get(i) > 127)
-      if (isBase) base[i] = on
-      if (!num[i]) continue
-      if (t.negate) on = !on
-      num[i] = on
+  // Evaluate a declarative boolean expression over the already-thresholded
+  // masks. Negation applies to a term before AND/OR reduction.
+  def evaluateExpression = { expr, String exprOp ->
+    boolean[] result = new boolean[w*h]
+    java.util.Arrays.fill(result, exprOp == "AND")
+    expr.terms.each { t ->
+      def ip = maskImps[t.mask.toString()].getProcessor()
+      for (int i = 0; i < result.length; i++) {
+        boolean on = (ip.get(i) > 127)
+        if (t.negate) on = !on
+        result[i] = exprOp == "AND" ? (result[i] && on) : (result[i] || on)
+      }
     }
+    return result
+  }
+  boolean[] num = evaluateExpression(spec.numerator, op)
+  boolean[] denom = denominatorIsRegion ? null : evaluateExpression(denominator, denomOp)
+
+  // The leading positive numerator term is a useful containment ceiling.
+  boolean[] base = new boolean[w*h]
+  def baseIp = maskImps[baseMaskName].getProcessor()
+  for (int i = 0; i < base.length; i++) {
+    base[i] = baseIp.get(i) > 127
   }
   maskImps.values().each { it.close() }
 
@@ -318,8 +343,8 @@ byKey.each { outKey, regs ->
     if (REGION_MODE == "roiset") {
       def roi = rois[r.region]
       if (roi == null) {
-        logMsg("  WARNING " + outKey + ": RoiSet has no ROI named '" + r.region +
-               "'; this (image, region) is measured UNCLIPPED.")
+        failRun(outKey + ": RoiSet has no ROI named '" + r.region +
+                "'. Refusing an unclipped endpoint area.")
       } else {
         def m = new ij.process.ByteProcessor(w, h)
         m.setValue(255); m.fill(roi)
@@ -346,13 +371,14 @@ byKey.each { outKey, regs ->
     }
     // whole_field: regionPixels stays null, i.e. no clipping.
 
-    long cnt = 0, baseCnt = 0, regCnt = 0
+    long cnt = 0, denomCnt = 0, baseCnt = 0, regCnt = 0
     for (int i = 0; i < num.length; i++) {
       boolean inRegion = (regionPixels == null) || ((regionPixels[i] & 0xFF) > 127)
       if (!inRegion) continue
       regCnt++
       if (base[i]) baseCnt++
       if (num[i]) cnt++
+      if (denominatorIsRegion || denom[i]) denomCnt++
     }
     double regionAreaFromMask = regCnt * pxA
     double rel = r.reported_region_area > 0 ?
@@ -362,13 +388,21 @@ byKey.each { outKey, regs ->
     // Mathematical invariant: an AND that includes the positive term can never
     // exceed that term alone over the same pixel set. A violation means the
     // masks or the region are inconsistent, not that the biology is surprising.
-    if (cnt > baseCnt)
+    if (op == "AND" && cnt > baseCnt)
       failRun(outKey + "/" + r.region + ": numerator area (" + (cnt*pxA) + ") exceeds the bare '" +
               baseMaskName + "' area (" + (baseCnt*pxA) + ") in the same region. " +
               "Boolean algebra cannot do this; the inputs are inconsistent.")
+    if (denomCnt > regCnt)
+      failRun(outKey + "/" + r.region +
+              ": denominator exceeds its clipping region; inputs are inconsistent")
+    if (cnt > denomCnt)
+      failRun(outKey + "/" + r.region + ": numerator area exceeds denominator area. " +
+              "The declared endpoint cannot yield a fraction greater than one.")
 
     rows << [output_key: outKey, image: img, region: r.region,
-             area: cnt * pxA, baseArea: baseCnt * pxA,
+             area: cnt * pxA, denominatorArea: denomCnt * pxA,
+             fraction: denomCnt > 0 ? ((double) cnt / (double) denomCnt) : Double.NaN,
+             baseArea: baseCnt * pxA,
              regionAreaMask: regionAreaFromMask, regionAreaReported: r.reported_region_area,
              regionAreaRel: rel]
     nEval++
@@ -392,11 +426,19 @@ if (worstAreaRel > AREA_TOL) {
 }
 
 def baseColName = baseMaskName.replaceAll(/[^A-Za-z0-9]+/, "_")
+def bareAreaCol = spec.output.bare_area_column == null ?
+  "qc_bare_" + baseColName + "_area_um2_in_region" :
+  spec.output.bare_area_column.toString()
+def numeratorFractionOfBareCol = spec.output.numerator_fraction_of_bare_column == null ?
+  "qc_numerator_fraction_of_bare" :
+  spec.output.numerator_fraction_of_bare_column.toString()
 def out = new File(OUT_PATH)
 out.getParentFile()?.mkdirs()
 def sb = new StringBuilder()
 sb.append("output_key,image,region,").append(areaCol)
-  .append(",qc_bare_").append(baseColName).append("_area_um2_in_region")
+  .append(",").append(denomAreaCol).append(",").append(fractionCol)
+  .append(",").append(bareAreaCol)
+  .append(",").append(numeratorFractionOfBareCol)
   .append(",qc_region_area_um2_from_mask,qc_region_area_um2_reported,qc_region_area_rel_diff")
   .append(",region_mode\n")
 rows.each { r ->
@@ -404,7 +446,10 @@ rows.each { r ->
   sb.append('"').append(r.image.replace('"','""')).append('",')
   sb.append('"').append(r.region.replace('"','""')).append('",')
   sb.append(r.area).append(',')
+  sb.append(r.denominatorArea).append(',')
+  sb.append(r.fraction).append(',')
   sb.append(r.baseArea).append(',')
+  sb.append(r.baseArea > 0 ? r.area / r.baseArea : Double.NaN).append(',')
   sb.append(r.regionAreaMask).append(',')
   sb.append(r.regionAreaReported).append(',')
   sb.append(r.regionAreaRel).append(',')
@@ -414,9 +459,11 @@ out.setText(sb.toString(), "UTF-8")
 
 logMsg("evaluated " + nEval + " (output_key, region) pairs; " + nMissing + " image(s) skipped")
 logMsg("wrote " + out.getAbsolutePath())
-logMsg("NOTE: " + spec.validation_status + " -- " +
-       "t1a_threshold is " + spec.parameters.t1a_threshold.status +
-       ", krt5_threshold is " + spec.parameters.krt5_threshold.status)
+def parameterStatuses = spec.parameters instanceof Map ?
+  spec.parameters.collect { name, value ->
+    name + "=" + (value instanceof Map ? value.status : "UNSTRUCTURED")
+  }.join(", ") : "none"
+logMsg("NOTE: " + spec.validation_status + " -- parameters: " + parameterStatuses)
 
 // ImageJ starts non-daemon threads even with --headless; exit explicitly so the
 // command line does not hang after the last synchronous write.
