@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "IFQuant-Lung",
+    "subtitle": "One measurement engine — QuPath reads and cuts, Python only sums",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "main-path", "label": "Whole-slide path", "focus": ["vsi", "qupath", "tiles", "engine", "aggregate", "output"], "note": "A slide too large for memory is cut into tiles, then measured by the same engine a confocal field uses." },
+      { "id": "file-handoff", "label": "Why the handoff is files", "focus": ["qupath", "tiles", "engine"], "note": "QuPath and Fiji ship incompatible Java versions, so tiles cross on disk rather than in process." },
+      { "id": "one-engine", "label": "Both inputs, one engine", "focus": ["confocal", "tiles", "engine", "controls"], "note": "Confocal fields and whole-slide tiles enter the same engine, so a KRT5 area means the same thing either way." }
+    ]
+  },
+  "components": [
+    { "id": "vsi", "type": "external", "label": ".vsi whole slide", "sublabel": "19.3 GB", "pos": [40, 220], "size": [150, 64] },
+    { "id": "confocal", "type": "external", "label": "confocal field", "sublabel": ".oir / .czi / .nd2", "pos": [40, 430], "size": [150, 64] },
+    { "id": "qupath", "type": "cloud", "label": "QuPath 0.7", "sublabel": "opens · detects tissue · cuts", "pos": [280, 220], "size": [170, 64], "tag": "measures nothing" },
+    { "id": "tiles", "type": "database", "label": "tiles on disk", "sublabel": "*.ome.tif + *_RoiSet.zip", "pos": [540, 220], "size": [170, 64] },
+    { "id": "controls", "type": "security", "label": "control-locked cutoff", "sublabel": "frozen before test data", "pos": [780, 40], "size": [170, 64], "tag": "KRT5 = 300" },
+    { "id": "engine", "type": "backend", "label": "Fiji measurement engine", "sublabel": "IF_Quant_Pipeline.groovy", "pos": [840, 325], "size": [200, 70], "tag": "the only one" },
+    { "id": "aggregate", "type": "backend", "label": "Python aggregation", "sublabel": "tile to slide to animal", "pos": [1130, 325], "size": [180, 64], "tag": "decides nothing" },
+    { "id": "output", "type": "database", "label": "mouse_level_summary", "sublabel": "n = mice", "pos": [1400, 325], "size": [180, 64] },
+    { "id": "panels", "type": "frontend", "label": "figure generation", "sublabel": "merge panels · QC overlays", "pos": [1130, 500], "size": [180, 64] },
+    { "id": "launcher", "type": "frontend", "label": "IFQuantLauncher", "sublabel": "four explicit routes", "pos": [850, 570], "size": [180, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Stage 1 — reads and cuts", "wraps": ["qupath", "tiles"] },
+    { "kind": "region", "label": "Stage 3 — sums only", "wraps": ["aggregate", "output"] }
+  ],
+  "connections": [
+    { "id": "slide-in", "from": "vsi", "to": "qupath", "label": "too large" },
+    { "id": "cut-tiles", "from": "qupath", "to": "tiles", "label": "2048 px" },
+    { "id": "file-handoff", "from": "tiles", "to": "engine", "label": "files", "variant": "emphasis" },
+    { "id": "field-in", "from": "confocal", "to": "engine", "label": "in memory" },
+    { "id": "cutoff", "from": "controls", "to": "engine", "label": "frozen", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "id": "measured", "from": "engine", "to": "aggregate", "label": "per tile" },
+    { "id": "rolled-up", "from": "aggregate", "to": "output", "label": "seams removed" },
+    { "id": "figures", "from": "engine", "to": "panels", "label": "masks only", "variant": "dashed" },
+    { "id": "routes", "from": "launcher", "to": "engine", "label": "4 routes", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "One engine measures", "items": ["QuPath reads and cuts; it measures nothing", "Python sums; it decides nothing", "A second engine in QuPath was built and rejected — two engines drift"] },
+    { "dot": "emerald", "title": "Why files, not a call", "items": ["QuPath and Fiji ship incompatible Java versions", "Tiles and ROI zips cross on disk", "Seams reconcile to 2.1e-16"] },
+    { "dot": "rose", "title": "Anti-circularity", "items": ["Cutoffs derived from uninfected controls only", "Frozen before infected animals are measured", "Constitutive markers stay labelled exploratory"] }
+  ]
+}

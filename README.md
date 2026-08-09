@@ -115,6 +115,7 @@ embedded engine has drifted from the version it claims equivalence to.
 |---|---|
 | **Current scientific state** — what is validated, exploratory, retracted | [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) |
 | **The algorithm** — routing, decision hierarchy, cutoff derivation, Z policy | [`WORKFLOW.md`](WORKFLOW.md) |
+| **Architecture, explorable** — pan/zoom, theme, focus views, export | [`docs/architecture.html`](docs/architecture.html) — download and open; GitHub shows source, not the render |
 | **Negative results & retractions** — markers tested and rejected | [`docs/NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md) |
 | **Validation** — the synthetic fixture and what it proves | [`validation/README.md`](validation/README.md) |
 | **Authorship & AI-assisted development** | [`DEVELOPMENT.md`](DEVELOPMENT.md) |
