@@ -1,204 +1,172 @@
 # Development and AI assistance
 
-Claude Code was used as an implementation and documentation assistant during
-development of this repository. This is visible in the git history — a
-substantial number of commits carry `Co-Authored-By: Claude`, and some pull
-request descriptions state it explicitly. That is deliberate and is not
-concealed.
+Claude Code was used extensively for implementation, debugging, testing, and
+documentation. **Scientific questions, experimental interpretation, analysis
+specifications, acceptance and rejection criteria, validation strategy, and final
+interpretation were directed and reviewed by me.**
 
-**Scientific questions, experimental interpretation, analysis specifications,
-acceptance and rejection criteria, validation strategy, and interpretation of
-results were directed and reviewed by the repository author.** Generated
-implementations were tested against the underlying data, the literature,
-synthetic fixtures, or independent outputs before being retained.
+This is visible in the git history — many commits carry `Co-Authored-By: Claude`
+— and it is not concealed. The AI could implement and calculate; it was not the
+authority on biological identity, experimental validity, or whether a result
+warranted belief.
 
-The division is not "the author had ideas and the AI typed them." It is
-narrower and more specific: **the AI could measure, but it could not know what
-the tissue was, which comparisons were legitimate, or when a result should be
-disbelieved.** Every entry below is a case where that distinction determined the
-outcome.
+| Responsibility | Primary authority |
+|---|---|
+| Biological question and experimental interpretation | **Me** |
+| Statistical unit and which comparisons are valid | **Me** |
+| Acceptance / rejection criteria | **Me** |
+| Endpoint definition and interpretation | **Me** |
+| Implementation, refactoring, diagnostic code | AI-assisted |
+| Documentation and diagrams | AI-assisted |
+| Verification strategy | Author-directed, computationally executed |
+| Final retain / reject decision | **Me** |
 
 ---
 
-## Author-directed scientific decisions
+## Five decisions that shaped the result
 
-### 1. Fields and cells are not independent biological replicates
+### 1 · The mouse is the statistical unit, not fields or cells
 
-The pipeline can report ~20,000 cells from four animals. Treating those as the
-sample size would inflate confidence by roughly the square root of cells per
-mouse — manufacturing significance from a single animal.
+The pipeline reports ~20,000 cells from four animals. Treating those as the
+sample size would inflate confidence by roughly √(cells per mouse) and
+manufacture significance from a single animal.
 
-The author specified the mouse as the statistical unit. `aggregate_to_mouse.py`
-enforces the roll-up and prints the distinct-animal count so it cannot be
-mistaken, and the constraint is stated in every document that reports a number.
+I specified the animal as the unit. `aggregate_to_mouse.py` enforces the roll-up
+and prints the distinct-animal count, and the constraint is restated wherever a
+number is reported.
 
-→ [`WORKFLOW.md` §Statistical unit](WORKFLOW.md) · `aggregate_to_mouse.py`
-
-### 2. Thresholds must be locked from controls, before the test data is opened
+### 2 · Thresholds locked from uninfected controls, before test data was evaluated
 
 A cutoff chosen to separate the groups being compared is not a measurement of
-those groups. The author directed that intensity cutoffs be re-derived **from
-the uninfected controls only**, then frozen before infected animals were
-measured.
+those groups. I required intensity cutoffs to be re-derived from the uninfected
+controls only, then frozen before infected animals were measured.
 
-`IFQ_KRT5_THRESHOLD = 300` comes from the two uninfected animals alone
-(in-tissue p99.99 = 283 and 255, worst-of-both), giving control false-positive
-area ≤ 1e-4 in each independently. Infected tissue then measured 8.1 % of area
-above 500 — a result the cutoff had no opportunity to manufacture.
+`IFQ_KRT5_THRESHOLD = 300` comes from the two controls alone (in-tissue
+p99.99 = 283 and 255), giving control false-positive area ≤ 1e-4 in each
+independently. Infected tissue then measured 8.1 % of area above 500.
 
-The author also accepted the consequence: for AGER and T1α, which are expressed
-in healthy lung, **no such anchor exists**, so those cutoffs remain adaptive and
-every output derived from them is labelled `adaptive_otsu_exploratory` rather
-than reported as a result.
+I also accepted the cost: AGER and T1α are expressed in healthy lung, so no such
+anchor exists for them. Those cutoffs remain adaptive and everything derived from
+them is labelled `adaptive_otsu_exploratory` rather than reported as a result.
 
-→ [`WORKFLOW.md` §Cutoff derivation](WORKFLOW.md)
+### 3 · AGER and KRT8 rejected when the data failed the pre-specified criterion
 
-### 3. Rejecting AGER and KRT8 when the data did not support them
+Both were tested with a control-locked enrichment ratio (R = infected fraction ÷
+control fraction beyond the same cut), and both failed:
 
-Both markers were tested with a control-locked enrichment ratio
-(R = infected fraction ÷ control fraction beyond the same cut) and both were
-**rejected on the author's criteria**:
-
-| Marker | R | Decision |
+| Marker | R | Outcome |
 |---|---|---|
-| AGER as a co-negativity marker | 0.99–1.05 | Retracted — the removal was definitional, not biological |
+| AGER as a co-negativity marker | 0.99–1.05 | Retracted — the exclusion was definitional, not biological |
 | KRT8 as a discriminator | 0.80–1.25 at every cut | Rejected — infected animals *bracket* the controls |
 
-The AGER retraction reversed a marker the author had previously selected. The
-KRT8 rejection came after the author specified the biological target (the
-transitional/DATP state, not baseline alveolar epithelium), which is what made
-the enrichment test the correct test.
+The AGER retraction reversed a marker I had chosen earlier. I kept both on the
+record rather than deleting them, so neither gets re-derived.
 
-Negative results are retained rather than deleted, so they are not re-derived.
+→ [`docs/NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md)
 
-→ [`docs/NEGATIVE_RESULTS.md`](docs/NEGATIVE_RESULTS.md) ·
-`scripts/krt8_operating_point.py`
+### 4 · No genotype-level inference from a four-mouse design
 
-### 4. Defining which comparisons are and are not justified
+One animal per genotype × condition cell means genotype is confounded with
+condition: the difference between the two infected animals cannot be separated
+from the difference between those two animals.
 
-The current batch is four mice: one per genotype × condition cell. Genotype is
-therefore confounded with condition, and the difference between the two infected
-animals (14.11 % vs 11.98 % KRT5⁺ area) cannot be distinguished from the
-difference between those two animals.
+I decided this is prohibitive rather than a caveat to soften. The measurement
+behaves as expected and the infected/uninfected contrast is near-binary, but no
+statistical comparison of groups is supportable from this batch.
 
-The author's position, stated wherever a number appears: the measurement
-behaves as expected and the infected/uninfected contrast is near-binary, but
-**no statistical comparison of groups is possible from this batch**. The
-reference study used n = 15 per group.
+### 5 · Endpoint corrected against the primary source
 
-This constraint is documented as prohibitive, not as a caveat to be softened.
-
-### 5. Cell-type identity — a call the software could not make
-
-The ProSPC (488) channel showed a bright, continuous band lining the airway.
-The pipeline had no concept that a correctly-thresholded, correctly-shaped,
-sufficiently-bright population could be **the wrong cell type**.
-
-The author identified it: those are not AT2 cells but other basal/club
-lineages, and genuine AT2 have circular, perinuclear-granular morphology rather
-than a continuous ring.
-
-That specification led directly to a measurement which settled the question:
-inside each population, ProSPC intensity is p50 = 430 (AT2) versus 385 (airway).
-**Nearly identical** — so no intensity threshold can separate them, and the
-apparent difference is contiguity and extent, not brightness. Seven display
-iterations had been attempting the impossible before that call was made.
-
-### 6. Section-level quality judgement from the bench
-
-The author's PI identified a staining failure in one animal (M6) that no
-in-image statistic had flagged. It was confirmed afterwards in the data — AGER
-`frac>500` = 0.0097 in the LEFT section against 0.289 in the RIGHT section, same
-antibody, same animal — but the hypothesis originated at the bench, and it
-changed the interpretation: the KRT5 cutoff in practice rests on **one clean
-control**, not two, and this is stated wherever the cutoff is cited.
-
-### 7. Refusing an analysis that would have been selective manipulation
-
-A proposal to remove the non-specific airway population using rolling-ball
-background subtraction was **rejected by the author** on the grounds that the
-filter radius was being chosen *because the unwanted content disappeared at that
-value*.
-
-That was correct, and it identified a repeat of an error already retired from
-the codebase — a connected-component size gate that deleted image content from a
-panel presented as a micrograph, which is selective manipulation under
-Rossner & Yamada 2004 (*J Cell Biol* 166:11) rather than a display adjustment.
-
-The resulting rule is encoded: a merge panel may not delete image content, and a
-configuration still requesting it now fails rather than silently rendering
-differently. Population suppression belongs to the QC overlay, where it is
-visibly an analysis decision.
-
-### 8. Endpoint definition, resolved against the primary source
-
-The implementation computed KRT5⁺PDPN⁻ over a computed damaged area. The author
-directed verification against the source paper, which specifies
+The implementation computed KRT5⁺PDPN⁻. The reference specifies
 
 > "percentages of **KRT5⁺PDPN⁺** areas in PDPN⁻ and KRT5⁺ areas"
 > — Lin et al. 2024, *J Clin Invest* 134(19):e176828, Fig 2A–B
 
-PDPN is expressed *by* dysplastic cells as well as AT1, so requiring
-PDPN-negativity had been excluding the population being measured. The
-denominator is also a hand-traced union of regions, not a computed density map —
-which retired a calibrated detector that had been solving a problem the
-reference does not have.
+PDPN is expressed by dysplastic cells as well as AT1, so requiring
+PDPN-negativity had been excluding the population being measured. The denominator
+is also a hand-traced region union, not a computed density map — which retired a
+detector that had been solving a problem the reference does not pose.
 
-The corrected specification is declared, and the evaluator now **refuses to run
-it** rather than dividing by the wrong denominator and exiting successfully.
-
----
-
-## What the AI assistant did
-
-Implementation and documentation, under the specifications above:
-
-- Groovy/Java image-processing code, C#/WinForms launcher, Python aggregation
-- Diagnostic probes and calibration scripts
-- Documentation, diagrams, and provenance records
-- Adversarial verification harnesses (mutation testing, execution-based
-  equivalence checking, independent re-derivation of agent-produced results)
-
-It also produced errors that the author caught, which is recorded here because
-an honest account of AI-assisted work includes the failure rate:
-
-- A segmentation overlay delivered when merge panels were requested
-- Marker channels erased by over-aggressive display floors, twice
-- Algorithmic diagrams downgraded to ASCII and presented as an improvement
-- A single-field measurement quoted as if it were a batch statistic
-- The background-subtraction proposal in §7
+I required the evaluator to **refuse** the corrected specification rather than
+divide by a denominator it cannot construct and exit successfully.
 
 ---
 
-## How generated work was verified
+## Further examples
 
-Claims in this repository are not accepted because they were produced; they were
-tested. Two are executable by a reader from a clean clone with no data:
+**Cell-type identity.** The 488 channel showed a bright, continuous band lining
+the airway. I identified it as basal/club lineages rather than AT2, and specified
+that genuine AT2 have circular perinuclear-granular morphology rather than a ring.
+That led to a measurement settling it: ProSPC intensity is p50 = 430 inside AT2
+against 385 in the airway — nearly identical, so no intensity threshold separates
+them and the difference is extent, not brightness.
 
-```bash
-powershell -ExecutionPolicy Bypass -File ./launcher/run_legacy_equivalence.ps1
-powershell -ExecutionPolicy Bypass -File ./validation/run_demo.ps1
-```
+**Bench-to-computation feedback overriding automated QC.** A staining failure in
+one animal (M6) was identified at the bench by my PI. No in-image statistic had
+flagged it; it was confirmed afterwards in the data (AGER `frac>500` = 0.0097 in
+the LEFT section against 0.289 in the RIGHT, same antibody, same animal). The
+consequence is carried forward: the KRT5 cutoff in practice rests on one clean
+control, not two.
+
+**Refusing an analysis that would have looked better.** A rolling-ball background
+subtraction was proposed to remove the non-specific airway population. I rejected
+it because the filter radius was being chosen for making the unwanted content
+disappear — a repeat of an error already retired from the codebase. A merge panel
+may not delete image content; suppression belongs to the QC overlay, where it is
+visibly an analysis decision.
+
+---
+
+## AI-produced work was not accepted automatically
+
+Consequential examples:
+
+- **A single-field statistic quoted as a batch result** — 185 → 16,422 (89×)
+  came from one field and was presented as the batch figure. The pooled value is
+  152.5 → 15,393.3 (~101×). Corrected everywhere, with the estimator now named.
+- **An image-manipulation proposal** — background subtraction tuned to remove a
+  population (above), and before it a connected-component gate that deleted the
+  airway from a panel presented as a micrograph. Both retired; a configuration
+  still requesting the gate now fails.
+- **Over-aggressive display processing** — marker channels erased twice by floors
+  derived from pooled statistics and applied per image, where each section's
+  ceiling is lower.
+- **Implementation defects exposed by validation** — outputs named from bare
+  filenames silently overwrote 8 of 80 panels while the log reported 80; a
+  `>127` mask test rendered nothing for label images with fewer than 128 objects.
+
+---
+
+## How work was verified
 
 | Method | Applied to |
 |---|---|
-| **Execution-based equivalence** | Launcher legacy mode — 84 checks comparing what a *real child process* receives, not what a dictionary claims |
-| **Mutation testing** | 28 mutants of the launcher's decision logic; 26 killed, 2 intentional surviving controls |
-| **Replay to bit-identity** | The `blackBackground` defect was diagnosed by reproducing the corrupted output at **IoU = 1.0000**, which pins a cause rather than suggesting one |
-| **Synthetic fixture** | `validation/` demonstrates that defect and its fix from a clone, with no patient data |
-| **Regression measurement** | After the engine fix, area outputs were *measured* unchanged (worst 0.0209 pp) rather than assumed |
-| **Held-out validation** | Thresholds locked on controls, then applied to infected animals not used in derivation |
-| **Independent re-running** | Agent-produced results were re-executed by the author before being retained |
+| Execution-based equivalence | Launcher legacy mode — 84 checks against what a *real child process* receives |
+| Mutation testing | 28 mutants of the launcher's decision logic; 26 killed, 2 intentional controls |
+| Replay to bit-identity | The segmentation defect, reproduced at **IoU = 1.0000** |
+| Synthetic fixture | Same defect, demonstrable from a clone with no data |
+| Regression measurement | Area outputs after the engine fix — *measured* unchanged (worst 0.0209 pp), not assumed |
+| Held-out / control-locked validation | Thresholds derived on controls, applied to infected animals not used in derivation |
+| Independent re-running | Agent-produced results re-executed before being retained |
+
+Two are executable by a reader from a clean clone:
+
+```bash
+powershell -ExecutionPolicy Bypass -File ./validation/run_demo.ps1
+powershell -ExecutionPolicy Bypass -File ./launcher/run_legacy_equivalence.ps1
+```
 
 ---
 
-## Why this is stated plainly
+## Unresolved
 
-AI assistance is visible in this repository's history and would be discoverable
-regardless. Concealing it would be both dishonest and pointless.
+**No licence is declared.** This is a deliberate open item rather than an
+oversight, and it should be settled before the repository is treated as
+reusable by others.
 
-The question worth answering is not whether an AI coding agent was used, but
-whether scientific control was retained while using one. The record above is
-offered as the evidence: the specifications, the rejections, the retraction of a
-marker the author had chosen, the refusal of an analysis that would have looked
-better, and the negative results kept on the record rather than deleted.
+---
+
+AI use in this repository is visible and documented. The question I would want a
+reviewer to ask is not whether an AI coding agent was used, but whether
+scientific control and accountability were retained while using one — and the
+specifications, rejections, retractions, and preserved negative results above are
+the evidence I would offer.

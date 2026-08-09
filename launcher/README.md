@@ -1,12 +1,12 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.8.0.exe` is a Windows Forms front end for the analysis
+`IFQuantLauncher-v1.9.0.exe` is a Windows Forms front end for the analysis
 pipeline. It embeds the exact Groovy engine, marker registry, QuPath tiling
 script and Python reconciliation script present at build time. **It does not
 reimplement image analysis.** Every number it produces comes from
 `IF_Quant_Pipeline.groovy`, which is frozen.
 
-## What changed in v1.8.0
+## What the four routes replaced (introduced v1.8.0; current release v1.9.0)
 
 v1.7.2 assumed one kind of input: a folder of confocal/field images measured by
 Fiji. v1.8.0 makes the *kind of image* an explicit first choice, because the
@@ -68,7 +68,7 @@ omitted threshold treated as a hard stop, nothing written.
 
 Route 4 exists so that analyses run before v1.8.0 stay reproducible. It is
 checked by a harness that *executes* both versions rather than asserting about
-them — `launcher/legacy_equivalence_report.txt`, 82 checks, 0 failures:
+them — `launcher/legacy_equivalence_report.txt`, **84 checks, 0 failures**:
 
 - **Environment**: 7 fixture cases (defaults, all-non-default, each conditional
   key, both at once, an Advanced overlay that shadows a base key, and values
@@ -82,12 +82,20 @@ them — `launcher/legacy_equivalence_report.txt`, 82 checks, 0 failures:
   profile to match a changed v1.7.2, this fails.
 - **Advanced box**: 23 input lines, accepted/refused identically by both.
 
-To re-run it, the v1.7.2 source must be restored from git history — the working
-tree now holds v1.8.0:
+- **Artefact drift**: the harness verifies that drift is *detected and named*,
+  not that it is absent. The embedded engine legitimately differs from v1.7.2's
+  since the `blackBackground` fix, and asserting equality would force a choice
+  between shipping a known-buggy engine and a red suite.
 
-```bash
-git show 072f28b:launcher/IFQuantLauncher.cs > /tmp/IFQuantLauncher-v1.7.2.cs
+Run it from a clean clone, no arguments:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\launcher\run_legacy_equivalence.ps1
 ```
+
+The v1.7.2 reference source is committed at
+`launcher/reference/IFQuantLauncher-v1.7.2.cs`, so this no longer requires
+extracting it from git history.
 
 ## Build
 
@@ -106,8 +114,8 @@ self-test and never ran it.)
 Artifacts are written to the repository root and are **not committed** —
 `.exe` and its `.sha256.txt` sidecar belong in GitHub Releases:
 
-- `IFQuantLauncher-v1.8.0.exe`
-- `IFQuantLauncher-v1.8.0.sha256.txt`
+- `IFQuantLauncher-v1.9.0.exe`
+- `IFQuantLauncher-v1.9.0.sha256.txt`
 
 The build prints the SHA-256 of the exe and of each embedded artefact, so a
 shipped binary can be traced to the exact engine it carries.
@@ -138,3 +146,18 @@ dialog lists each allocated panel and its image count.
 
 Every route produces per-image or per-tile rows. Those are **not** the
 statistical unit. Run `aggregate_to_mouse.py` before any test; n = mice.
+
+## Released binary vs a build from HEAD
+
+The published **v1.9.0** release corresponds to commit `22afada`. Building from a
+later `HEAD` produces a *different* SHA-256, because
+`IF_Quant_Pipeline.groovy` — which the launcher embeds — received a **comment-only
+correction** afterwards (an estimator was named and a single-field figure that had
+been quoted as a batch statistic was replaced).
+
+Verified: `git diff 22afada..HEAD -- IF_Quant_Pipeline.groovy` changes
+**0 non-comment lines**. Execution is identical; only the embedded artefact hash
+moves. This is expected for a tagged release and is recorded here so the
+difference does not read as an unexplained mismatch.
+
+To reproduce the released binary exactly, build from `22afada`.
