@@ -282,6 +282,7 @@ namespace IFQuantLauncher
             // Blank boxes must leave the gate summary flagged, not green.
             RefreshGateSummary();
             if (!runButton.Enabled) return 71;
+            if (!previewButton.Enabled) return 71;
             if (gateSummaryLabel.Text.IndexOf("FLAGGED", StringComparison.Ordinal) < 0) return 71;
 
             // Filling every box must turn it green.
@@ -1499,8 +1500,12 @@ namespace IFQuantLauncher
                     SetGateSummary("Cannot start:  " + Summarise(gate, Severity.Block),
                                    Color.White, Color.FromArgb(160, 30, 30));
                     runButton.Enabled = false;
-                    previewButton.Enabled =
-                        previewButton.Visible && !HasHardToolBlock(gate);
+                    // Do not derive Enabled from Control.Visible here. During
+                    // startup WinForms can report a child's effective Visible
+                    // state as false until its parent form has been shown. That
+                    // left the preview button disabled even though the same gate
+                    // correctly enabled the full analysis button.
+                    previewButton.Enabled = !HasHardToolBlock(gate);
                 }
                 else if (gate.NeedsConfirmation)
                 {
@@ -1509,14 +1514,14 @@ namespace IFQuantLauncher
                         "):  " + Summarise(gate, Severity.Confirm),
                         Color.Black, Color.FromArgb(250, 220, 150));
                     runButton.Enabled = true;
-                    previewButton.Enabled = previewButton.Visible;
+                    previewButton.Enabled = true;
                 }
                 else
                 {
                     SetGateSummary("Ready.  " + DescribeReadyState(request, gate),
                                    Color.White, Color.FromArgb(30, 110, 60));
                     runButton.Enabled = true;
-                    previewButton.Enabled = previewButton.Visible;
+                    previewButton.Enabled = true;
                 }
             }
             catch (Exception ex)
