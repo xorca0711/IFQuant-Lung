@@ -32,6 +32,10 @@ jobs:
           }
           if ($bad.Count) { throw ($bad -join "`n") }
 
+      - name: Validate H&E hierarchy and study contract
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-HeConfiguration.ps1
+
       - name: Parse PowerShell scripts
         shell: powershell
         run: |

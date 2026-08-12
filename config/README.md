@@ -1,5 +1,19 @@
 # Configuration assets
 
+## Brightfield and study contracts
+
+- [`brightfield/he_decision_hierarchy.json`](brightfield/he_decision_hierarchy.json)
+  is the fail-closed H&E decision order. It is **proposed**, not an enabled
+  analysis engine.
+- [`brightfield/he_endpoints.json`](brightfield/he_endpoints.json) defines
+  quantitative, blinded-ordinal, and deliberately deferred H&E endpoint tiers.
+- [`studies/g_surf_he_20260812.json`](studies/g_surf_he_20260812.json) is the
+  verified four-mouse/eight-section identity and series contract for the
+  current Olympus VSI cohort.
+
+These files keep biological identity and endpoint semantics reviewable without
+placing H&E into the fluorescence Fiji engine.
+
 - [`lung_marker_registry.json`](lung_marker_registry.json) stores descriptive
   marker aliases, localization, analytical-role defaults, lineage/state notes,
   and research-context cautions. It is not a positivity cutoff table or

@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "study_id": "g_surf_he_20260812",
+  "status": "PREFLIGHT_VERIFIED_ANALYSIS_NOT_RUN",
+  "source_root": "D:\\Microscopy_Images\\20260812_CW_H&E_Slidescanner\\20260812_CW",
+  "modality": "brightfield_he",
+  "scanner_format": "Olympus VSI",
+  "biological_unit": "mouse",
+  "expected_mouse_count": 4,
+  "expected_analytical_sections": 8,
+  "analytical_series": {
+    "allow_names": ["20x_BF_01", "20x_BF_02"],
+    "expected_per_slide": 2,
+    "expected_channels": 1,
+    "rgb_packed": true,
+    "pixel_size_um_range": [0.27, 0.28]
+  },
+  "samples": [
+    {
+      "mouse_id": "M2",
+      "biological_unit_id": "M2",
+      "genotype": "IFNg_KO_hom",
+      "condition": "PR8_infection",
+      "source_file": "IFNg ko(hom) 260325 m2 pr8 infection.vsi",
+      "section_ids": ["M2_BF_01", "M2_BF_02"]
+    },
+    {
+      "mouse_id": "M4-1",
+      "biological_unit_id": "M4-1",
+      "genotype": "IFNg_KO_het",
+      "condition": "PR8_infection",
+      "source_file": "IFNg ko(het) 260325 m4_1 pr8 infection.vsi",
+      "section_ids": ["M4-1_BF_01", "M4-1_BF_02"]
+    },
+    {
+      "mouse_id": "M4-2",
+      "biological_unit_id": "M4-2",
+      "genotype": "IFNg_KO_het",
+      "condition": "PR8_no_infection",
+      "source_file": "IFNg ko(het) 260325 m4-2 pr8 no infection.vsi",
+      "section_ids": ["M4-2_BF_01", "M4-2_BF_02"]
+    },
+    {
+      "mouse_id": "M6",
+      "biological_unit_id": "M6",
+      "genotype": "IFNg_KO_hom",
+      "condition": "PR8_no_infection",
+      "source_file": "IFNg ko(hom) 260325 m6 pr8 no infection.vsi",
+      "section_ids": ["M6_BF_01", "M6_BF_02"]
+    }
+  ],
+  "interpretation_constraints": [
+    "This dataset supports pipeline development and descriptive paired-section analysis, not genotype-by-infection inference.",
+    "Genotype and infection are confounded at n=1 per design cell.",
+    "The two analytical series per slide are technical sections, not biological replicates."
+  ]
+}

@@ -4,8 +4,10 @@
 > older one. Where any other doc in `docs/` disagrees with this file, this file
 > wins and the other doc is stale — say so rather than reconciling silently.
 >
-> Last reconciled against data and code: **2026-08-09**, against
-> `D:\IFQ_Runs\confocal_260809_rerun`, `main` @ `35d27b8`, and the
+> Last reconciled against data and code: **2026-08-12**, against
+> `D:\IFQ_Runs\confocal_260809_rerun`, `main` @ `e60b7e6`, the
+> four-mouse/eight-section H&E cohort at
+> `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW`, and the
 > [G-SURF research scheme](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9).
 
 **Update this whenever work is parked.** It exists so a fresh session — or a
@@ -16,9 +18,10 @@ is not.
 
 ## 0. The 60-second version
 
-* The measurement engine is `IF_Quant_Pipeline.groovy` (Fiji). **QuPath measures
-  nothing**; it reads and tiles whole slides. The handoff is file-based because
-  the two ship incompatible Java versions.
+* The fluorescence measurement engine is `IF_Quant_Pipeline.groovy` (Fiji).
+  **QuPath measures nothing in either fluorescence route**; it reads and tiles
+  whole slides. The proposed H&E route is a separate brightfield module and is
+  still disabled.
 * Confocal data arrived 2026-08-08. **`IFQ_KRT5_THRESHOLD = 300` is calibrated**
   from uninfected controls. AGER and T1A are **not** calibrated and every call
   they make is labelled `adaptive_otsu_exploratory`.
@@ -27,6 +30,9 @@ is not.
 * **n = 1 mouse per genotype × condition cell, and genotype is confounded with
   condition. No statistics are possible from this batch.** Anything that reads
   like a group comparison is a description of four animals, not a result.
+* H&E now has a **proposed, machine-readable decision hierarchy and endpoint
+  contract**, verified against the actual two-series-per-slide VSI structure.
+  Route 3 remains disabled: no H&E classifier or endpoint is calibrated yet.
 * Two things were tested and **rejected** with a control-locked enrichment test:
   AGER as a co-negativity marker, and KRT8 as a discriminator. See
   [`NEGATIVE_RESULTS.md`](NEGATIVE_RESULTS.md).
@@ -44,11 +50,12 @@ is not.
 |---|---|
 | repo | `X:\GitHub\IFQuant-Lung` (renamed from `Fiji_ImageJ_Cell_Counting`) |
 | GitHub | `xorca0711/IFQuant-Lung` |
-| branch | `main` @ `35d27b8`. Launcher tag `v1.9.0` points at `22afada`; the current tip is a post-release documentation baseline. See `BRANCHING.md`. |
+| branch | `main` @ `e60b7e6` before the 2026-08-12 maintenance/H&E working changes. Launcher tag `v1.9.0` points at `22afada`. See `BRANCHING.md`. |
 | review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
-| launcher binary | current `IFQuantLauncher-v1.9.1.exe` at repo root — **gitignored**; previous v1.9.0 archived under `legacy/launchers/`, see section 4 |
+| launcher binary | local `IFQuantLauncher-v1.9.2.exe` at repo root — **gitignored**, SHA-256 `3b510b559738ea62ce017a6c1bfbc7e3f48dcc4e2668234bec134ecda7b9faad`; v1.9.1 local binaries moved under `legacy/launchers/` |
 | confocal data | `D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × 2 panels × ~10 fields |
 | slide-scanner data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` — 4 slides (WSI pilot) |
+| H&E slide-scanner data | `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW` — 4 mice, 2 analytical 20x BF series each, 8 technical sections |
 | pipeline runs | `D:\IFQ_Runs\` — see its README |
 | research scheme | [G-SURF / 4W after PR8 infection](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9); M4-1 is confirmed **het** |
 | channel cache | `<repo>\.cache\slide_channels` (ds=8, bit-exact, 24.5× faster than decoding). Gitignored, regenerable in ~10 min via `scripts/cache_slide_channels.groovy`. Override with `IFQ_CACHE_DIR`. |
@@ -237,13 +244,15 @@ countable, not area-quantifiable, without a registry change.
 
 ---
 
-## 4. Launcher — v1.9.1 GUI repair candidate
+## 4. Launcher — v1.9.2 maintenance build
 
 Four routes: confocal fields / slide scanner / H&E (deliberately disabled) /
 legacy. v1.8.0 committed at `f7dbb02`; **published v1.9.0 at `22afada`** adds a
 responsive WinForms layout and makes the equivalence claim reproducible. The
-v1.9.1 source candidate keeps file scope outside the unreliable scrolling pane
-and adds a named preset for the validated 20x/2k lung cohort. See
+v1.9.2 keeps file scope outside the scrolling pane, stabilizes the complete
+Step 1 and Analysis settings group heights, and retains the named preset for
+the validated 20x/2k lung cohort. The build, embedded self-test, UI smoke test,
+and 84-check legacy equivalence pass locally. See
 `launcher/README.md`.
 
 **Route 4 is proven equal to v1.7.2 by execution, not assertion.**
@@ -276,22 +285,26 @@ counts are not evidence; the adversarial pass is.
 Two materially different launcher sources both declared `1.8.0.0` — the
 committed one and a ~476-line uncommitted WinForms layout revision on top of it.
 **Fixed at `22afada`:** the release source declares
-`AssemblyFileVersion("1.9.0.0")`. The GUI repair advances the source to
-`1.9.1.0`, so it does not repeat the earlier collision; a local
-`IFQuantLauncher-v1.9.1.exe` build has its own SHA-256 sidecar.
+`AssemblyFileVersion("1.9.0.0")`. The completed GUI repair advances the source
+to `1.9.2.0`, so it does not repeat the earlier collision; the local v1.9.2
+build has its own SHA-256 sidecar.
 
 ### Still owed
 
 * **Choose a long-term version namespace.** `v1.9.0` correctly tags the launcher
   release at `22afada`, while `v2.0.0` is an older repository tag. The coexistence
   is historically accurate but easy to misread.
-* **The current binary is gitignored** (`.gitignore:58`,
+* **The current binary is gitignored** (`.gitignore`,
   `/IFQuantLauncher-*.exe`). The previous v1.9.0 executable and its checksum are
-  archived under `legacy/launchers/`; the current v1.9.1 build remains the only
+  archived under `legacy/launchers/`; the current v1.9.2 build remains the only
   untracked link in that chain.
 * Section `[c]` of the equivalence report is still headed "The **v1.8.0** source
   cannot quietly stop being legacy". Cosmetic, but it is the sort of stale label
   that later reads as evidence about the wrong build.
+* **Route 3 H&E remains intentionally unavailable.** Its hierarchy and study
+  contract are defined, but tissue/artifact classifiers, stain-vector locking,
+  blinded calibration and the QuPath runner still need implementation and
+  validation before the route flag may change.
 
 ---
 

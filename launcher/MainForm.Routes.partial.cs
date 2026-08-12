@@ -196,6 +196,14 @@ namespace IFQuantLauncher
                 !IsDescendantOf(includeRegexBox, inputScopeGroup) ||
                 IsDescendantOf(includeRegexBox, configScroll)) return 78;
             includeRegexBox.Text = ".*";
+
+            // v1.9.2 regression: both column-top groups must size to their full
+            // table content. v1.9.1 could leave their final rows below the
+            // GroupBox border even though the surrounding pane scrolled.
+            PerformLayout();
+            configScroll.PerformLayout();
+            if (!GroupContainsItsContent(routeGroup) ||
+                !GroupContainsItsContent(analysisSettingsGroup)) return 79;
             validatedLungScopeButton.PerformClick();
             if (!string.Equals(includeRegexBox.Text, @".*20x 2k.*\.oir",
                                StringComparison.Ordinal)) return 78;
@@ -458,12 +466,22 @@ namespace IFQuantLauncher
             return false;
         }
 
+        private static bool GroupContainsItsContent(GroupBox group)
+        {
+            if (group == null || group.Controls.Count == 0) return false;
+            Control content = group.Controls[0];
+            int requiredBottom = content.Top + content.GetPreferredSize(
+                new Size(Math.Max(1, content.Width), 0)).Height;
+            return group.ClientSize.Height >= requiredBottom + group.Padding.Bottom;
+        }
+
         private void BuildRouteGroup()
         {
             routeGroup = new GroupBox();
             routeGroup.Text = "Step 1 — what kind of images are these?";
             routeGroup.Dock = DockStyle.Top;
             routeGroup.AutoSize = true;
+            routeGroup.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             routeGroup.Padding = new Padding(10);
 
             TableLayoutPanel table = new TableLayoutPanel();

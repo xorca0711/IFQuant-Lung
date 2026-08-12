@@ -20,8 +20,8 @@ using IFQuantLauncher.Routing;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.9.1.0")]
-[assembly: AssemblyFileVersion("1.9.1.0")]
+[assembly: AssemblyVersion("1.9.2.0")]
+[assembly: AssemblyFileVersion("1.9.2.0")]
 
 namespace IFQuantLauncher
 {
@@ -114,6 +114,7 @@ namespace IFQuantLauncher
         private Label panelHelpLabel;
         private ProgressBar progressBar;
         private GroupBox advancedGroup;
+        private GroupBox analysisSettingsGroup;
         private CheckBox showAdvancedBox;
         private ToolTip toolTips;
 
@@ -422,11 +423,12 @@ namespace IFQuantLauncher
             paths.Controls.Add(runHint, 2, 3);
             toolTips.SetToolTip(runNameBox, "Optional readable name such as Mouse12_CC10_AcTub. A timestamp is added automatically.");
 
-            GroupBox runGroup = new GroupBox();
-            runGroup.Text = "Analysis settings — recommended defaults are appropriate for most first runs";
-            runGroup.Dock = DockStyle.Top;
-            runGroup.AutoSize = true;
-            runGroup.Padding = new Padding(10);
+            analysisSettingsGroup = new GroupBox();
+            analysisSettingsGroup.Text = "Analysis settings — recommended defaults are appropriate for most first runs";
+            analysisSettingsGroup.Dock = DockStyle.Top;
+            analysisSettingsGroup.AutoSize = true;
+            analysisSettingsGroup.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            analysisSettingsGroup.Padding = new Padding(10);
 
             TableLayoutPanel settings = new TableLayoutPanel();
             settings.Dock = DockStyle.Top;
@@ -436,7 +438,7 @@ namespace IFQuantLauncher
             settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaledF(155F)));
             settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            runGroup.Controls.Add(settings);
+            analysisSettingsGroup.Controls.Add(settings);
 
             panelBox = MakeCombo(
                 new string[] {
@@ -716,7 +718,7 @@ namespace IFQuantLauncher
             AppendToConfigColumn(configLeft, routeGroup);
             AppendToConfigColumn(configLeft, pathsGroup);
             AppendToConfigColumn(configLeft, toolsGroup);
-            AppendToConfigColumn(configRight, runGroup);
+            AppendToConfigColumn(configRight, analysisSettingsGroup);
             AppendToConfigColumn(configRight, advancedContainer);
             configStack.Controls.Add(measurementGroup, 0, 1);
         }
@@ -843,6 +845,15 @@ namespace IFQuantLauncher
             if (rootTable == null || configScroll == null || configStack == null) return;
             if (rootTable.RowStyles.Count <= RootRowLog) return;
 
+            // WinForms can under-measure an AutoSize GroupBox whose only child
+            // is a docked AutoSize TableLayoutPanel. The child then paints below
+            // the group border and the following group appears to cut off the
+            // final rows. This was visible in v1.9.1 in both Step 1 and Analysis
+            // settings. Give those groups a width-aware floor derived from the
+            // complete child table before measuring the surrounding pane.
+            StabilizeGroupHeight(routeGroup);
+            StabilizeGroupHeight(analysisSettingsGroup);
+
             int available = rootTable.ClientSize.Height - rootTable.Padding.Vertical;
             if (available <= 0) return;
 
@@ -945,6 +956,24 @@ namespace IFQuantLauncher
                 }
             }
             finally { adjustingConfigPane = false; }
+        }
+
+        private static void StabilizeGroupHeight(GroupBox group)
+        {
+            if (group == null || !group.Visible || group.Controls.Count == 0) return;
+
+            Control content = group.Controls[0];
+            int width = group.ClientSize.Width - group.Padding.Horizontal;
+            if (width < Scaled(120))
+                width = Math.Max(Scaled(120), group.Width - group.Padding.Horizontal);
+
+            int contentHeight = content.GetPreferredSize(new Size(width, 0)).Height;
+            int captionAllowance = Math.Max(group.Font.Height, Scaled(12));
+            int required = contentHeight + group.Padding.Vertical + captionAllowance;
+            if (required < 1) required = 1;
+
+            if (group.MinimumSize.Height != required)
+                group.MinimumSize = new Size(0, required);
         }
 
         /// The height a pinned row needs at a given width, plus its margins.

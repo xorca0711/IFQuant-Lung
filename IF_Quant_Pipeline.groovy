@@ -88,8 +88,10 @@ import ij.plugin.ZProjector
 import ij.plugin.ChannelSplitter
 import ij.plugin.Duplicator
 import ij.plugin.RoiEnlarger
+import ij.plugin.filter.BackgroundSubtracter
 import ij.plugin.filter.GaussianBlur
 import ij.plugin.filter.ParticleAnalyzer
+import ij.plugin.filter.RankFilters
 import ij.plugin.filter.ThresholdToSelection
 import ij.io.RoiDecoder
 import loci.plugins.BF
@@ -454,29 +456,37 @@ def PANELS = [
   // universal engine; all registry markers, custom panels, and legacy panels
   // remain available. Channel idx values are acquisition order.
   "LEFT": [ label:"LEFT_KRT5_AGER_T1A",
-    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI"],
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI",
+                 displayWeight:1.0d],
                [idx:2, marker:"KRT5", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
-                qcColor:"green", fileLabel:"KRT5-488", areaMarker:true],
+                 qcColor:"green", fileLabel:"KRT5-488", areaMarker:true,
+                 displayWeight:0.55d],
                [idx:3, marker:"AGER", role:"membrane", measurement:"thin_membrane_support",
-                expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
-                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d],
+                 expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
+                 areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d,
+                 displayWeight:0.45d],
                [idx:4, marker:"T1A", role:"membrane", measurement:"thin_membrane_support",
-                expectedCompartment:"alveolar", qcColor:"white", fileLabel:"T1alpha-647",
-                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d] ],
+                 expectedCompartment:"alveolar", qcColor:"white", fileLabel:"T1alpha-647",
+                 areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d,
+                 displayWeight:0.50d] ],
     classify:[ ["AGER":true,"T1A":true],
                ["KRT5":true,"AGER":false],
                ["KRT5":true,"T1A":false],
                ["KRT5":true,"AGER":false,"T1A":false] ] ],
 
   "RIGHT": [ label:"RIGHT_ProSPC_AGER_KRT8",
-    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI"],
+    channels:[ [idx:1, marker:"DAPI", role:"nuclear", qcColor:"blue", fileLabel:"DAPI",
+                 displayWeight:1.0d],
                [idx:2, marker:"ProSPC", role:"cyto", measurement:"perinuclear_granular_cytoplasm",
-                expectedCompartment:"alveolar", qcColor:"green", fileLabel:"Pro-SPC-488"],
+                 expectedCompartment:"alveolar", qcColor:"green", fileLabel:"Pro-SPC-488",
+                 displayWeight:0.55d],
                [idx:3, marker:"AGER", role:"membrane", measurement:"thin_membrane_support",
-                expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
-                areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d],
+                 expectedCompartment:"alveolar", qcColor:"red", fileLabel:"AGER-555",
+                 areaMarker:true, areaMode:"membrane", areaMinAreaUm2:2.0d, areaBlurSigmaPx:0.7d,
+                 displayWeight:0.45d],
                [idx:4, marker:"KRT8", role:"cyto", measurement:"perinuclear_cytoplasmic_keratin",
-                expectedCompartment:"alveolar", qcColor:"white", fileLabel:"KRT8-647"] ],
+                 expectedCompartment:"alveolar", qcColor:"white", fileLabel:"KRT8-647",
+                 displayWeight:0.50d] ],
     classify:[ ["KRT8":true,"ProSPC":true],
                ["KRT8":true,"AGER":true],
                ["KRT8":true,"ProSPC":false,"AGER":false] ] ],
@@ -821,6 +831,41 @@ PANELS.each { panelKey, panelDef ->
     }
     if (!Double.isFinite(displayGamma) || displayGamma <= 0.0d) {
       failRun("displayGamma must be positive for marker '" + c.marker + "'")
+    }
+    boolean hasDisplayLowIntensity = c.displayLowIntensity != null
+    boolean hasDisplayHighIntensity = c.displayHighIntensity != null
+    if (hasDisplayLowIntensity != hasDisplayHighIntensity) {
+      failRun("displayLowIntensity and displayHighIntensity must be provided together for marker '" +
+              c.marker + "'")
+    }
+    if (hasDisplayLowIntensity) {
+      double displayLowIntensity = c.displayLowIntensity as double
+      double displayHighIntensity = c.displayHighIntensity as double
+      if (!Double.isFinite(displayLowIntensity) || !Double.isFinite(displayHighIntensity) ||
+          displayLowIntensity < 0.0d || displayLowIntensity >= displayHighIntensity) {
+        failRun("Invalid absolute display window for marker '" + c.marker + "'")
+      }
+    }
+    double displayWeight = c.displayWeight != null ? c.displayWeight as double : 1.0d
+    if (!Double.isFinite(displayWeight) || displayWeight <= 0.0d || displayWeight > 1.0d) {
+      failRun("displayWeight must be in (0, 1] for marker '" + c.marker + "'")
+    }
+    double displayBackgroundRadiusPx = c.displayBackgroundRadiusPx != null ?
+                                       c.displayBackgroundRadiusPx as double : 0.0d
+    if (!Double.isFinite(displayBackgroundRadiusPx) || displayBackgroundRadiusPx < 0.0d) {
+      failRun("displayBackgroundRadiusPx must be non-negative for marker '" + c.marker + "'")
+    }
+    double displayBlackPoint = c.displayBlackPoint != null ?
+                               c.displayBlackPoint as double : 0.0d
+    if (!Double.isFinite(displayBlackPoint) ||
+        displayBlackPoint < 0.0d || displayBlackPoint >= 1.0d) {
+      failRun("displayBlackPoint must be in [0, 1) for marker '" + c.marker + "'")
+    }
+    double displayMedianRadiusPx = c.displayMedianRadiusPx != null ?
+                                   c.displayMedianRadiusPx as double : 0.0d
+    if (!Double.isFinite(displayMedianRadiusPx) ||
+        displayMedianRadiusPx < 0.0d || displayMedianRadiusPx > 10.0d) {
+      failRun("displayMedianRadiusPx must be in [0, 10] for marker '" + c.marker + "'")
     }
     if (c.thresholdSensitivity != null &&
         (!Double.isFinite(c.thresholdSensitivity as double) ||
@@ -1992,8 +2037,22 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
                            c.displayHighPercentile as double : cfg.displayHighPercentile
       double displayGamma = c.displayGamma != null ?
                             c.displayGamma as double : cfg.displayGamma
+      Double displayLowIntensity = c.displayLowIntensity != null ?
+                                   c.displayLowIntensity as double : null
+      Double displayHighIntensity = c.displayHighIntensity != null ?
+                                    c.displayHighIntensity as double : null
+      double displayBackgroundRadiusPx = c.displayBackgroundRadiusPx != null ?
+                                          c.displayBackgroundRadiusPx as double : 0.0d
+      double displayBlackPoint = c.displayBlackPoint != null ?
+                                 c.displayBlackPoint as double : 0.0d
+      double displayMedianRadiusPx = c.displayMedianRadiusPx != null ?
+                                     c.displayMedianRadiusPx as double : 0.0d
       def enhanced = buildDisplayChannel(markerImg[c.marker], c.marker.toString(),
-                                         displayLow, displayHigh, displayGamma)
+                                         displayLow, displayHigh, displayGamma,
+                                         displayLowIntensity, displayHighIntensity,
+                                         displayBackgroundRadiusPx,
+                                         displayBlackPoint,
+                                         displayMedianRadiusPx)
       def displayImage = enhanced.image
       boolean ciliaFocused = c.role == "apical_cilia"
       if (ciliaFocused) {
@@ -2020,10 +2079,19 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         resolved_low_intensity: enhanced.low_intensity,
         resolved_high_intensity: enhanced.high_intensity,
         gamma: enhanced.gamma,
+        weight: (c.displayWeight != null ? c.displayWeight as double : 1.0d),
+        window_source: enhanced.window_source,
+        display_background_radius_px: enhanced.background_radius_px,
+        display_black_point: enhanced.black_point,
+        display_median_radius_px: enhanced.median_radius_px,
         background_suppression:
           (ciliaFocused ?
             "high_intensity_local_density_bounded_apical_tuft" :
-            "none"),
+            ((enhanced.background_radius_px > 0.0d ||
+              enhanced.median_radius_px > 0.0d) ?
+              ([enhanced.background_radius_px > 0.0d ? "rolling_ball" : null,
+                enhanced.median_radius_px > 0.0d ? "median_despeckle" : null]
+                .findAll { it != null }.join("+") + "_display_only") : "none")),
         z_start_plane: zInfo.start,
         z_end_plane: zInfo.end,
         z_projection: zInfo.projection
@@ -2033,8 +2101,13 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
         (c.primaryEndpoint == true ? "PRIMARY ENDPOINT | " : "") +
         "C" + c.idx + " " + c.marker +
         (ciliaFocused ? " | cilia-focused cytoskeleton suppressed" : "") +
-        " | p" + displayLow + "-" +
-        displayHigh + " gamma " + displayGamma)
+        " | " + (enhanced.window_source == "absolute" ?
+          ("raw[" + enhanced.low_intensity + "-" + enhanced.high_intensity + "]") :
+          ("p" + displayLow + "-" + displayHigh)) +
+        " gamma " + displayGamma +
+        (enhanced.black_point > 0.0d ? " black " + enhanced.black_point : "") +
+        (enhanced.median_radius_px > 0.0d ?
+          " median " + enhanced.median_radius_px + "px" : ""))
       transientImages << labeled
       IJ.saveAs(labeled, "PNG", imgOut.getAbsolutePath() + "/" + fileKey +
                 "__DISPLAY_ONLY__C" + c.idx + "-" + fileSafe(c.marker) +
@@ -2051,7 +2124,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
          panelDef.channels.find { it.primaryEndpoint == true }.marker + " | ") :
         "") +
       panelDef.channels.collect { c ->
-        c.marker + "=" + (c.qcColor ?: "white")
+        c.marker + "=" + (c.qcColor ?: "white") + "@" +
+          (c.displayWeight != null ? c.displayWeight : 1.0d)
       }.join(", "), true)
     transientImages << labeledMerge
     IJ.saveAs(labeledMerge, "PNG", imgOut.getAbsolutePath() + "/" + fileKey +
@@ -2974,17 +3048,50 @@ def displayPercentileBounds(ImagePlus imp, double lowPercentile,
 }
 
 def buildDisplayChannel(ImagePlus source, String marker, double lowPercentile,
-                        double highPercentile, double gamma) {
-  def bounds = displayPercentileBounds(source, lowPercentile, highPercentile)
+                        double highPercentile, double gamma,
+                        Double lowIntensity = null, Double highIntensity = null,
+                        double backgroundRadiusPx = 0.0d,
+                        double blackPoint = 0.0d,
+                        double medianRadiusPx = 0.0d) {
   ImageProcessor work = source.getProcessor().duplicate()
+  if (backgroundRadiusPx > 0.0d) {
+    new BackgroundSubtracter().rollingBallBackground(
+      work, backgroundRadiusPx, false, false, false, true, true)
+  }
+  // An optional median filter suppresses isolated hot pixels without broadly
+  // blurring membrane morphology. It operates only on this disposable display
+  // branch and therefore cannot affect masks, thresholds, or measurements.
+  if (medianRadiusPx > 0.0d) {
+    new RankFilters().rank(work, medianRadiusPx, RankFilters.MEDIAN)
+  }
+  def windowImage = new ImagePlus(marker + "_DISPLAY_WINDOW", work)
+  def bounds = (lowIntensity != null && highIntensity != null) ?
+    [low:lowIntensity as double, high:highIntensity as double] :
+    displayPercentileBounds(windowImage, lowPercentile, highPercentile)
   work.setMinAndMax(bounds.low as double, bounds.high as double)
   ImageProcessor byteIp = work.convertToByte(true)
+  windowImage.close()
   if (Math.abs(gamma - 1.0d) > 1.0e-9d) byteIp.gamma(gamma)
+  if (blackPoint > 0.0d) {
+    byte[] pixels = byteIp.getPixels() as byte[]
+    double floor = 255.0d * blackPoint
+    double scale = 255.0d / (255.0d - floor)
+    for (int i = 0; i < pixels.length; i++) {
+      int v = pixels[i] & 0xff
+      int adjusted = v <= floor ? 0 :
+        Math.max(0, Math.min(255, Math.round((v - floor) * scale) as int))
+      pixels[i] = (byte)(adjusted & 0xff)
+    }
+  }
   def out = new ImagePlus(marker + "_DISPLAY_ONLY", byteIp)
   out.setCalibration(source.getCalibration())
   return [image:out, low_intensity:bounds.low, high_intensity:bounds.high,
           low_percentile:lowPercentile, high_percentile:highPercentile,
-          gamma:gamma]
+          gamma:gamma,
+          background_radius_px:backgroundRadiusPx,
+          black_point:blackPoint,
+          median_radius_px:medianRadiusPx,
+          window_source:(lowIntensity != null ? "absolute" : "percentile")]
 }
 
 def labelDisplayOnlyExport(ImagePlus source, String label,
@@ -3013,6 +3120,7 @@ def buildQcComposite(markerImg, panelDef, displayImages = null) {
     def ip = sourceImages[c.marker].getProcessor().duplicate()
     if (displayImages == null) ip.resetMinAndMax()
     return [color: (c.qcColor ?: "white"),
+            weight: (c.displayWeight != null ? c.displayWeight as double : 1.0d),
             ip:(displayImages == null ? ip.convertToByte(true) : ip)]
   }
   def out = new ColorProcessor(w, h)
@@ -3020,7 +3128,8 @@ def buildQcComposite(markerImg, panelDef, displayImages = null) {
     for (int x = 0; x < w; x++) {
       int rr = 0, gg = 0, bb = 0
       layers.each { layer ->
-        int v = layer.ip.get(x, y)
+        int v = Math.max(0, Math.min(255,
+          Math.round(layer.ip.get(x, y) * (layer.weight as double)) as int))
         switch (layer.color) {
           case "red": rr = Math.max(rr, v); break
           case "green": gg = Math.max(gg, v); break

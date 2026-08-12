@@ -60,7 +60,9 @@ a working tool.
 
 ## Current release
 
-`v1.9.1` adds the post-release GUI repair and validated 20x/2k lung-field
-preset. See [Releases](https://github.com/xorca0711/IFQuant-Lung/releases).
+`v1.9.2` is the current maintenance source. It completes the post-release GUI
+reachability repair and retains the validated 20x/2k lung-field preset. The
+v1.9.1 binaries are retained here as local ignored historical artifacts. See
+[Releases](https://github.com/xorca0711/IFQuant-Lung/releases).
 New build artefacts are not tracked in git by default; `launcher/build.ps1`
 writes them to the repository root, where `.gitignore` excludes them.

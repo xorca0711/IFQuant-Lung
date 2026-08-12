@@ -1,12 +1,12 @@
 # IF Quant Windows launcher
 
-`IFQuantLauncher-v1.9.1.exe` is a Windows Forms front end for the analysis
+`IFQuantLauncher-v1.9.2.exe` is a Windows Forms front end for the analysis
 pipeline. It embeds the exact Groovy engine, marker registry, QuPath tiling
 script and Python reconciliation script present at build time. **It does not
 reimplement image analysis.** Every number it produces comes from
 `IF_Quant_Pipeline.groovy`, which is frozen.
 
-## What the four routes replaced (introduced v1.8.0; current source v1.9.1)
+## What the four routes replaced (introduced v1.8.0; current source v1.9.2)
 
 v1.7.2 assumed one kind of input: a folder of confocal/field images measured by
 Fiji. v1.8.0 makes the *kind of image* an explicit first choice, because the
@@ -118,8 +118,8 @@ self-test and never ran it.)
 Artifacts are written to the repository root and are **not committed** —
 `.exe` and its `.sha256.txt` sidecar belong in GitHub Releases:
 
-- `IFQuantLauncher-v1.9.1.exe`
-- `IFQuantLauncher-v1.9.1.sha256.txt`
+- `IFQuantLauncher-v1.9.2.exe`
+- `IFQuantLauncher-v1.9.2.sha256.txt`
 
 The build prints the SHA-256 of the exe and of each embedded artefact, so a
 shipped binary can be traced to the exact engine it carries.
@@ -160,8 +160,9 @@ statistical unit. Run `aggregate_to_mouse.py` before any test; n = mice.
 
 ## Released binary vs a build from HEAD
 
-The published **v1.9.0** release corresponds to commit `22afada`. Version 1.9.1
-is the post-release GUI repair: file scope is permanently visible and the
+The published **v1.9.0** release corresponds to commit `22afada`. Version 1.9.2
+completes the post-release GUI repair: file scope is permanently visible, the
+complete Step 1 and Analysis settings groups are height-stabilized, and the
 validated 20x/2k lung-field preset removes the need to recover a hidden expert
 regular expression. Building from a later `HEAD` produces a different SHA-256
 because both the launcher source and its embedded pipeline have advanced.

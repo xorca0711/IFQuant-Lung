@@ -27,12 +27,18 @@ across two acquisition routes measured by the **same** engine:
 * **field / confocal route** — small calibrated images go straight to
   `IF_Quant_Pipeline.groovy`. Described in [`../WORKFLOW.md`](../WORKFLOW.md).
   This is the route the current data came through.
-* **whole-slide route** — a slide-scanner `.vsi` is opened and tiled by QuPath,
+* **whole-slide route** — a fluorescence slide-scanner `.vsi` is opened and tiled by QuPath,
   then the same engine measures the tiles. Described in
   [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md).
+* **H&E brightfield route** — designed as a separate QuPath measurement module
+  sharing identity and mouse aggregation, but deliberately disabled until its
+  masks and endpoints are calibrated. See
+  [`HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](HE_BRIGHTFIELD_DECISION_HIERARCHY.md).
 
-QuPath never measures anything; it is a reader and tiler. All quantification
-stays in the Fiji engine so both routes share one validated decision model.
+For fluorescence, QuPath never measures anything; it is a reader and tiler, and
+all quantification stays in the Fiji engine so both fluorescence routes share
+one validated decision model. The proposed H&E route is explicitly different:
+its brightfield measurements belong in a separate QuPath module.
 
 ## The five-minute path
 
@@ -61,6 +67,7 @@ stays in the Fiji engine so both routes share one validated decision model.
 |---|---|---|
 | [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md) | **REFERENCE** (claims validated elsewhere) | why the two tools are used together, the published pattern this follows (Chiaruttini et al. 2022), where we deliberately differ |
 | [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) | **VALIDATED** (plumbing) / **PROPOSED** (thresholds) | the whole-slide route: series selection, global tissue detection, tiling, seam correctness, aggregation |
+| [`HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](HE_BRIGHTFIELD_DECISION_HIERARCHY.md) | **PROPOSED** / **PREFLIGHT VERIFIED** | separate H&E hierarchy, endpoint tiers, QC gates, current 4-mouse/8-section study contract, and validation ladder |
 | [`VISUAL_PANELS.md`](VISUAL_PANELS.md) | **VALIDATED** (v8 rendered) | figure generation as a first-class module, with the reason v1–v7 were all wrong |
 
 ### Interpretation and configuration

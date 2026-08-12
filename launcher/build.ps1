@@ -1,5 +1,5 @@
 <#
-    build.ps1 -- IF Quant Launcher v1.8.0
+    build.ps1 -- IF Quant Launcher v1.9.2
 
     Diff against the v1.7.2 build script, in full:
 

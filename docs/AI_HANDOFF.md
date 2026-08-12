@@ -2,7 +2,8 @@
 
 > **Purpose.** A dense, factual *technical* context transfer for an AI agent picking up this
 > project with no conversation history. Written to be read start-to-finish.
-> State reconciled 2026-08-09 against baseline `main` commit `35d27b8` and the
+> State reconciled 2026-08-12 against baseline `main` commit `e60b7e6`, the
+> new four-mouse/eight-section H&E cohort, and the
 > G-SURF research scheme.
 > The human-facing entry points are [`../README.md`](../README.md) and
 > [`../WORKFLOW.md`](../WORKFLOW.md); [`PROJECT_STATE.md`](PROJECT_STATE.md) is
@@ -22,7 +23,7 @@
 | **Study** | IFN-γ *ligand* KO + PR8 influenza; does KO change dysplastic KRT5⁺ repair? |
 | **Reference** | Lin X. et al., *J Clin Invest* 2024;134(19):e176828 (DOI 10.1172/JCI176828) |
 | **Endpoint** | KRT5⁺PDPN⁺ area ÷ damaged alveolar area (PDPN⁻ ∪ KRT5⁺) |
-| **Baseline HEAD** | `35d27b8` · `main` == `origin/main` before the 2026-08-09 validation work · tags `v1.8.0`, `v1.9.0`, `v2.0.0` |
+| **Baseline HEAD** | `e60b7e6` · `main` == `origin/main` before the 2026-08-12 maintenance/H&E work · tags `v1.8.0`, `v1.9.0`, `v1.9.1`, `v2.0.0` |
 | **Research scheme** | [G-SURF](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9) · M4-1 is **het**, matching raw filenames and `samplesheet.csv` |
 
 ---
@@ -81,6 +82,7 @@ These caused real failures. Check before assuming.
 | `D:\IFQ_Runs\confocal_260808_fixed` | **post-fix run — use this one** | regenerable |
 | `D:\IFQ_Runs\confocal_260809_rerun` | byte-identical independent reproduction; corrected endpoint outputs are **exploratory only** | regenerable |
 | `<repo>\.cache\slide_channels` | deleted 2026-08-09; rebuild ~10 min via `scripts/cache_slide_channels.groovy` | yes |
+| `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW` | 4 H&E VSI slides; 2 analytical 20x BF series per mouse | **NO** |
 
 **Batch design:** 4 mice × 2 panels × ~10 fields. LEFT = DAPI/KRT5-488/AGER-555/T1α-647; RIGHT = DAPI/ProSPC-488/AGER-555/KRT8-647. 2048², single Z, 0.3107 µm/px, 12-bit.
 
@@ -250,6 +252,9 @@ for appearance.
 | `config/endpoints/ectopic_pod_over_damaged.json` | retracted; kept as the record |
 | `panels/MergePanels.java` | merge panels (photograph) |
 | `panels/qc/RenderPanels.java` | QC overlays (analysis result) |
-| `launcher/` | v1.9.1 GUI repair candidate, 4 routes; `run_legacy_equivalence.ps1` |
+| `launcher/` | v1.9.2 GUI maintenance build, 4 routes; H&E remains disabled; `run_legacy_equivalence.ps1` |
+| `config/brightfield/` | proposed H&E decision hierarchy and endpoint tiers |
+| `config/studies/g_surf_he_20260812.json` | verified 4-mouse/8-section H&E identity contract |
+| `docs/HE_BRIGHTFIELD_DECISION_HIERARCHY.md` | H&E scope, QC gates, endpoints, outputs and validation ladder |
 | `validation/` | synthetic fixture demonstrating the bug from a clone |
 | `scripts/` | calibration and probe scripts |

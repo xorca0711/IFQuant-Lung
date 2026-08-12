@@ -14,7 +14,7 @@ Git branch:
   morphology-authoritative three-state hierarchy.
 - `launchers/`: archived launcher executables and checksums. Version 1.7.2 is
   retained for byte-exact legacy reproduction, and v1.9.0 is the superseded
-  release immediately preceding the current repository-root v1.9.1 launcher.
+  release immediately preceding the current repository-root v1.9.2 launcher.
 - `scripts/README.md`: routes historical script access to the snapshot branch
   and commit history; no legacy script is an active entry point.
 - `test_runs/`: local smoke, baseline, and intermediate Fiji outputs.

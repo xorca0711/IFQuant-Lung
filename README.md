@@ -181,6 +181,13 @@ run with adaptive thresholds is a defensible exploratory measurement whereas a
 slide run silently re-deriving a threshold on each of ~370 tiles is not one
 measurement at all. Details in [`launcher/README.md`](launcher/README.md).
 
+The H&E module is specified but not calibrated or runnable. Its decision
+hierarchy, endpoint tiers, fail-closed gates, and verified 2026-08-12 study
+mapping are in
+[`docs/HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](docs/HE_BRIGHTFIELD_DECISION_HIERARCHY.md).
+Machine-readable policy lives under `config/brightfield/`; study-specific
+mouse/section identity lives under `config/studies/`.
+
 ### Field / confocal route, directly
 
 A complete worked example is

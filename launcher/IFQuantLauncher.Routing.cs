@@ -47,11 +47,11 @@ namespace IFQuantLauncher.Routing
     internal static class LauncherBuild
     {
         // 1.9.0, not 1.8.1, ended the historical version collision: three
-        // different binaries had been called v1.8.0. Version 1.9.1 is a real
-        // patch release candidate for the settings-reachability defect; it must
-        // not overwrite or masquerade as the published v1.9.0 binary.
-        public const string Version = "1.9.1";
-        public const string AssemblyVersion = "1.9.1.0";
+        // different binaries had been called v1.8.0. Version 1.9.2 is the
+        // maintenance release that makes the complete Step 1 and Analysis
+        // settings groups reachable at every supported window size.
+        public const string Version = "1.9.2";
+        public const string AssemblyVersion = "1.9.2.0";
 
         // =============================================================
         // >>> THE ONE LINE THAT RE-ENABLES ROUTE 3 (H&E / brightfield) <<<

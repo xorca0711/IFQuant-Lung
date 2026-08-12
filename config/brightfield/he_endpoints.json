@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "module": "brightfield_he",
+  "status": "PROPOSED_NOT_CALIBRATED",
+  "endpoint_tiers": {
+    "tier_1_quantitative": [
+      {
+        "id": "usable_tissue_fraction",
+        "label": "Usable tissue fraction",
+        "numerator": "usable_tissue_area_um2",
+        "denominator": "detected_tissue_area_um2",
+        "unit": "fraction",
+        "review_requirement": "artifact_mask_reviewed"
+      },
+      {
+        "id": "consolidated_area_fraction",
+        "label": "Consolidated or dense-lesion area fraction",
+        "numerator": "reviewed_consolidated_area_um2",
+        "denominator": "usable_tissue_area_um2",
+        "unit": "fraction",
+        "review_requirement": "lesion_mask_reviewed"
+      },
+      {
+        "id": "hematoxylin_nuclear_density",
+        "label": "Hematoxylin-positive nuclear density",
+        "numerator": "accepted_nuclei_count",
+        "denominator": "usable_tissue_area_mm2",
+        "unit": "nuclei_per_mm2",
+        "interpretation": "Cellularity or inflammatory-cell-rich burden; not immune lineage."
+      },
+      {
+        "id": "inflammatory_hotspot_fraction",
+        "label": "Inflammatory-cell-rich hotspot fraction",
+        "numerator": "reviewed_hotspot_area_um2",
+        "denominator": "usable_tissue_area_um2",
+        "unit": "fraction",
+        "interpretation": "Spatial concentration of nuclei after compartment and artifact gating."
+      },
+      {
+        "id": "airspace_area_fraction",
+        "label": "Airspace profile area fraction",
+        "numerator": "airspace_profile_area_um2",
+        "denominator": "alveolar_reference_area_um2",
+        "unit": "fraction",
+        "interpretation": "Two-dimensional profile fraction. Do not label as alveolar volume or number without stereological sampling."
+      },
+      {
+        "id": "peribronchial_cuff_burden",
+        "label": "Peribronchial cuff burden",
+        "numerator": "reviewed_peribronchial_cuff_area_um2",
+        "denominator": "airway_basement_membrane_length_um",
+        "unit": "um2_per_um",
+        "review_requirement": "airway_and_cuff_boundaries_reviewed"
+      },
+      {
+        "id": "perivascular_cuff_burden",
+        "label": "Perivascular cuff burden",
+        "numerator": "reviewed_perivascular_cuff_area_um2",
+        "denominator": "vascular_boundary_length_um",
+        "unit": "um2_per_um",
+        "review_requirement": "vascular_and_cuff_boundaries_reviewed"
+      }
+    ],
+    "tier_2_blinded_ordinal": [
+      {"id": "alveolitis_score", "scale": "0-4", "requires": "locked_rubric_and_blinded_reviewer"},
+      {"id": "bronchiolitis_score", "scale": "0-4", "requires": "locked_rubric_and_blinded_reviewer"},
+      {"id": "peribronchial_cuffing_score", "scale": "0-4", "requires": "locked_rubric_and_blinded_reviewer"},
+      {"id": "perivascular_cuffing_score", "scale": "0-4", "requires": "locked_rubric_and_blinded_reviewer"},
+      {"id": "consolidation_score", "scale": "0-4", "requires": "locked_rubric_and_blinded_reviewer"},
+      {"id": "epithelial_injury_debris_score", "scale": "0-4", "requires": "locked_rubric_and_blinded_reviewer"}
+    ],
+    "tier_3_deferred": [
+      {"id": "immune_lineage_from_he", "reason": "H&E morphology alone cannot establish CD4, CD8, macrophage, neutrophil, or other lineage."},
+      {"id": "cell_level_if_he_registration", "reason": "Requires verified serial-section correspondence and independent registration validation."},
+      {"id": "alveolar_number_or_volume", "reason": "Cannot be inferred from simple counts or cross-sectional profiles without design-based stereology."},
+      {"id": "fully_automated_pathology_grade", "reason": "Requires pathologist-labelled training and external validation."}
+    ]
+  },
+  "aggregation": {
+    "biological_unit": "mouse",
+    "fraction_rule": "sum_numerators_divided_by_sum_denominators",
+    "ordinal_rule": "retain_section_scores_and_apply_prespecified_mouse_summary",
+    "technical_replicates": "report_between_section_agreement; never increment biological n"
+  }
+}

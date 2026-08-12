@@ -59,6 +59,11 @@ group_level_summary.csv
 /IFQuantLauncher-*.exe
 /IFQuantLauncher-*.sha256.txt
 
+# Local historical launcher copies moved out of the repository root during
+# release packaging. Canonical distributables belong in GitHub Releases.
+legacy/launchers/IFQuantLauncher-v1.9.1*.exe
+legacy/launchers/IFQuantLauncher-v1.9.1*.sha256.txt
+
 # Local legacy archives: indexed by legacy/README.md, binaries/results untracked.
 legacy/test_runs/
 legacy/pilot_output/

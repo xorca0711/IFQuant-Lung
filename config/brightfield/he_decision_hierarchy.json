@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "module": "brightfield_he",
+  "status": "PROPOSED_NOT_ENABLED",
+  "purpose": "Quantify lung injury architecture and inflammatory-cell-rich morphology in H&E whole-slide images without inferring immune lineage from H&E alone.",
+  "biological_unit": "mouse",
+  "technical_units": ["slide", "section", "region"],
+  "hard_rules": [
+    "H&E never enters the fluorescence Fiji measurement engine.",
+    "A section is not an independent biological replicate.",
+    "Immune lineage is not inferred from H&E morphology alone.",
+    "A failed identity, calibration, artifact, or completeness gate prevents mouse-level output.",
+    "Fractions are pooled from numerators and denominators, never averaged across fields or sections."
+  ],
+  "stages": [
+    {
+      "id": "H0",
+      "name": "modality_and_series_identity",
+      "decision": "Accept only calibrated RGB brightfield analytical series declared by the study profile.",
+      "required_evidence": ["image_type=BRIGHTFIELD_H_E", "series_name_allowlist", "pixel_size_um", "rgb_channels", "non_thumbnail"],
+      "failure_action": "reject_series"
+    },
+    {
+      "id": "H1",
+      "name": "sample_and_section_identity",
+      "decision": "Resolve mouse, genotype, infection, slide, and section before measurement.",
+      "required_evidence": ["study_id", "mouse_id", "slide_id", "section_id", "biological_unit_id"],
+      "failure_action": "reject_slide"
+    },
+    {
+      "id": "H2",
+      "name": "stain_and_scan_qc",
+      "decision": "Estimate H&E stain vectors during pilot work, then freeze a reviewed batch profile.",
+      "required_evidence": ["scanner_model", "objective", "pixel_size_um", "background_rgb", "hematoxylin_vector", "eosin_vector", "profile_status"],
+      "failure_action": "review_required"
+    },
+    {
+      "id": "H3",
+      "name": "tissue_and_artifact_mask",
+      "decision": "Separate usable tissue from glass and exclude pen, dust, folds, tears, blur, bubbles, and saturated material.",
+      "required_evidence": ["tissue_mask", "artifact_mask", "usable_tissue_area_um2", "excluded_area_um2", "qc_overlay"],
+      "failure_action": "exclude_or_review"
+    },
+    {
+      "id": "H4",
+      "name": "anatomical_compartment",
+      "decision": "Assign airway, peribronchial, vascular, perivascular, alveolar, pleural, or unresolved geography before lesion interpretation.",
+      "required_evidence": ["compartment_label", "compartment_area_um2", "compartment_qc_overlay"],
+      "failure_action": "retain_as_unresolved_not_negative"
+    },
+    {
+      "id": "H5",
+      "name": "candidate_injury_regions",
+      "decision": "Density, optical-density, airspace loss, and texture may nominate candidate inflammatory or consolidated regions.",
+      "required_evidence": ["candidate_mask", "candidate_method", "frozen_operating_point_or_exploratory_stamp"],
+      "failure_action": "no_lesion_call"
+    },
+    {
+      "id": "H6",
+      "name": "morphology_authorization",
+      "decision": "Topology and compartment-compatible morphology authorize consolidation, cuffing, epithelial injury, and inflammatory-cell-rich calls.",
+      "required_evidence": ["morphology_features", "compartment_compatibility", "lesion_mask", "decision_reason"],
+      "failure_action": "indeterminate"
+    },
+    {
+      "id": "H7",
+      "name": "blinded_review",
+      "decision": "A blinded reviewer accepts, edits, or rejects masks and ordinal scores on a locked review set.",
+      "required_evidence": ["reviewer_id", "review_state", "review_timestamp", "edit_provenance"],
+      "failure_action": "not_reportable"
+    },
+    {
+      "id": "H8",
+      "name": "section_to_mouse_aggregation",
+      "decision": "Pool section numerators and denominators within mouse; report section agreement as technical QC.",
+      "required_evidence": ["expected_sections", "observed_sections", "coverage_complete", "pooled_numerator", "pooled_denominator"],
+      "failure_action": "no_mouse_summary"
+    },
+    {
+      "id": "H9",
+      "name": "multimodal_association",
+      "decision": "Join H&E injury burden to IF pod and epithelial-state endpoints at mouse level unless serial-section correspondence has been independently validated.",
+      "required_evidence": ["join_level", "sample_identity_match", "registration_status"],
+      "failure_action": "mouse_level_only"
+    }
+  ]
+}
