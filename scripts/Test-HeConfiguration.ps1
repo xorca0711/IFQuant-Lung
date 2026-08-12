@@ -39,6 +39,10 @@ Assert-True ($sectionCount -eq 8 -and $study.expected_analytical_sections -eq 8)
     "The current study contract must contain eight technical sections."
 Assert-True ((@($study.analytical_series.allow_names) -join ",") -eq "20x_BF_01,20x_BF_02") `
     "The analytical series allowlist has drifted."
+Assert-True ($study.analytical_series.series_index_by_name.'20x_BF_01' -eq 2) `
+    "20x_BF_01 must resolve to verified VSI series index 2."
+Assert-True ($study.analytical_series.series_index_by_name.'20x_BF_02' -eq 3) `
+    "20x_BF_02 must resolve to verified VSI series index 3."
 
 Assert-True ($endpoints.aggregation.biological_unit -eq "mouse") `
     "H&E endpoint aggregation must remain mouse-level."
@@ -54,6 +58,7 @@ Write-Host "H&E configuration: passed."
 Write-Host ("  stages:   {0}" -f $observedStages.Count)
 Write-Host ("  mice:     {0}" -f $mouseIds.Count)
 Write-Host ("  sections: {0}" -f $sectionCount)
+Write-Host "  VSI series: BF_01=2, BF_02=3"
 Write-Host ("  tier 1:   {0}" -f @($endpoints.endpoint_tiers.tier_1_quantitative).Count)
 Write-Host ("  tier 2:   {0}" -f @($endpoints.endpoint_tiers.tier_2_blinded_ordinal).Count)
 Write-Host ("  deferred: {0}" -f $deferred.Count)

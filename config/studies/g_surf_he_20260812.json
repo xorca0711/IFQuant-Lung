@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "study_id": "g_surf_he_20260812",
-  "status": "PREFLIGHT_VERIFIED_ANALYSIS_NOT_RUN",
+  "status": "EXPLORATORY_H0_H3_PILOT_COMPLETE_REVIEW_REQUIRED",
   "source_root": "D:\\Microscopy_Images\\20260812_CW_H&E_Slidescanner\\20260812_CW",
   "modality": "brightfield_he",
   "scanner_format": "Olympus VSI",
@@ -10,6 +10,10 @@
   "expected_analytical_sections": 8,
   "analytical_series": {
     "allow_names": ["20x_BF_01", "20x_BF_02"],
+    "series_index_by_name": {
+      "20x_BF_01": 2,
+      "20x_BF_02": 3
+    },
     "expected_per_slide": 2,
     "expected_channels": 1,
     "rgb_packed": true,

@@ -169,7 +169,7 @@ Route is the first choice, before any folder:
 |---|---|---|---|
 | 1 | IF — confocal / field images | Fiji only | `run_summary.csv` (+ `.xlsx`, `run_manifest.json`), one row per (image, region) |
 | 2 | IF — slide scanner (`.vsi`) | QuPath → Fiji → Python | tiles → per-tile measurements → `stats/slide_level_summary.csv` |
-| 3 | H&E / brightfield | — | **deliberately disabled in this build** |
+| 3 | H&E / brightfield | QuPath engineering pilot | **launcher route disabled**; H0-H3 review artifacts only |
 | 4 | Fiji-only legacy mode | Fiji only | the v1.7.2 environment and command line, verified by execution |
 
 Route 3 is visible and greyed rather than hidden, with a written reason: the
@@ -181,9 +181,10 @@ run with adaptive thresholds is a defensible exploratory measurement whereas a
 slide run silently re-deriving a threshold on each of ~370 tiles is not one
 measurement at all. Details in [`launcher/README.md`](launcher/README.md).
 
-The H&E module is specified but not calibrated or runnable. Its decision
-hierarchy, endpoint tiers, fail-closed gates, and verified 2026-08-12 study
-mapping are in
+The H&E module has an executable, review-gated H0-H3 engineering pilot, but no
+validated biological endpoint and no enabled launcher route. Its decision
+hierarchy, endpoint tiers, fail-closed gates, executed 2026-08-12 pilot, and
+study mapping are in
 [`docs/HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](docs/HE_BRIGHTFIELD_DECISION_HIERARCHY.md).
 Machine-readable policy lives under `config/brightfield/`; study-specific
 mouse/section identity lives under `config/studies/`.

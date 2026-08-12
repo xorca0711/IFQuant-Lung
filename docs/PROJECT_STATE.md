@@ -31,7 +31,7 @@ is not.
   condition. No statistics are possible from this batch.** Anything that reads
   like a group comparison is a description of four animals, not a result.
 * H&E now has a **proposed, machine-readable decision hierarchy and endpoint
-  contract**, verified against the actual two-series-per-slide VSI structure.
+  contract**, plus an executed eight-section H0-H3 QuPath engineering pilot.
   Route 3 remains disabled: no H&E classifier or endpoint is calibrated yet.
 * Two things were tested and **rejected** with a control-locked enrichment test:
   AGER as a co-negativity marker, and KRT8 as a discriminator. See
@@ -72,6 +72,7 @@ else was merged or retired on 2026-08-07; see [`BRANCHING.md`](BRANCHING.md).
 | `D:\IFQ_Runs\confocal_260808` | first confocal run; carries the `blackBackground` bug | **areas only**; every count in it is wrong |
 | `D:\IFQ_Runs\confocal_260808_fixed` | re-run after the fix | **trusted result baseline** |
 | `D:\IFQ_Runs\confocal_260809_rerun` | independent 2026-08-09 reproduction | **verification record** — 79-row run summary and both ordinary aggregate CSVs are byte-identical to `confocal_260808_fixed` |
+| `D:\IFQ_Runs\he_20260812\02_pilot_r2_od018` | eight-section H&E H0-H3 engineering pilot | **review overlays and pipeline development only** — no immune lineage or mouse-level biological result |
 | `D:\IFQ_Runs\validated` / `superseded` | earlier WSI pilot outputs | provenance |
 | `D:\IFQ_Runs\archive_202607_pre_revision` | 14 July runs (12.0 GB) moved off the system drive | provenance |
 
@@ -302,9 +303,10 @@ build has its own SHA-256 sidecar.
   cannot quietly stop being legacy". Cosmetic, but it is the sort of stale label
   that later reads as evidence about the wrong build.
 * **Route 3 H&E remains intentionally unavailable.** Its hierarchy and study
-  contract are defined, but tissue/artifact classifiers, stain-vector locking,
-  blinded calibration and the QuPath runner still need implementation and
-  validation before the route flag may change.
+  contract are defined and the standalone H0-H3 QuPath pilot now runs, but
+  tissue/artifact classifiers, stain-vector locking, blinded calibration,
+  compartments, lesion endpoints and full-resolution validation still need
+  implementation before the route flag may change.
 
 ---
 

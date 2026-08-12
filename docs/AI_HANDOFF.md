@@ -83,6 +83,7 @@ These caused real failures. Check before assuming.
 | `D:\IFQ_Runs\confocal_260809_rerun` | byte-identical independent reproduction; corrected endpoint outputs are **exploratory only** | regenerable |
 | `<repo>\.cache\slide_channels` | deleted 2026-08-09; rebuild ~10 min via `scripts/cache_slide_channels.groovy` | yes |
 | `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW` | 4 H&E VSI slides; 2 analytical 20x BF series per mouse | **NO** |
+| `D:\IFQ_Runs\he_20260812\02_pilot_r2_od018` | current H0-H3 H&E engineering pilot; 8 previews + 8 overlays + section QC | regenerable |
 
 **Batch design:** 4 mice × 2 panels × ~10 fields. LEFT = DAPI/KRT5-488/AGER-555/T1α-647; RIGHT = DAPI/ProSPC-488/AGER-555/KRT8-647. 2048², single Z, 0.3107 µm/px, 12-bit.
 
@@ -256,5 +257,7 @@ for appearance.
 | `config/brightfield/` | proposed H&E decision hierarchy and endpoint tiers |
 | `config/studies/g_surf_he_20260812.json` | verified 4-mouse/8-section H&E identity contract |
 | `docs/HE_BRIGHTFIELD_DECISION_HIERARCHY.md` | H&E scope, QC gates, endpoints, outputs and validation ladder |
+| `brightfield/qupath_he_exploratory_pilot.groovy` | standalone review-gated H0-H3 H&E engineering pilot; not a biological endpoint engine |
+| `scripts/Invoke-HePilot.ps1` / `scripts/Test-HePilotOutput.ps1` | timestamped QuPath pilot runner and fail-closed output validator |
 | `validation/` | synthetic fixture demonstrating the bug from a clone |
 | `scripts/` | calibration and probe scripts |

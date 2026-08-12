@@ -201,3 +201,32 @@ complete and every required review gate passes.
 - ATS/ERS standards for quantitative lung structure and unbiased stereology:
   https://pmc.ncbi.nlm.nih.gov/articles/PMC5455840/
 
+## 8. Executed exploratory pilot (2026-08-12)
+
+The H0-H3 engineering pilot is implemented in
+`brightfield/qupath_he_exploratory_pilot.groovy` and launched with
+`scripts/Invoke-HePilot.ps1`. It ran against all eight declared analytical
+series. The reviewed second pass is organized at:
+
+`D:\IFQ_Runs\he_20260812\02_pilot_r2_od018`
+
+The run uses downsample 64, a provisional H&E stain matrix, and a tissue OD-sum
+threshold of 0.18. Its control-locked dense-hematoxylin candidate threshold is
+the maximum section p90 among the two uninfected mice (0.26025390625). All eight
+raw previews and all eight H3 overlays were generated. Visual review confirmed
+that candidates remain on stained section material and do not spread across the
+broad glass background.
+
+This advances the hierarchy only through an **exploratory, review-gated H3
+prototype**. Dense hematoxylin is a cellularity candidate, not immune lineage;
+the fixed stain vectors, tissue/artifact masks, compartment classifier, lesion
+classifier, full-resolution measurements, technical-section repeatability and
+mouse aggregation remain unvalidated. The pilot deliberately emits no
+mouse-level biological summary.
+
+Validate any organized pilot output with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-HePilotOutput.ps1 `
+  -OutputRoot D:\IFQ_Runs\he_20260812\02_pilot_r2_od018
+```

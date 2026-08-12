@@ -67,7 +67,7 @@ its brightfield measurements belong in a separate QuPath module.
 |---|---|---|
 | [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md) | **REFERENCE** (claims validated elsewhere) | why the two tools are used together, the published pattern this follows (Chiaruttini et al. 2022), where we deliberately differ |
 | [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) | **VALIDATED** (plumbing) / **PROPOSED** (thresholds) | the whole-slide route: series selection, global tissue detection, tiling, seam correctness, aggregation |
-| [`HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](HE_BRIGHTFIELD_DECISION_HIERARCHY.md) | **PROPOSED** / **PREFLIGHT VERIFIED** | separate H&E hierarchy, endpoint tiers, QC gates, current 4-mouse/8-section study contract, and validation ladder |
+| [`HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](HE_BRIGHTFIELD_DECISION_HIERARCHY.md) | **PROPOSED** / **H0-H3 PILOT EXECUTED** | separate H&E hierarchy, endpoint tiers, QC gates, current 4-mouse/8-section study contract, executed exploratory pilot, and validation ladder |
 | [`VISUAL_PANELS.md`](VISUAL_PANELS.md) | **VALIDATED** (v8 rendered) | figure generation as a first-class module, with the reason v1–v7 were all wrong |
 
 ### Interpretation and configuration
