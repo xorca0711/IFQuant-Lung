@@ -135,8 +135,8 @@ try {
     $s=$pres.Slides.Add($idx++,12); Set-Background $s (RGB 9 12 18)
     $null=Add-Text $s 'Confocal acquisition map + retouched fields' 66 116 830 64 34 (RGB 248 249 251) 'Aptos Display' $true
     $null=Add-Text $s 'Whole-section localization followed by 20x visual-merge panels in acquisition order' 70 196 800 36 19 (RGB 186 195 210)
-    $null=Add-Text $s '260808-CW | 79 supplied retouched images | explicit placeholder for the missing field' 70 280 820 30 15 (RGB 15 18 23) 'Aptos' $true 1 (RGB 255 232 0) 8
-    $null=Add-Text $s 'Retouched panels are labeled “VISUAL MERGE PANEL - NOT QUANTIFIED” in the supplied images.' 70 344 820 30 12 (RGB 148 158 175)
+    $null=Add-Text $s '260808-CW | 80 supplied retouched images | complete LEFT and RIGHT acquisition order' 70 280 820 30 15 (RGB 15 18 23) 'Aptos' $true 1 (RGB 255 232 0) 8
+    $null=Add-Text $s 'Retouched panels are display-only visual merges and are not quantified.' 70 344 820 30 12 (RGB 148 158 175)
 
     foreach($item in $items){
         $s=$pres.Slides.Add($idx++,12); Set-Background $s (RGB 8 11 16)

@@ -1100,7 +1100,12 @@ namespace IFQuantLauncher
             string text = Regex.Replace(upper, "[^A-Z0-9]+", "");
             bool krt5 = text.Contains("KRT5");
             bool krt8 = text.Contains("KRT8");
-            bool ager = text.Contains("AGER");
+            // The validated lung cohort encodes AGER as mRAGE_555 in its raw
+            // filenames. After punctuation removal this is "MRAGE", which
+            // does not contain "AGER" in the same order. Treat the explicit
+            // antibody synonym as AGER; do not accept generic "RAGE", which
+            // could occur inside unrelated words such as "average".
+            bool ager = text.Contains("AGER") || text.Contains("MRAGE");
             bool tdtom = text.Contains("TDTOM");
             bool t1a = text.Contains("T1ALPHA") || text.Contains("T1A") ||
                        text.Contains("PDPN") || text.Contains("PODOPLANIN");
@@ -3713,6 +3718,16 @@ namespace IFQuantLauncher
                         StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(
                         MainForm.InferBuiltInPanelFromText(
+                            @"C:\images\IFNg ko(het) 260325 M4-1 PR8 infection proSPC_488 mRAGE_555 krt8_647 20x 2k_A01_G001_0001.oir"),
+                        "RIGHT",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        MainForm.InferBuiltInPanelFromText(
+                            @"C:\images\IFNg ko(het) 260325 M4-2 PR8 no infection krt5_488 mRAGE_555 T1a_647 20x 2k_A01_G006_0001.oir"),
+                        "LEFT",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        MainForm.InferBuiltInPanelFromText(
                             @"C:\images\krt5-creERT2 tdTOM CC10_488 acetyl_647\field.oir"),
                         "E",
                         StringComparison.OrdinalIgnoreCase) ||
@@ -3765,9 +3780,9 @@ namespace IFQuantLauncher
                 try
                 {
                     string left = Path.Combine(
-                        mixedRoot, "DAPI KRT5_488 AGER_555 T1alpha_647");
+                        mixedRoot, "DAPI KRT5_488 mRAGE_555 T1alpha_647");
                     string right = Path.Combine(
-                        mixedRoot, "DAPI Pro-SPC_488 AGER_555 KRT8_647");
+                        mixedRoot, "DAPI Pro-SPC_488 mRAGE_555 KRT8_647");
                     Directory.CreateDirectory(left);
                     Directory.CreateDirectory(right);
                     File.WriteAllBytes(Path.Combine(left, "left_field.oir"), new byte[0]);
