@@ -20,8 +20,8 @@ using IFQuantLauncher.Routing;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.9.2.0")]
-[assembly: AssemblyFileVersion("1.9.2.0")]
+[assembly: AssemblyVersion("1.9.3.0")]
+[assembly: AssemblyFileVersion("1.9.3.0")]
 
 namespace IFQuantLauncher
 {
@@ -171,6 +171,7 @@ namespace IFQuantLauncher
                 "IFQ_RECURSIVE", "IFQ_INCLUDE_REGEX", "IFQ_MAX_IMAGES",
                 "IFQ_SEGMENTER", "IFQ_PROJECTION", "IFQ_SINGLE_PLANE",
                 "IFQ_EXPORT_DISPLAY_CHANNELS", "IFQ_DISPLAY_PREVIEW_ONLY",
+                "IFQ_DISPLAY_SCALE_BAR_UM", "IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX",
                 "IFQ_TISSUE_MODE", "IFQ_COMPARTMENT_MODE",
                 "IFQ_WHOLE_FIELD_COMPARTMENT",
                 "IFQ_ALLOW_NONEMPTY_OUTPUT", "IFQ_MORPHOLOGY_PRIMARY"
@@ -630,7 +631,8 @@ namespace IFQuantLauncher
             actions.Controls.Add(previewButton);
             toolTips.SetToolTip(
                 previewButton,
-                "Creates the primary visual merge panel and supporting enhanced channel views for every image in the configured run scope. " +
+                "Creates the primary visual merge panel and supporting enhanced channel views for every image in the configured run scope, " +
+                "with a calibrated thin 100 \u00b5m scale bar drawn inside the image. " +
                 "No segmentation, cell calls, masks, CSV, Excel, parameters, or analysis manifest are produced.");
 
             cancelButton = new Button();
@@ -1681,6 +1683,12 @@ namespace IFQuantLauncher
                         return pair.Key + "=" + pair.Value;
                     }))
                 : "Panel:  " + config.Environment["IFQ_PANEL"]);
+            string canonicalManifest;
+            if (config.Environment.TryGetValue(
+                    "IFQ_CANONICAL_MANIFEST_PATH", out canonicalManifest) &&
+                !string.IsNullOrWhiteSpace(canonicalManifest))
+                AppendLog("Canonical cohort manifest: " + canonicalManifest);
+
             AppendLog(previewOnly
                 ? "Mode:   visual merge panels only; configured image scope; no quantification"
                 : "Mode:   full analysis with a visual merge panel for every analyzed image");
@@ -1837,7 +1845,8 @@ namespace IFQuantLauncher
                     ? "all matching analytical images"
                     : "up to " + config.Environment["IFQ_MAX_IMAGES"] + " matching analytical image(s)") + "\r\n\r\n" +
                 "Output folder:\r\n" + config.OutputDirectory + "\r\n\r\n" +
-                "This operation writes the primary visual merge panel and supporting enhanced channel PNGs. " +
+                "This operation writes the primary visual merge panel and supporting enhanced channel PNGs, " +
+                "with a calibrated thin 100 \u00b5m scale bar drawn inside each primary panel. " +
                 "It will not run segmentation or create cell counts, masks, CSV, Excel, " +
                 "parameter files, Z-profile tables, or an analysis manifest.\r\n\r\n" +
                 "Continue?",

@@ -1,9 +1,9 @@
 # H&E brightfield feature roadmap
 
-> **Status: structured, not validated.** This document turns every unavailable
-> H&E capability into an implementable and testable release gate. The current
-> executable remains the H0-H3 exploratory engineering pilot; Route 3 remains
-> disabled for biological reporting.
+> **Status: R1 approved / R2 development.** Image QC and the usable-tissue
+> denominator are approved for the current cohort through H3. H4 context and the
+> H7 whole-section rubric are development inputs; H5-H6 measurement and all
+> mouse-level reporting remain unavailable. Route 3 remains disabled.
 
 The machine-readable source of truth is
 `config/brightfield/he_feature_roadmap.json`. The existing decision hierarchy
@@ -40,9 +40,9 @@ outputs and acceptance evidence.
 
 | release | capability | current state | maximum permitted interpretation |
 |---|---|---|---|
-| R0 | engineering preflight | available, review required | identity and coarse H3 candidates |
-| R1 | production image QC | unavailable | reviewed usable-tissue denominator |
-| R2 | reviewer-gated section analysis | unavailable | section quantitative + ordinal results |
+| R0 | engineering preflight | available; superseded by R1 | identity and coarse H3 candidates |
+| R1 | production image QC | **approved/current for this cohort** | reviewed usable-tissue denominator; no lesion endpoint |
+| R2 | reviewer-gated section analysis | development; review required | section quantitative + ordinal results |
 | R3 | confirmatory mouse reporting | unavailable | prespecified mouse endpoints in an adequately powered cohort |
 | R4 | multimodal G-SURF association | unavailable | mouse-level H&E-to-IF association |
 

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "g_surf_he_20260812_candidate_v1",
+  "status": "CANDIDATE_REVIEW_REQUIRED",
+  "study_id": "g_surf_he_20260812",
+  "image_type": "BRIGHTFIELD_H_E",
+  "acquisition_batch": "20260812_CW_Olympus_VSI",
+  "background_rgb": [255, 255, 255],
+  "stain_vectors": {
+    "hematoxylin": [0.65111, 0.70119, 0.29049],
+    "eosin": [0.21590, 0.80120, 0.55810]
+  },
+  "basis": "QuPath H&E starting vectors carried forward from the H0-H3 pilot; pending batch-specific review of all eight separation contact sheets.",
+  "review": {
+    "required": true,
+    "reviewer_id": null,
+    "reviewed_utc": null,
+    "decision": "PENDING",
+    "required_sections": [
+      "M2_BF_01", "M2_BF_02", "M4-1_BF_01", "M4-1_BF_02",
+      "M4-2_BF_01", "M4-2_BF_02", "M6_BF_01", "M6_BF_02"
+    ]
+  },
+  "restrictions": [
+    "Not a quantitative stain-concentration calibration.",
+    "Not authorized for lesion, nuclear-density, ordinal-score, or mouse-level endpoints.",
+    "Do not estimate separate vectors by genotype or infection condition."
+  ]
+}

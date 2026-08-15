@@ -47,11 +47,11 @@ namespace IFQuantLauncher.Routing
     internal static class LauncherBuild
     {
         // 1.9.0, not 1.8.1, ended the historical version collision: three
-        // different binaries had been called v1.8.0. Version 1.9.2 is the
-        // maintenance release that makes the complete Step 1 and Analysis
-        // settings groups reachable at every supported window size.
-        public const string Version = "1.9.2";
-        public const string AssemblyVersion = "1.9.2.0";
+        // different binaries had been called v1.8.0. Version 1.9.3 adds a calibrated,
+        // thin internal scale bar to visual merge panels while preserving the
+        // frozen v1.7.2-compatible legacy route.
+        public const string Version = "1.9.3";
+        public const string AssemblyVersion = "1.9.3.0";
 
         // =============================================================
         // >>> THE ONE LINE THAT RE-ENABLES ROUTE 3 (H&E / brightfield) <<<
@@ -102,19 +102,19 @@ namespace IFQuantLauncher.Routing
 
         /// Shown next to the greyed route-3 entry and in the block message.
         public const string BrightfieldDisabledReason =
-            "Planned, not available in v" + Version + ".\r\n\r\n" +
-            "The measurement engine (IF_Quant_Pipeline.groovy) is fluorescence-only: it " +
-            "assumes a dark background with bright signal, and it contains no colour " +
-            "deconvolution and no stain-vector model. There is no haematoxylin/eosin entry " +
-            "in the marker registry, so there is no validated numerator to report. The " +
-            "brightfield morphometry module that would supply one is an unreviewed draft " +
-            "and is not part of this release.\r\n\r\n" +
-            "Pointing the fluorescence engine at a brightfield slide would not fail. It " +
-            "would invert the meaning of every threshold and every area mask and return " +
-            "numbers. A route that appears to work and silently produces nothing " +
-            "interpretable is worse than no route, so this one refuses to start.\r\n\r\n" +
-            "Re-enabling it is one line: LauncherBuild.BrightfieldRouteEnabled in " +
-            "launcher/IFQuantLauncher.Routing.cs.";
+            "R1 image QC is approved for the current four-mouse/eight-section cohort, " +
+            "but pathology analysis is not available in v" + Version + ".\r\n\r\n" +
+            "The approved R1/H3 scope covers stain separation, tissue/artifact masks, " +
+            "and the usable-tissue denominator. It does not authorize an inflammatory " +
+            "or structural-injury numerator, lesion burden, ordinal score, or mouse " +
+            "summary. The H4 context and H7 rubric remain development inputs.\r\n\r\n" +
+            "The fluorescence engine is incompatible with brightfield absorbance and " +
+            "must never be used for H&E. The dedicated H&E status/review tool is " +
+            "scripts/he_pipeline.py; it fails closed on identity, profile, package, or " +
+            "review-gate drift.\r\n\r\n" +
+            "Route 3 stays disabled until a validated H5-H6 QuPath measurement runner, " +
+            "completed H7 review, and H8 aggregation contract are wired into the launcher. " +
+            "Changing BrightfieldRouteEnabled alone remains insufficient.";
     }
 
     // =================================================================
@@ -927,7 +927,8 @@ namespace IFQuantLauncher.Routing
                 "IFQ_COMPARTMENT_MODE", "IFQ_DAPI_BACKGROUND_RADIUS_UM", "IFQ_DAPI_BLUR_SIGMA_PX",
                 "IFQ_DAPI_CONTRAST_SATURATION", "IFQ_DAPI_LOCAL_RADIUS_UM", "IFQ_DAPI_METHOD",
                 "IFQ_DISPLAY_GAMMA", "IFQ_DISPLAY_HIGH_PERCENTILE", "IFQ_DISPLAY_LOW_PERCENTILE",
-                "IFQ_DISPLAY_PREVIEW_ONLY", "IFQ_EXPORT_DISPLAY_CHANNELS", "IFQ_INCLUDE_REGEX",
+                "IFQ_DISPLAY_PREVIEW_ONLY", "IFQ_DISPLAY_SCALE_BAR_UM", "IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX",
+                "IFQ_EXPORT_DISPLAY_CHANNELS", "IFQ_INCLUDE_REGEX", "IFQ_CANONICAL_MANIFEST_PATH",
                 "IFQ_INPUT_DIR", "IFQ_MARKER_REGISTRY", "IFQ_MAX_IMAGES", "IFQ_MIN_INCLUDED_NUCLEI",
                 "IFQ_MIN_NUCLEUS_AREA_UM2", "IFQ_MORPHOLOGY_PRIMARY", "IFQ_MRAGE_MIN_RING_FRACTION",
                 "IFQ_OUTPUT_DIR", "IFQ_PANEL", "IFQ_PANEL_CONFIG", "IFQ_PANEL_MAP_PATH",
@@ -949,7 +950,7 @@ namespace IFQuantLauncher.Routing
             };
 
         /// Owned by the launcher UI. The Advanced box may never set these.
-        /// v1.7.2's nineteen, plus the four this build takes ownership of.
+        /// v1.7.2's nineteen, plus the six this build takes ownership of.
         public static readonly HashSet<string> ProtectedKeys =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -959,6 +960,7 @@ namespace IFQuantLauncher.Routing
                 "IFQ_RECURSIVE", "IFQ_INCLUDE_REGEX", "IFQ_MAX_IMAGES",
                 "IFQ_SEGMENTER", "IFQ_PROJECTION", "IFQ_SINGLE_PLANE",
                 "IFQ_EXPORT_DISPLAY_CHANNELS", "IFQ_DISPLAY_PREVIEW_ONLY",
+                "IFQ_DISPLAY_SCALE_BAR_UM", "IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX",
                 "IFQ_TISSUE_MODE", "IFQ_COMPARTMENT_MODE",
                 "IFQ_WHOLE_FIELD_COMPARTMENT",
                 "IFQ_ALLOW_NONEMPTY_OUTPUT", "IFQ_MORPHOLOGY_PRIMARY",
@@ -1114,10 +1116,10 @@ namespace IFQuantLauncher.Routing
                         "3. H&E / brightfield" +
                         (LauncherBuild.BrightfieldRouteEnabled
                             ? " (brightfield morphometry)"
-                            : "   [PLANNED - NOT AVAILABLE IN v" + LauncherBuild.Version + "]");
+                            : "   [R1 QC ONLY - ANALYSIS NOT AVAILABLE IN v" + LauncherBuild.Version + "]");
                     spec.OneLine =
-                        "Haematoxylin/eosin and other brightfield stains. Deliberately visible " +
-                        "and deliberately not selectable in this build.";
+                        "H&E image QC is approved for the current cohort; pathology measurement " +
+                        "remains review-gated and deliberately unavailable in this build.";
                     spec.RequiresQuPath = true;
                     spec.ProducesQuantitativeNumbers = false;
                     spec.ThresholdsMayBeOmitted = true;
@@ -2558,6 +2560,8 @@ namespace IFQuantLauncher.Routing
             env["IFQ_SINGLE_PLANE"] = request.SinglePlane.ToString(CultureInfo.InvariantCulture);
             env["IFQ_EXPORT_DISPLAY_CHANNELS"] = "true";
             env["IFQ_DISPLAY_PREVIEW_ONLY"] = previewOnly ? "true" : "false";
+            env["IFQ_DISPLAY_SCALE_BAR_UM"] = "100";
+            env["IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX"] = "6";
             env["IFQ_TISSUE_MODE"] = request.TissueMode;
             env["IFQ_COMPARTMENT_MODE"] = request.CompartmentMode;
             env["IFQ_WHOLE_FIELD_COMPARTMENT"] = request.WholeFieldCompartment;
@@ -3041,6 +3045,15 @@ namespace IFQuantLauncher.Routing
                 throw new InvalidOperationException(
                     "H4: IFQ_ALLOW_NONEMPTY_OUTPUT must be false. The launcher never merges a " +
                     "run into an existing output folder. The run was not started.");
+
+            string canonicalManifest;
+            if (env.TryGetValue("IFQ_CANONICAL_MANIFEST_PATH", out canonicalManifest) &&
+                !string.IsNullOrWhiteSpace(canonicalManifest) &&
+                !File.Exists(canonicalManifest))
+                throw new InvalidOperationException(
+                    "Canonical field manifest does not exist: " + canonicalManifest +
+                    "\r\nThe run was not started. Remove IFQ_CANONICAL_MANIFEST_PATH " +
+                    "or select the reviewed manifest generated for this cohort.");
 
             if (route != ImageRoute.LegacyFiji172)
             {

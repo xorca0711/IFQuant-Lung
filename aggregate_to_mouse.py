@@ -276,7 +276,12 @@ def marker_of(col, suffix):
     return col[: -len(suffix)]
 
 
-def aggregate_mice(header, rows, endpoint_relation=None):
+def aggregate_mice(header, rows, endpoint_relation=None, sampling_unit="section"):
+    if sampling_unit not in {"field", "section"}:
+        raise ValueError(
+            "sampling_unit must be 'field' for microscope fields or "
+            "'section' for histological/whole-slide sections"
+        )
     cats = classify_columns(header)
     groups = defaultdict(list)
     for r in rows:
@@ -289,7 +294,9 @@ def aggregate_mice(header, rows, endpoint_relation=None):
         rec = {"mouse_id": mouse_id, "genotype": genotype,
                "condition": condition, "panel": panel}
         rec["n_regions"] = len(grp)
-        rec["n_sections"] = len({(g.get("section_id") or "NA") for g in grp})
+        rec[f"n_{sampling_unit}s"] = len(
+            {(g.get("section_id") or "NA") for g in grp})
+        rec["sampling_unit"] = sampling_unit
 
         # --- sums ---
         sums = {}
@@ -461,23 +468,25 @@ def _stats(values):
     vals = [v for v in values if v is not None]
     n = len(vals)
     if n == 0:
-        return 0, 0.0, 0.0, 0.0
+        return 0, None, None, None
     mean = sum(vals) / n
     if n > 1:
         var = sum((v - mean) ** 2 for v in vals) / (n - 1)
         sd = math.sqrt(var)
         sem = sd / math.sqrt(n)
     else:
-        sd = 0.0
-        sem = 0.0
+        sd = None
+        sem = None
     return n, mean, sd, sem
 
 
 def group_stats(mouse_rows):
-    """mean/sd/sem/n across mice, per (genotype, condition, panel, metric)."""
+    """Group descriptives; variability is not estimable for a one-mouse group."""
     metric_cols = []
     seen = set()
-    skip = set(KEY_COLS) | {"n_regions", "n_sections"}
+    skip = set(KEY_COLS) | {
+        "n_regions", "n_fields", "n_sections", "sampling_unit",
+    }
     for r in mouse_rows:
         for c in r:
             if c in skip or c in seen:
@@ -497,9 +506,19 @@ def group_stats(mouse_rows):
             if not vals:
                 continue
             n, mean, sd, sem = _stats(vals)
-            out.append({"genotype": geno, "condition": cond, "panel": panel,
-                        "metric": metric, "n_mice": n,
-                        "mean": mean, "sd": sd, "sem": sem})
+            out.append({
+                "genotype": geno,
+                "condition": cond,
+                "panel": panel,
+                "metric": metric,
+                "n_mice": n,
+                "mean": mean,
+                "sd": sd,
+                "sem": sem,
+                "reportability": (
+                    "DESCRIPTIVE_ONLY" if n < 2 else "VARIABILITY_ESTIMABLE"
+                ),
+            })
     return out
 
 
@@ -523,6 +542,15 @@ def main():
     ap = argparse.ArgumentParser(description="Aggregate per-region run_summary.csv to mouse and group level.")
     ap.add_argument("run_summary", help="path to run_summary.csv from the Fiji pipeline")
     ap.add_argument("--outdir", default=None, help="output folder (default: alongside input)")
+    ap.add_argument(
+        "--sampling-unit",
+        choices=("field", "section"),
+        default="section",
+        help=(
+            "identity represented by section_id: use field for direct confocal "
+            "images and section for slide/WSI inputs (default: section)"
+        ),
+    )
     ap.add_argument(
         "--endpoint-csv", default=None,
         help="optional endpoint_areas.csv; joins exact output_key/region matches and "
@@ -567,7 +595,12 @@ def main():
             sys.exit("ERROR: endpoint spec output is missing: " + ", ".join(missing_outputs))
         endpoint_relation = {name: output[name] for name in required_outputs}
 
-    mouse_rows = aggregate_mice(header, rows, endpoint_relation=endpoint_relation)
+    mouse_rows = aggregate_mice(
+        header,
+        rows,
+        endpoint_relation=endpoint_relation,
+        sampling_unit=args.sampling_unit,
+    )
     grp_rows = group_stats(mouse_rows)
 
     prefix = "endpoint_" if args.endpoint_csv else ""
@@ -582,6 +615,7 @@ def main():
     print(f"Wrote {len(grp_rows)} group x metric rows -> {group_path}")
     print(f"Distinct animals: {n_mice}  (this is your statistical n, split by group)")
     print("Reminder: compare groups on the mouse-level metrics; n = mice.")
+    print(f"Sampling units are reported as n_{args.sampling_unit}s.")
 
 
 if __name__ == "__main__":

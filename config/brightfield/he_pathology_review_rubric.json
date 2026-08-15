@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0.0",
+  "rubric_id": "g_surf_he_pathology_review_development_v1",
+  "status": "DEVELOPMENT_REVIEW_REQUIRED_NOT_A_VALIDATED_PATHOLOGY_SCORE",
+  "study_id": "g_surf_he_20260812",
+  "review_unit": "blinded_whole_section",
+  "primary_purpose": "Describe inflammatory-cell-rich structural injury and its anatomical distribution as an orthogonal context for the settled confocal KRT5-pod and epithelial-state results.",
+  "hard_rules": [
+    "Review the whole section before consulting any supporting region tile.",
+    "The section score is the primary review unit; supporting tiles are evidence locators, not independent replicates.",
+    "H&E may support a cellular-infiltration or structural-injury interpretation but cannot identify immune lineage.",
+    "H&E cannot identify a KRT5-positive pod. Pod identity remains an IF endpoint.",
+    "Airway, vessel, and alveolar reference space must be distinguished before compartment-specific injury is scored.",
+    "Artifact or unresolved anatomy is not converted to a negative lesion call.",
+    "The reviewer must remain blinded to mouse, genotype, infection, and IF measurements during primary scoring."
+  ],
+  "anatomy_reference": {
+    "airway": "A circular or branching lumen with a comparatively continuous epithelial cell-nuclear lining.",
+    "alveolar_parenchyma": "A sponge-like network of many small airspaces separated by thin septa.",
+    "vessel": "A thin-walled elongated, slit-like, or partly collapsed lumen with an endothelial nuclear lining; red blood cells may support but do not define the call.",
+    "mixed": "More than one reference space is materially represented.",
+    "unresolved": "The available view does not support a reliable reference-space assignment."
+  },
+  "review_sequence": [
+    {
+      "step": 1,
+      "name": "technical_acceptability",
+      "question": "Is enough approved, in-focus tissue visible to score this section?",
+      "allowed_values": ["yes", "no", "uncertain"]
+    },
+    {
+      "step": 2,
+      "name": "whole_section_inflammation_extent",
+      "question": "What fraction of usable tissue contains abnormal inflammatory-cell-rich or consolidated morphology?",
+      "scale": {
+        "0": "none observed",
+        "1": "rare or focal; less than 10% of usable tissue",
+        "2": "multifocal; approximately 10-25%",
+        "3": "coalescing; approximately 26-50%",
+        "4": "diffuse or extensive; greater than 50%",
+        "uncertain": "cannot be scored reliably"
+      }
+    },
+    {
+      "step": 3,
+      "name": "compartment_specific_injury",
+      "question": "Score abnormal cell-rich inflammation in alveolar/interstitial, peribronchial, and perivascular reference spaces separately.",
+      "scale": {
+        "0": "not observed",
+        "1": "minimal",
+        "2": "mild",
+        "3": "moderate",
+        "4": "marked",
+        "uncertain": "reference space or injury is unresolved"
+      }
+    },
+    {
+      "step": 4,
+      "name": "structural_injury",
+      "question": "Score consolidation/airspace loss and airway epithelial injury or luminal debris separately.",
+      "scale": {
+        "0": "not observed",
+        "1": "minimal",
+        "2": "mild",
+        "3": "moderate",
+        "4": "marked",
+        "uncertain": "cannot be scored reliably"
+      }
+    },
+    {
+      "step": 5,
+      "name": "evidence_and_confidence",
+      "question": "Record representative region IDs, the dominant pattern, confidence, and any limitation."
+    }
+  ],
+  "section_form_fields": [
+    "blind_section_id",
+    "reviewable_yes_no_uncertain",
+    "whole_section_inflammation_extent_0_4_uncertain",
+    "alveolar_interstitial_inflammation_0_4_uncertain",
+    "peribronchial_inflammation_0_4_uncertain",
+    "perivascular_inflammation_0_4_uncertain",
+    "consolidation_airspace_loss_0_4_uncertain",
+    "airway_epithelial_injury_debris_0_4_uncertain",
+    "edema_hemorrhage_necrosis_present_yes_no_uncertain",
+    "dominant_pattern",
+    "representative_region_ids",
+    "technical_limitation_none_minor_major",
+    "confidence_low_medium_high",
+    "reviewer_id",
+    "reviewed_utc",
+    "notes"
+  ],
+  "dominant_pattern_values": [
+    "none",
+    "alveolar_interstitial",
+    "peribronchial",
+    "perivascular",
+    "consolidative",
+    "airway_epithelial",
+    "mixed",
+    "unresolved"
+  ],
+  "reportability": [
+    {
+      "endpoint": "section_pathology_scores",
+      "current_status": "REVIEW_REQUIRED",
+      "maximum_claim": "Blinded descriptive section scores after completion and QC."
+    },
+    {
+      "endpoint": "mouse_pathology_summary",
+      "current_status": "BLOCKED_PENDING_COMPLETE_SECTION_REVIEW_AND_AGGREGATION_RULE",
+      "maximum_claim": "Descriptive mouse summary; current cohort cannot support group inference."
+    },
+    {
+      "endpoint": "he_if_pod_association",
+      "current_status": "BLOCKED_BY_SAMPLE_SIZE",
+      "maximum_claim": "Qualitative/descriptive concordance at mouse level only."
+    },
+    {
+      "endpoint": "immune_lineage",
+      "current_status": "NOT_REPORTABLE_FROM_HE",
+      "maximum_claim": "None; requires lineage-specific assays."
+    }
+  ]
+}
