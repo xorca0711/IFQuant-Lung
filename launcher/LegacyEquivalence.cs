@@ -605,10 +605,10 @@ namespace IFQuantLauncher.LegacyCheck
                 Check(typedFloorAllowed,
                       "PreStartAssertions allows a nuclei floor that came from the Advanced box");
 
-                // D4. The claim shown to the USER is that re-enabling route 3
-                // is one line. Any second place that fails when the flag is on
-                // makes that false, and the one that existed made --self-test
-                // return 30 so build.ps1 deleted the binary.
+                // D4. Keep the route gate runtime-addressable. The launcher
+                // must not fail its own self-test merely because the flag is
+                // toggled; the environment builders remain the fail-closed
+                // boundary until a brightfield engine is wired.
                 Check(!Regex.IsMatch(
                           source,
                           @"if\s*\(\s*LauncherBuild\.BrightfieldRouteEnabled\s*\)\s*return"),
@@ -619,8 +619,9 @@ namespace IFQuantLauncher.LegacyCheck
             {
                 string routing = File.ReadAllText(routingSource, Encoding.UTF8);
                 // A `const bool` is folded at compile time, so every branch
-                // guarded on it becomes unreachable code the moment it is
-                // flipped. That is what made "one line" untrue.
+                // guarded on it becomes unreachable code. Keeping this as a
+                // field allows self-test coverage without claiming the route
+                // is complete or safe to enable by itself.
                 Check(Regex.IsMatch(
                           routing,
                           @"static\s+readonly\s+bool\s+BrightfieldRouteEnabled\s*="),
@@ -628,8 +629,14 @@ namespace IFQuantLauncher.LegacyCheck
                 Check(!Regex.IsMatch(
                           routing, @"const\s+bool\s+BrightfieldRouteEnabled"),
                       "...and is not declared const anywhere");
-                Check(routing.IndexOf("Re-enabling it is one line", StringComparison.Ordinal) >= 0,
-                      "the user-visible reason still makes the one-line claim it now honours");
+                Check(routing.IndexOf(
+                          "Changing BrightfieldRouteEnabled alone remains insufficient.",
+                          StringComparison.Ordinal) >= 0,
+                      "the user-visible reason states that the brightfield flag alone is insufficient");
+                Check(routing.IndexOf(
+                          "Re-enabling it is one line",
+                          StringComparison.Ordinal) < 0,
+                      "the user-visible reason no longer claims brightfield is a one-line enable");
             }
 
             // ---- (d) process-level diff ----------------------------------
