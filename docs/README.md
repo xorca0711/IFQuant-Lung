@@ -67,8 +67,10 @@ its brightfield measurements belong in a separate QuPath module.
 |---|---|---|
 | [`QUPATH_FIJI_INTEGRATION.md`](QUPATH_FIJI_INTEGRATION.md) | **REFERENCE** (claims validated elsewhere) | why the two tools are used together, the published pattern this follows (Chiaruttini et al. 2022), where we deliberately differ |
 | [`WSI_TILING_WORKFLOW.md`](WSI_TILING_WORKFLOW.md) | **VALIDATED** (plumbing) / **PROPOSED** (thresholds) | the whole-slide route: series selection, global tissue detection, tiling, seam correctness, aggregation |
-| [`HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](HE_BRIGHTFIELD_DECISION_HIERARCHY.md) | **PROPOSED** / **H0-H3 PILOT EXECUTED** | separate H&E hierarchy, endpoint tiers, QC gates, current 4-mouse/8-section study contract, executed exploratory pilot, and validation ladder |
+| [`HE_BRIGHTFIELD_PIPELINE.md`](HE_BRIGHTFIELD_PIPELINE.md) | **CURRENT R1 / H3** | operator entrypoint, fail-closed status audit, practical whole-section review, and reportability boundaries |
+| [`HE_BRIGHTFIELD_DECISION_HIERARCHY.md`](HE_BRIGHTFIELD_DECISION_HIERARCHY.md) | **R1 APPROVED** / **H4-H7 DEVELOPMENT** | separate H&E hierarchy, endpoint tiers, QC gates, current 4-mouse/8-section study contract, and validation ladder |
 | [`VISUAL_PANELS.md`](VISUAL_PANELS.md) | **VALIDATED** (v8 rendered) | figure generation as a first-class module, with the reason v1–v7 were all wrong |
+| [`CONFOCAL_SETTLED_RELEASE.md`](CONFOCAL_SETTLED_RELEASE.md) | **CURRENT** | canonical 80-field reconciliation, immutable release packaging, field-level aggregation semantics and rerun allowlist |
 
 ### Interpretation and configuration
 

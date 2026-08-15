@@ -253,7 +253,7 @@ for appearance.
 | `config/endpoints/ectopic_pod_over_damaged.json` | retracted; kept as the record |
 | `panels/MergePanels.java` | merge panels (photograph) |
 | `panels/qc/RenderPanels.java` | QC overlays (analysis result) |
-| `launcher/` | v1.9.2 GUI maintenance build, 4 routes; H&E remains disabled; `run_legacy_equivalence.ps1` |
+| `launcher/` | v1.9.3 GUI build with calibrated internal visual-merge scale bars, 4 routes; H&E remains disabled; `run_legacy_equivalence.ps1` |
 | `config/brightfield/` | proposed H&E decision hierarchy and endpoint tiers |
 | `config/studies/g_surf_he_20260812.json` | verified 4-mouse/8-section H&E identity contract |
 | `docs/HE_BRIGHTFIELD_DECISION_HIERARCHY.md` | H&E scope, QC gates, endpoints, outputs and validation ladder |

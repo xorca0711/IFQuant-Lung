@@ -164,6 +164,7 @@ def PANEL_CONFIG_PATH = envOr("IFQ_PANEL_CONFIG", "")
 // It changes panel allocation only; biological metadata still comes from the
 // study samplesheet or filename parser.
 def PANEL_MAP_PATH = envOr("IFQ_PANEL_MAP_PATH", "").trim()
+def CANONICAL_MANIFEST_PATH = envOr("IFQ_CANONICAL_MANIFEST_PATH", "").trim()
 def FILE_GLOB   = ~/(?i).*\.(czi|lif|nd2|oir|oib|oif|ics|tif|tiff)$/
 // Microscope navigation maps such as Map_A01.oir are acquisition metadata/
 // overview files, not analytical fields. They are retained in the manifest as
@@ -342,6 +343,12 @@ def EXPORT_DISPLAY_CHANNELS = DISPLAY_PREVIEW_ONLY ? true :
 def DISPLAY_LOW_PERCENTILE = envDouble("IFQ_DISPLAY_LOW_PERCENTILE", 1.0d)
 def DISPLAY_HIGH_PERCENTILE = envDouble("IFQ_DISPLAY_HIGH_PERCENTILE", 99.8d)
 def DISPLAY_GAMMA = envDouble("IFQ_DISPLAY_GAMMA", 1.0d)
+// Burn a calibrated scale bar into the primary visual-merge PNG. A 6 px bar
+// at the native 2048 px acquisition size remains visible in a slide without
+// the heavy appearance of a PowerPoint overlay. Set the length to 0 only when
+// an external figure tool will add its own calibrated bar.
+def DISPLAY_SCALE_BAR_UM = envDouble("IFQ_DISPLAY_SCALE_BAR_UM", 100.0d)
+def DISPLAY_SCALE_BAR_THICKNESS_PX = envInt("IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX", 6)
 
 // --- Geometry (calibrated, micrometres) ---
 def RING_EXPAND_UM      = envDouble("IFQ_RING_EXPAND_UM", 2.0d)
@@ -2126,7 +2133,8 @@ def processImage(String imgPath, String outputKey, panelKey, panelDef, meta, cfg
       panelDef.channels.collect { c ->
         c.marker + "=" + (c.qcColor ?: "white") + "@" +
           (c.displayWeight != null ? c.displayWeight : 1.0d)
-      }.join(", "), true)
+      }.join(", "), true, cfg.displayScaleBarUm as double,
+      cfg.displayScaleBarThicknessPx as int)
     transientImages << labeledMerge
     IJ.saveAs(labeledMerge, "PNG", imgOut.getAbsolutePath() + "/" + fileKey +
               "__VISUAL_MERGE_PANEL__merged_enhanced.png")
@@ -3095,7 +3103,9 @@ def buildDisplayChannel(ImagePlus source, String marker, double lowPercentile,
 }
 
 def labelDisplayOnlyExport(ImagePlus source, String label,
-                           boolean visualMergePanel = false) {
+                            boolean visualMergePanel = false,
+                            double scaleBarUm = 0.0d,
+                            int scaleBarThicknessPx = 6) {
   ColorProcessor cp = source.getProcessor().convertToRGB() as ColorProcessor
   int bannerHeight = Math.min(30, Math.max(18, cp.getHeight()))
   cp.setColor(Color.BLACK)
@@ -3107,7 +3117,50 @@ def labelDisplayOnlyExport(ImagePlus source, String label,
   cp.drawString((visualMergePanel ?
     "VISUAL MERGE PANEL - NOT QUANTIFIED | " :
     "DISPLAY ONLY - NOT QUANTIFIED | ") + label, 8, 19)
-  return new ImagePlus(source.getTitle() + "_labeled", cp)
+  if (visualMergePanel && scaleBarUm > 0.0d) {
+    Calibration cal = source.getCalibration()
+    double pixelWidthUm = cal == null ? Double.NaN : cal.pixelWidth
+    String unit = cal == null ? "" : (cal.getUnit() ?: "").toLowerCase()
+    boolean micrometreUnit = unit in ["um", "\u00b5m", "\u03bcm", "micron", "microns",
+                                      "micrometer", "micrometers", "micrometre", "micrometres"]
+    if (!Double.isFinite(pixelWidthUm) || pixelWidthUm <= 0.0d || !micrometreUnit) {
+      throw new IllegalArgumentException(
+        "Cannot draw visual-merge scale bar without positive micrometre calibration; found " +
+        pixelWidthUm + " " + unit)
+    }
+    int barWidthPx = Math.max(1, Math.round(scaleBarUm / pixelWidthUm) as int)
+    if (barWidthPx >= cp.getWidth() - 48) {
+      throw new IllegalArgumentException(
+        "Requested visual-merge scale bar (" + scaleBarUm + " um) is too wide for " +
+        cp.getWidth() + " px at " + pixelWidthUm + " um/px")
+    }
+    int thickness = Math.max(2, Math.min(20, scaleBarThicknessPx))
+    int margin = Math.max(18, Math.round(cp.getWidth() * 0.018d) as int)
+    int barX = cp.getWidth() - margin - barWidthPx
+    int barY = cp.getHeight() - margin - thickness
+    int fontSize = Math.max(24, Math.min(44, Math.round(cp.getWidth() / 49.0d) as int))
+    String scaleLabel = (Math.rint(scaleBarUm) == scaleBarUm ?
+      Integer.toString(scaleBarUm as int) : Double.toString(scaleBarUm)) + " \u00b5m"
+    cp.setAntialiasedText(true)
+    cp.setFont(new Font("SansSerif", Font.BOLD, fontSize))
+    int labelWidth = cp.getStringWidth(scaleLabel)
+    int labelX = Math.max(margin, barX + barWidthPx - labelWidth)
+    int labelY = barY - Math.max(8, thickness)
+
+    // One-pixel black keyline and text shadow preserve visibility without the
+    // thick boxed appearance of the former PowerPoint shapes.
+    cp.setColor(Color.BLACK)
+    cp.setRoi(barX - 1, barY - 1, barWidthPx + 2, thickness + 2)
+    cp.fill(); cp.resetRoi()
+    cp.drawString(scaleLabel, labelX + 1, labelY + 1)
+    cp.setColor(Color.WHITE)
+    cp.setRoi(barX, barY, barWidthPx, thickness)
+    cp.fill(); cp.resetRoi()
+    cp.drawString(scaleLabel, labelX, labelY)
+  }
+  def labeled = new ImagePlus(source.getTitle() + "_labeled", cp)
+  labeled.setCalibration(source.getCalibration())
+  return labeled
 }
 
 // Additively merge display-normalized channels into a headless-safe RGB image.
@@ -3141,7 +3194,9 @@ def buildQcComposite(markerImg, panelDef, displayImages = null) {
       out.set(x, y, (rr << 16) | (gg << 8) | bb)
     }
   }
-  return new ImagePlus("four_channel_QC", out)
+  def composite = new ImagePlus("four_channel_QC", out)
+  composite.setCalibration(first.getCalibration())
+  return composite
 }
 
 def buildQcOverlay(markerImg, panelDef, Roi region, nucRois, channelMasks,
@@ -3599,6 +3654,48 @@ def loadPanelMap(String path) {
   }
   return [source:f, byRelative:byRelative]
 }
+def loadCanonicalManifest(String path) {
+  if (path == null || path.trim().isEmpty()) return null
+  def f = new File(path)
+  if (!f.isFile()) {
+    throw new IllegalArgumentException(
+      "IFQ_CANONICAL_MANIFEST_PATH is not a file: " + path)
+  }
+  def lines = f.readLines("UTF-8")
+  if (lines.isEmpty()) {
+    throw new IllegalArgumentException("Canonical manifest is empty: " + path)
+  }
+  def header = parseCsvLine(lines[0]).collect { it.trim() }
+  if (!header.isEmpty()) header[0] = header[0].replace("\uFEFF", "")
+  int relativeIdx = header.indexOf("source_relative_path")
+  if (relativeIdx < 0) relativeIdx = header.indexOf("relative_path")
+  if (relativeIdx < 0) {
+    throw new IllegalArgumentException(
+      "Canonical manifest needs source_relative_path or relative_path: " + path)
+  }
+  def byRelative = [] as LinkedHashSet
+  lines.drop(1).eachWithIndex { ln, lineIndex ->
+    if (ln.trim().isEmpty() || ln.trim().startsWith("#")) return
+    def values = parseCsvLine(ln)
+    String relative = relativeIdx < values.size() ?
+      values[relativeIdx].trim().replace('\\', '/').replaceFirst(/^\.\//, "") : ""
+    if (relative.isEmpty() || new File(relative).isAbsolute() ||
+        relative.tokenize('/').contains("..")) {
+      throw new IllegalArgumentException(
+        "Canonical manifest line " + (lineIndex + 2) +
+        " needs a safe non-empty path relative to IFQ_INPUT_DIR")
+    }
+    if (!byRelative.add(relative)) {
+      throw new IllegalArgumentException(
+        "Canonical manifest repeats source_relative_path '" + relative + "'")
+    }
+  }
+  if (byRelative.isEmpty()) {
+    throw new IllegalArgumentException(
+      "Canonical manifest contains no image assignments: " + path)
+  }
+  return [source:f, byRelative:byRelative]
+}
 
 // ============================================================================
 //  8. MAIN
@@ -3635,6 +3732,8 @@ def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles:
            displayLowPercentile: DISPLAY_LOW_PERCENTILE,
            displayHighPercentile: DISPLAY_HIGH_PERCENTILE,
            displayGamma: DISPLAY_GAMMA,
+           displayScaleBarUm: DISPLAY_SCALE_BAR_UM,
+           displayScaleBarThicknessPx: DISPLAY_SCALE_BAR_THICKNESS_PX,
            ringExpandUm: RING_EXPAND_UM, minNucArea: MIN_NUCLEUS_AREA_UM2,
            minIncludedNuclei: MIN_INCLUDED_NUCLEI,
            podMinArea: POD_MIN_AREA_UM2, podBlur: POD_BLUR_SIGMA_PX, podMethod: POD_THRESH_METHOD,
@@ -3645,6 +3744,8 @@ def cfg = [ segmenter: SEGMENTER, prob: STARDIST_PROB, nms: STARDIST_NMS, tiles:
            markerRegistrySchema: MARKER_REGISTRY.schema_version ?: "unavailable",
            panelConfigPath: PANEL_CONFIG_PATH ?: "built_in_only", customPanelKeys: CUSTOM_PANEL_KEYS,
            panelMapMode: PANEL_MAP_PATH ? "per_image_relative_path" : "single_panel_or_samplesheet",
+           canonicalManifestPath: CANONICAL_MANIFEST_PATH ?: null,
+           canonicalManifestMode: CANONICAL_MANIFEST_PATH ? "allowlist" : "discovery",
            minRingPosFraction: MIN_RING_POS_FRACTION, compartmentMode: COMPARTMENT_MODE,
            wholeFieldCompartment: WHOLE_FIELD_COMPARTMENT,
            actubSupportExpandUm: ACTUB_SUPPORT_EXPAND_UM,
@@ -3675,6 +3776,10 @@ catch (Throwable t) { failRun("Cannot load samplesheet.csv: " + t.message, t) }
 def panelMap
 try { panelMap = loadPanelMap(PANEL_MAP_PATH) }
 catch (Throwable t) { failRun("Cannot load per-image panel map: " + t.message, t) }
+def canonicalManifest
+try { canonicalManifest = loadCanonicalManifest(CANONICAL_MANIFEST_PATH) }
+catch (Throwable t) { failRun("Cannot load canonical field manifest: " + t.message, t) }
+
 
 def listed = []
 if (RECURSIVE) inDir.eachFileRecurse { f -> if (f.isFile()) listed << f }
@@ -3686,7 +3791,35 @@ def matchedFiles = listed.findAll {
   it.isFile() && (it.name ==~ FILE_GLOB) && (it.getAbsolutePath() ==~ includePattern)
 }.sort { it.getAbsolutePath() }
 def deliberatelySkippedFiles = matchedFiles.findAll { it.name ==~ NON_ANALYTICAL_MAP_FILE }
-def files = matchedFiles.findAll { !(it.name ==~ NON_ANALYTICAL_MAP_FILE) }
+def candidateFiles = matchedFiles.findAll { !(it.name ==~ NON_ANALYTICAL_MAP_FILE) }
+def canonicalExcludedFiles = []
+def files = candidateFiles
+if (canonicalManifest != null) {
+  def discoveredByRelative = [:]
+  candidateFiles.each { f ->
+    String relative = inDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+    discoveredByRelative[relative] = f
+  }
+  def missingCanonical = canonicalManifest.byRelative.findAll {
+    !discoveredByRelative.containsKey(it)
+  }
+  if (!missingCanonical.isEmpty()) {
+    failRun("Canonical manifest is missing " + missingCanonical.size() +
+      " file(s) from the configured input scope, including: " +
+      missingCanonical.take(3).join(", ") +
+      ". Check IFQ_INPUT_DIR, IFQ_INCLUDE_REGEX, and IFQ_RECURSIVE.")
+  }
+  canonicalExcludedFiles = candidateFiles.findAll { f ->
+    String relative = inDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+    !canonicalManifest.byRelative.contains(relative)
+  }
+  files = candidateFiles.findAll { f ->
+    String relative = inDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+    canonicalManifest.byRelative.contains(relative)
+  }
+  IJ.log("Canonical manifest selected " + files.size() + " intended image(s); " +
+         canonicalExcludedFiles.size() + " discovery candidate(s) retained as audit-only skips.")
+}
 if (MAX_IMAGES > 0) files = files.take(MAX_IMAGES)
 IJ.log("Found " + files.size() + " analytical image(s); deliberately skipped " +
        deliberatelySkippedFiles.size() + " non-analysis acquisition(s).")
@@ -3720,6 +3853,9 @@ if (panelMap != null) {
     new File(OUTPUT_DIR, "auto_panel_assignments.csv").bytes = panelMap.source.bytes
   }
 }
+if (canonicalManifest != null && !DISPLAY_PREVIEW_ONLY) {
+  new File(OUTPUT_DIR, "canonical_field_manifest.csv").bytes = canonicalManifest.source.bytes
+}
 
 def masterSummary = []
 def manifest = [ run_timestamp: versions.timestamp, versions: versions, config: cfg,
@@ -3730,7 +3866,12 @@ def manifest = [ run_timestamp: versions.timestamp, versions: versions, config: 
                     "auto_panel_assignments.csv" : null,
                   matched_input_count: matchedFiles.size(),
                   analytical_input_count: files.size(),
-                  status: "running", success_count: 0, skipped_count: deliberatelySkippedFiles.size(),
+                  canonical_manifest_path: canonicalManifest != null ?
+                    canonicalManifest.source.getAbsolutePath() : null,
+                  canonical_input_count: canonicalManifest != null ? files.size() : null,
+                  canonical_excluded_count: canonicalExcludedFiles.size(),
+                  status: "running", success_count: 0,
+                  skipped_count: deliberatelySkippedFiles.size() + canonicalExcludedFiles.size(),
                   failure_count: 0, output_failure_count: 0, images: [] ]
 deliberatelySkippedFiles.each { f ->
   def relativePath = inDir.toPath().relativize(f.toPath()).toString()
@@ -3738,6 +3879,14 @@ deliberatelySkippedFiles.each { f ->
     file: f.name, relative_path: relativePath, output_key: null, panel: null,
     status: "skipped", skip_reason: "non_analytical_map_acquisition",
     message: "Microscope map/overview acquisition excluded before image analysis"
+  ]
+canonicalExcludedFiles.each { f ->
+}
+  def relativePath = inDir.toPath().relativize(f.toPath()).toString()
+  manifest.images << [
+    file: f.name, relative_path: relativePath, output_key: null, panel: null,
+    status: "skipped", skip_reason: "not_in_canonical_manifest",
+    message: "Discovery candidate excluded by reviewer-approved canonical field manifest"
   ]
 }
 

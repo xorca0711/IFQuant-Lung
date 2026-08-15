@@ -1,48 +1,48 @@
 {
   "schema_version": "1.0.0",
   "module": "brightfield_he",
-  "status": "STRUCTURED_NOT_VALIDATED",
-  "current_capability": "H0-H3_EXPLORATORY_ENGINEERING_PILOT",
+  "status": "R1_APPROVED_R2_DEVELOPMENT",
+  "current_capability": "R1_IMAGE_QC_APPROVED_H4_H7_DEVELOPMENT",
   "launcher_route_enabled": false,
   "biological_unit": "mouse",
   "release_levels": [
-    {"id": "R0", "label": "Engineering preflight", "status": "AVAILABLE_REVIEW_REQUIRED", "highest_stage": "H3", "allowed_claim": "Series identity and coarse review candidates only"},
-    {"id": "R1", "label": "Production image QC", "status": "UNAVAILABLE", "highest_stage": "H3", "allowed_claim": "Reviewed usable-tissue denominator; no lesion endpoint"},
-    {"id": "R2", "label": "Reviewer-gated section analysis", "status": "UNAVAILABLE", "highest_stage": "H7", "allowed_claim": "Section-level quantitative and blinded ordinal results"},
+    {"id": "R0", "label": "Engineering preflight", "status": "AVAILABLE_SUPERSEDED_BY_R1", "highest_stage": "H3", "allowed_claim": "Series identity and coarse review candidates only"},
+    {"id": "R1", "label": "Production image QC", "status": "AVAILABLE_APPROVED_CURRENT", "highest_stage": "H3", "allowed_claim": "Reviewed usable-tissue denominator; no lesion endpoint"},
+    {"id": "R2", "label": "Reviewer-gated section analysis", "status": "DEVELOPMENT_REVIEW_REQUIRED", "highest_stage": "H7", "allowed_claim": "Section-level quantitative and blinded ordinal results"},
     {"id": "R3", "label": "Confirmatory mouse reporting", "status": "UNAVAILABLE", "highest_stage": "H8", "allowed_claim": "Prespecified mouse-level endpoints in an adequately designed cohort"},
     {"id": "R4", "label": "Multimodal G-SURF association", "status": "UNAVAILABLE", "highest_stage": "H9", "allowed_claim": "Mouse-level H&E-to-IF association; spatial transfer only after registration validation"}
   ],
   "features": [
     {
-      "id": "HE-F01", "name": "QuPath project and deterministic slide inventory", "stages": ["H0", "H1"], "priority": "P0", "status": "PARTIAL", "depends_on": [],
+      "id": "HE-F01", "name": "QuPath project and deterministic slide inventory", "stages": ["H0", "H1"], "priority": "P0", "status": "PARTIAL_FAIL_CLOSED_INVENTORY", "depends_on": [],
       "implementation": "Create one versioned QuPath project entry per declared analytical series; resolve source, series, mouse, slide and section only from the study profile; reject extra, missing, thumbnail or uncalibrated series.",
       "outputs": ["he_input_inventory.csv", "qupath_project", "preflight_failures.csv"],
       "acceptance": ["The current study resolves exactly four mice and eight analytical sections.", "A renamed, missing or extra series produces a blocking error rather than a guess.", "Every output row carries stable mouse, slide, section and source-series identity."],
       "remaining_blocker": "The pilot opens declared series directly but does not create a persistent QuPath project or reusable inventory table."
     },
     {
-      "id": "HE-F02", "name": "Frozen acquisition-batch H&E stain profile", "stages": ["H2"], "priority": "P0", "status": "UNAVAILABLE", "depends_on": ["HE-F01"],
+      "id": "HE-F02", "name": "Frozen acquisition-batch H&E stain profile", "stages": ["H2"], "priority": "P0", "status": "REVIEWED_LOCKED_CURRENT_COHORT", "depends_on": ["HE-F01"],
       "implementation": "Estimate background RGB and hematoxylin/eosin vectors from small reviewed representative regions, exclude unrecognized colors, review separated channels, then freeze one named and hashed profile for the acquisition batch. Never estimate per condition or per slide during confirmatory analysis.",
       "outputs": ["he_stain_profile.json", "stain_separation_contact_sheet.png", "stain_profile_review.csv"],
       "acceptance": ["A reviewer signs off hematoxylin, eosin and residual-channel separation across all sections.", "The batch runner consumes the frozen profile and records its SHA-256.", "Any missing or different profile blocks R2 and R3 output."],
       "remaining_blocker": "The pilot uses provisional hard-coded vectors."
     },
     {
-      "id": "HE-F03", "name": "Scan-quality and artifact exclusion", "stages": ["H2", "H3"], "priority": "P0", "status": "PROTOTYPE_ONLY", "depends_on": ["HE-F01", "HE-F02"],
+      "id": "HE-F03", "name": "Scan-quality and artifact exclusion", "stages": ["H2", "H3"], "priority": "P0", "status": "COHORT_REVIEWED_R1", "depends_on": ["HE-F01", "HE-F02"],
       "implementation": "Generate distinct masks for pen, coverslip/background, dust, dark saturation, folds, tears, bubbles and focus/blur failure. Keep automatic exclusions separate from review-only candidates and preserve the original plus overlay for every section.",
       "outputs": ["artifact_mask_labels.ome.tif", "artifact_measurements.csv", "qc/artifact_overlay.png", "he_review_queue.csv"],
       "acceptance": ["Every excluded pixel has one reason code and is visible in a QC overlay.", "Mask areas reconcile with detected tissue and usable tissue within one classification pixel.", "A blinded holdout audit reports class-wise false exclusions and missed artifacts before profile lock."],
       "remaining_blocker": "Only red-pen candidates are automatically excluded; dark regions are review-only and fold, tear, blur, dust and bubble handling are not implemented."
     },
     {
-      "id": "HE-F04", "name": "Validated usable-tissue mask", "stages": ["H3"], "priority": "P0", "status": "PROTOTYPE_ONLY", "depends_on": ["HE-F02", "HE-F03"],
+      "id": "HE-F04", "name": "Validated usable-tissue mask", "stages": ["H3"], "priority": "P0", "status": "COHORT_REVIEWED_R1", "depends_on": ["HE-F02", "HE-F03"],
       "implementation": "Replace the coarse OD-sum rule with a saved QuPath thresholder or compact pixel classifier trained from small, diverse annotations across all mice. Use Tissue, Glass and Ignore* classes and create cleaned tissue objects with prespecified hole and fragment rules.",
       "outputs": ["tissue_classifier.json", "detected_tissue_mask.ome.tif", "usable_tissue_mask.ome.tif", "qc/tissue_overlay.png"],
       "acceptance": ["Training, tuning and locked audit regions are separated at mouse or slide level.", "Accuracy is reported against blinded point annotations and area masks, stratified by section and artifact class.", "Low tissue coverage, denominator mismatch or classifier/profile drift blocks downstream endpoints."],
       "remaining_blocker": "The current downsample-64 OD threshold is suitable only for overview review."
     },
     {
-      "id": "HE-F05", "name": "Anatomical compartment map", "stages": ["H4"], "priority": "P0", "status": "UNAVAILABLE", "depends_on": ["HE-F04"],
+      "id": "HE-F05", "name": "Anatomical compartment map", "stages": ["H4"], "priority": "P0", "status": "DEVELOPMENT_CONTEXT_ONLY", "depends_on": ["HE-F04"],
       "implementation": "Use reviewer annotations plus a compact multi-scale pixel/object classifier to map airway, vessel, alveolar parenchyma, pleura and Unresolved. Derive peribronchial and perivascular rings from reviewed structure boundaries rather than color alone.",
       "outputs": ["compartment_classifier.json", "compartment_objects.geojson", "compartment_measurements.csv", "qc/compartment_overlay.png"],
       "acceptance": ["Airway and vessel boundaries are audited on a locked set spanning normal, infected and artifact-rich tissue.", "Uncertain geography is emitted as Unresolved and never converted to a negative lesion call.", "Boundary lengths and reference areas are exported in calibrated physical units."],
@@ -70,7 +70,7 @@
       "remaining_blocker": "No topology engine or authorized lesion object exists."
     },
     {
-      "id": "HE-F09", "name": "Blinded review and ordinal pathology rubric", "stages": ["H7"], "priority": "P0", "status": "UNAVAILABLE", "depends_on": ["HE-F03", "HE-F05", "HE-F08"],
+      "id": "HE-F09", "name": "Blinded review and ordinal pathology rubric", "stages": ["H7"], "priority": "P0", "status": "RUBRIC_DEFINED_REVIEW_REQUIRED", "depends_on": ["HE-F03", "HE-F05", "HE-F08"],
       "implementation": "Create a label-blinded review queue covering every mouse and both sections. Support accept, edit, reject and Indeterminate for masks, plus locked 0-4 rubrics for alveolitis/interstitial inflammation, bronchiolitis/epithelial injury, peribronchial cuffing, perivascular cuffing and consolidation. Preserve original and edited geometry.",
       "outputs": ["he_review_queue.csv", "he_review_decisions.csv", "reviewed_masks", "ordinal_scores.csv", "review_audit.json"],
       "acceptance": ["Reviewer cannot see genotype, infection or IF endpoint values during primary review.", "Rubric anchors define extent and severity separately and include representative examples.", "Intra-reviewer repeat and, when available, inter-reviewer agreement are reported before rubric lock.", "Unreviewed required objects block R2 and higher outputs."],
@@ -105,7 +105,7 @@
       "remaining_blocker": "Route 3 is intentionally disabled and has no production runner or review workflow."
     },
     {
-      "id": "HE-F14", "name": "Validation, provenance and reporting package", "stages": ["H0", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"], "priority": "P0", "status": "PARTIAL", "depends_on": ["HE-F01"],
+      "id": "HE-F14", "name": "Validation, provenance and reporting package", "stages": ["H0", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"], "priority": "P0", "status": "R1_PROVENANCE_VERIFIED", "depends_on": ["HE-F01"],
       "implementation": "Hash configuration, scripts, classifiers and stain profiles; record QuPath and reader versions, calibrated resolution, source identity, exclusions, reviewer actions and run tier. Keep development, tuning and locked validation sets separate at mouse/slide level and report all failures.",
       "outputs": ["he_run_manifest.json", "provenance/", "validation_report.md", "machine_readable_validation.json"],
       "acceptance": ["Every result is traceable to immutable inputs, code, profile and review state.", "No patch or section from one mouse appears in both development and locked validation partitions.", "The report states experimental unit, exclusions, blinding, sample-size basis and uncertainty.", "Automation performance is reported by section and mouse, not only as pooled pixels."],

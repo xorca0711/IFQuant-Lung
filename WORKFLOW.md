@@ -475,7 +475,12 @@ The launcher presents **Create visual merge panels** next to **Review and run
 analysis**. Visual-merge-only mode uses the selected panel and Z-routing rules
 and processes the configured run scope: image limit `0` means all matching
 analytical images. It exits immediately after writing the primary visual merge
-panel and supporting channel PNGs. It does not run DAPI segmentation, cell
+panel and supporting channel PNGs. The primary merge PNG includes a calibrated
+internal 100 micrometre scale bar by default (IFQ_DISPLAY_SCALE_BAR_UM=100 and
+IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX=6). Its pixel length is derived from the
+source micrometre calibration; absent or incompatible calibration stops the export.
+
+It does not run DAPI segmentation, cell
 inclusion, marker decisions, or aggregation, and it writes no masks, CSV,
 Excel, parameter JSON, Z profile, analysis manifest, or launcher record.
 

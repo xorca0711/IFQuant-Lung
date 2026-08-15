@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "g_surf_he_20260812_reviewed_locked_v1",
+  "status": "REVIEWED_LOCKED",
+  "study_id": "g_surf_he_20260812",
+  "image_type": "BRIGHTFIELD_H_E",
+  "acquisition_batch": "20260812_CW_Olympus_VSI",
+  "background_rgb": [
+    241,
+    241,
+    242
+  ],
+  "stain_vectors": {
+    "hematoxylin": [
+      0.65111,
+      0.70119,
+      0.29049
+    ],
+    "eosin": [
+      0.2159,
+      0.8012,
+      0.5581
+    ]
+  },
+  "basis": "Reviewer-approved batch profile; representative scanner glass RGB is the median of per-section 90th-percentile estimates. Reviewed masks retain documented section-level background normalization and geometry edits.",
+  "review": {
+    "required": false,
+    "reviewer_id": "USER_CONFIRMED",
+    "reviewed_utc": "2026-08-14T13:19:31.036403+00:00",
+    "decision": "APPROVED_IMAGE_QC",
+    "source_approval": "R1_REVIEW_APPROVAL.json"
+  },
+  "restrictions": [
+    "Not a quantitative stain-concentration calibration.",
+    "Not authorized for lesion, nuclear-density, ordinal-score, or mouse-level endpoints.",
+    "Do not estimate separate vectors by genotype or infection condition."
+  ]
+}

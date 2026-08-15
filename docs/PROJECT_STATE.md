@@ -52,8 +52,8 @@ is not.
 | GitHub | `xorca0711/IFQuant-Lung` |
 | branch | `main` @ `e60b7e6` before the 2026-08-12 maintenance/H&E working changes. Launcher tag `v1.9.0` points at `22afada`. See `BRANCHING.md`. |
 | review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
-| launcher binary | local `IFQuantLauncher-v1.9.2.exe` at repo root — **gitignored**, SHA-256 `3b510b559738ea62ce017a6c1bfbc7e3f48dcc4e2668234bec134ecda7b9faad`; v1.9.1 local binaries moved under `legacy/launchers/` |
-| confocal data | `D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × 2 panels × ~10 fields |
+| launcher binary | local `IFQuantLauncher-v1.9.3.exe` at repo root — **gitignored**, SHA-256 `052d608ff5185b7dcdc7d0daa61a3c3d1e97d80a1149f03f664d08ce950ff53b`; v1.9.2 local binaries moved under `legacy/launchers/` |
+| confocal data | `D:\Microscopy_Images\260808-CW_Confocal\260808-CW` — 4 mice × 2 panels × ~10 fields |
 | slide-scanner data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` — 4 slides (WSI pilot) |
 | H&E slide-scanner data | `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW` — 4 mice, 2 analytical 20x BF series each, 8 technical sections |
 | pipeline runs | `D:\IFQ_Runs\` — see its README |
@@ -140,7 +140,7 @@ in section 3 are area measurements, not the endpoint.
 
 ## 3. The confocal batch, and the bug that nearly ate it
 
-`D:\Confocal_Images\260808-CW\260808-CW` — 4 mice × BOTH panels × ~10 fields
+`D:\Microscopy_Images\260808-CW_Confocal\260808-CW` — 4 mice × BOTH panels × ~10 fields
 = **82 acquisitions**, 2048², 4 ch, single plane, 0.3107 µm/px. The RIGHT panel
 (ProSPC / mRAGE / KRT8) that had been deferred to confocal is now in hand.
 
@@ -245,12 +245,17 @@ countable, not area-quantifiable, without a registry change.
 
 ---
 
-## 4. Launcher — v1.9.2 maintenance build
+## 4. Launcher — v1.9.3 maintenance build
+
+
+v1.9.3 adds a calibrated internal 100 micrometre scale bar to primary visual merge
+panels (6 native pixels thick with a one-pixel keyline). The frozen v1.7.2 legacy
+route does not receive the two new scale-bar environment keys.
 
 Four routes: confocal fields / slide scanner / H&E (deliberately disabled) /
 legacy. v1.8.0 committed at `f7dbb02`; **published v1.9.0 at `22afada`** adds a
 responsive WinForms layout and makes the equivalence claim reproducible. The
-v1.9.2 keeps file scope outside the scrolling pane, stabilizes the complete
+v1.9.3 keeps file scope outside the scrolling pane, stabilizes the complete
 Step 1 and Analysis settings group heights, and retains the named preset for
 the validated 20x/2k lung cohort. The build, embedded self-test, UI smoke test,
 and 84-check legacy equivalence pass locally. See
@@ -287,7 +292,7 @@ Two materially different launcher sources both declared `1.8.0.0` — the
 committed one and a ~476-line uncommitted WinForms layout revision on top of it.
 **Fixed at `22afada`:** the release source declares
 `AssemblyFileVersion("1.9.0.0")`. The completed GUI repair advances the source
-to `1.9.2.0`, so it does not repeat the earlier collision; the local v1.9.2
+to `1.9.3.0`, so it does not repeat the earlier collision; the local v1.9.3
 build has its own SHA-256 sidecar.
 
 ### Still owed
@@ -296,8 +301,8 @@ build has its own SHA-256 sidecar.
   release at `22afada`, while `v2.0.0` is an older repository tag. The coexistence
   is historically accurate but easy to misread.
 * **The current binary is gitignored** (`.gitignore`,
-  `/IFQuantLauncher-*.exe`). The previous v1.9.0 executable and its checksum are
-  archived under `legacy/launchers/`; the current v1.9.2 build remains the only
+  `/IFQuantLauncher-*.exe`). The previous launchers through v1.9.2 and their checksums are
+  archived under `legacy/launchers/`; the current v1.9.3 build remains the only
   untracked link in that chain.
 * Section `[c]` of the equivalence report is still headed "The **v1.8.0** source
   cannot quietly stop being legacy". Cosmetic, but it is the sort of stale label

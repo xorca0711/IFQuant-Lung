@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "module": "brightfield_he",
-  "status": "PROPOSED_NOT_ENABLED",
+  "status": "R1_IMAGE_QC_APPROVED_H4_H7_DEVELOPMENT",
   "purpose": "Quantify lung injury architecture and inflammatory-cell-rich morphology in H&E whole-slide images without inferring immune lineage from H&E alone.",
   "biological_unit": "mouse",
   "technical_units": ["slide", "section", "region"],

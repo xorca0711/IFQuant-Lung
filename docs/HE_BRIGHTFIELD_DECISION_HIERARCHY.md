@@ -1,8 +1,9 @@
 # H&E brightfield decision hierarchy
 
-> **Status: PROPOSED / PREFLIGHT VERIFIED.** The hierarchy and file-series
-> assumptions have been checked against the 2026-08-12 slides. No H&E endpoint
-> has been calibrated, validated, or enabled in the launcher.
+> **Status: R1 IMAGE QC APPROVED / H4-H7 DEVELOPMENT.** The 2026-08-12
+> four-mouse/eight-section cohort has a reviewer-approved stain/tissue/artifact
+> denominator through H3. Lesion, ordinal, mouse, and multimodal endpoints remain
+> review-gated and Route 3 remains disabled.
 
 ## 1. Scope
 

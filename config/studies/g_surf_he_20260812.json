@@ -1,13 +1,36 @@
 {
   "schema_version": "1.0.0",
   "study_id": "g_surf_he_20260812",
-  "status": "EXPLORATORY_H0_H3_PILOT_COMPLETE_REVIEW_REQUIRED",
+  "status": "R1_IMAGE_QC_APPROVED_H4_H7_DEVELOPMENT",
   "source_root": "D:\\Microscopy_Images\\20260812_CW_H&E_Slidescanner\\20260812_CW",
   "modality": "brightfield_he",
   "scanner_format": "Olympus VSI",
   "biological_unit": "mouse",
   "expected_mouse_count": 4,
   "expected_analytical_sections": 8,
+  "current_release": {
+    "id": "R1",
+    "label": "Production image QC",
+    "decision": "APPROVED_IMAGE_QC",
+    "highest_authorized_stage": "H3",
+    "allowed_claim": "Reviewed stain separation, tissue envelope, stained-material mask, artifact presentation, and usable-tissue denominator for this cohort.",
+    "blocked_claims": [
+      "automated lesion calls",
+      "immune-cell lineage",
+      "KRT5 pod identification from H&E",
+      "mouse-level hypothesis testing"
+    ]
+  },
+  "approved_packages": {
+    "r1_root": "D:\\IFQ_Runs\\H&E_20260812\\10_R1_IMAGE_QC_APPROVED_FINAL",
+    "r1_approval_sha256": "77fbdc19706dd556e21416084711565c7a50fc9b84449994ac91c7a1272c7be8",
+    "r1_package_manifest_sha256": "bbc83589c64bdc68dfb9f023ec365024f9f467614eb9cda1abf8f3f740f421cd",
+    "locked_stain_profile_id": "g_surf_he_20260812_reviewed_locked_v1",
+    "locked_stain_profile_sha256": "371bb0d424a66831789c3907ce990ad071f3979fec9fef119bfa2eb95e957baf",
+    "h4_development_root": "D:\\IFQ_Runs\\H&E_20260812\\13_H4_SPATIALLY_BALANCED_REGION_REVIEW",
+    "h4_package_manifest_sha256": "7bc1c50d54e0d4e77705105c8cd88cdf4cd7c1fbe23adc7161660cc9b5eba0e3",
+    "h4_status": "DEVELOPMENT_CONTEXT_ONLY_NOT_AN_ENDPOINT"
+  },
   "analytical_series": {
     "allow_names": ["20x_BF_01", "20x_BF_02"],
     "series_index_by_name": {
@@ -52,6 +75,16 @@
       "source_file": "IFNg ko(hom) 260325 m6 pr8 no infection.vsi",
       "section_ids": ["M6_BF_01", "M6_BF_02"]
     }
+  ],
+  "blind_section_map": [
+    {"blind_section_id": "HE-001", "section_id": "M2_BF_01"},
+    {"blind_section_id": "HE-002", "section_id": "M2_BF_02"},
+    {"blind_section_id": "HE-003", "section_id": "M4-1_BF_01"},
+    {"blind_section_id": "HE-004", "section_id": "M4-1_BF_02"},
+    {"blind_section_id": "HE-005", "section_id": "M4-2_BF_01"},
+    {"blind_section_id": "HE-006", "section_id": "M4-2_BF_02"},
+    {"blind_section_id": "HE-007", "section_id": "M6_BF_01"},
+    {"blind_section_id": "HE-008", "section_id": "M6_BF_02"}
   ],
   "interpretation_constraints": [
     "This dataset supports pipeline development and descriptive paired-section analysis, not genotype-by-infection inference.",
