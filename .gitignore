@@ -80,3 +80,7 @@ validation/out/
 !validation/*.groovy
 !validation/*.ps1
 !validation/README.md
+
+# Derived whole-slide review snapshots. These are local inspection aids generated
+# from microscopy data; keep them with run outputs rather than at repository root.
+/wsi_slide*_review.png
