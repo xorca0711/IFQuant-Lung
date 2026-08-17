@@ -431,9 +431,9 @@ namespace IFQuantLauncher.LegacyCheck
                               string routingSource)
         {
             Console.WriteLine("Route 4 legacy (v1.7.2) equivalence -- executed, not asserted");
-            Console.WriteLine("  v1.7.2 source : " + v172Source);
-            Console.WriteLine("  v1.8.0 source : " + v180Source);
-            Console.WriteLine("  env probe     : " + probeExe);
+            Console.WriteLine("  v1.7.2 source : launcher/reference/IFQuantLauncher-v1.7.2.cs");
+            Console.WriteLine("  current source: launcher/IFQuantLauncher.cs");
+            Console.WriteLine("  env probe     : <temporary-build>/EnvProbe.exe");
             Console.WriteLine();
 
             // The panel table and the engine's threshold whitelist, needed by

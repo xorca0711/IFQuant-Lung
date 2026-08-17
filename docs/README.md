@@ -89,6 +89,7 @@ engine *decides*, not what this study *found*.
 | document | status | what it is |
 |---|---|---|
 | [`BRANCHING.md`](BRANCHING.md) | **CURRENT** | branch roles, what was retired and why, the completed Z-stack merge gate |
+| [`PRIVACY_AND_DATA_BOUNDARY.md`](PRIVACY_AND_DATA_BOUNDARY.md) | **CURRENT** | what may be public, what must remain local, and the pre-publication privacy checks |
 
 ### Entry points outside `docs/`
 

@@ -5,10 +5,10 @@
 > wins and the other doc is stale — say so rather than reconciling silently.
 >
 > Last reconciled against data and code: **2026-08-12**, against
-> `D:\IFQ_Runs\confocal_260809_rerun`, `main` @ `e60b7e6`, the
+> `<LOCAL_RUN_ROOT>\confocal_260809_rerun`, `main` @ `e60b7e6`, the
 > four-mouse/eight-section H&E cohort at
-> `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW`, and the
-> [G-SURF research scheme](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9).
+> `<LOCAL_HE_DATA>`, and the
+> internal G-SURF research scheme (not stored in this repository).
 
 **Update this whenever work is parked.** It exists so a fresh session — or a
 reader with five minutes — can tell what was built, what is validated, and what
@@ -48,19 +48,19 @@ is not.
 
 | | |
 |---|---|
-| repo | `X:\GitHub\IFQuant-Lung` (renamed from `Fiji_ImageJ_Cell_Counting`) |
+| repo | `<REPOSITORY_ROOT>` (renamed from `Fiji_ImageJ_Cell_Counting`) |
 | GitHub | `xorca0711/IFQuant-Lung` |
 | branch | `main` @ `e60b7e6` before the 2026-08-12 maintenance/H&E working changes. Launcher tag `v1.9.0` points at `22afada`. See `BRANCHING.md`. |
 | review branch | `claude/module-drafts` @ `b953e7d` — **never merge** |
 | launcher binary | local `IFQuantLauncher-v1.9.3.exe` at repo root — **gitignored**, SHA-256 `052d608ff5185b7dcdc7d0daa61a3c3d1e97d80a1149f03f664d08ce950ff53b`; v1.9.2 local binaries moved under `legacy/launchers/` |
-| confocal data | `D:\Microscopy_Images\260808-CW_Confocal\260808-CW` — 4 mice × 2 panels × ~10 fields |
-| slide-scanner data | `D:\Confocal_Images\20260806_CW\20260806_CW\*.vsi` — 4 slides (WSI pilot) |
-| H&E slide-scanner data | `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW` — 4 mice, 2 analytical 20x BF series each, 8 technical sections |
-| pipeline runs | `D:\IFQ_Runs\` — see its README |
-| research scheme | [G-SURF / 4W after PR8 infection](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9); M4-1 is confirmed **het** |
+| confocal data | `<LOCAL_CONFOCAL_DATA>` — 4 mice × 2 panels × ~10 fields |
+| slide-scanner data | `<LOCAL_WSI_DATA>\*.vsi` — 4 slides (WSI pilot) |
+| H&E slide-scanner data | `<LOCAL_HE_DATA>` — 4 mice, 2 analytical 20x BF series each, 8 technical sections |
+| pipeline runs | `<LOCAL_RUN_ROOT>\` — see its README |
+| research scheme | internal G-SURF / 4W-after-PR8 research scheme; M4-1 is confirmed **het** |
 | channel cache | `<repo>\.cache\slide_channels` (ds=8, bit-exact, 24.5× faster than decoding). Gitignored, regenerable in ~10 min via `scripts/cache_slide_channels.groovy`. Override with `IFQ_CACHE_DIR`. |
-| QuPath | `X:\QuPath\QuPath-0.7.0 (console).exe` |
-| Fiji | `X:\Fiji` — its `.exe` is **broken on ARM64**; invoke the JVM directly |
+| QuPath | `<QUPATH_CONSOLE>` |
+| Fiji | `<FIJI_ROOT>` — its `.exe` is **broken on ARM64**; invoke the JVM directly |
 
 Only two remote branches exist: `main` and `claude/module-drafts`. Everything
 else was merged or retired on 2026-08-07; see [`BRANCHING.md`](BRANCHING.md).
@@ -69,12 +69,12 @@ else was merged or retired on 2026-08-07; see [`BRANCHING.md`](BRANCHING.md).
 
 | run | what it is | use it for |
 |---|---|---|
-| `D:\IFQ_Runs\confocal_260808` | first confocal run; carries the `blackBackground` bug | **areas only**; every count in it is wrong |
-| `D:\IFQ_Runs\confocal_260808_fixed` | re-run after the fix | **trusted result baseline** |
-| `D:\IFQ_Runs\confocal_260809_rerun` | independent 2026-08-09 reproduction | **verification record** — 79-row run summary and both ordinary aggregate CSVs are byte-identical to `confocal_260808_fixed` |
-| `D:\IFQ_Runs\he_20260812\02_pilot_r2_od018` | eight-section H&E H0-H3 engineering pilot | **review overlays and pipeline development only** — no immune lineage or mouse-level biological result |
-| `D:\IFQ_Runs\validated` / `superseded` | earlier WSI pilot outputs | provenance |
-| `D:\IFQ_Runs\archive_202607_pre_revision` | 14 July runs (12.0 GB) moved off the system drive | provenance |
+| `<LOCAL_RUN_ROOT>\confocal_260808` | first confocal run; carries the `blackBackground` bug | **areas only**; every count in it is wrong |
+| `<LOCAL_RUN_ROOT>\confocal_260808_fixed` | re-run after the fix | **trusted result baseline** |
+| `<LOCAL_RUN_ROOT>\confocal_260809_rerun` | independent 2026-08-09 reproduction | **verification record** — 79-row run summary and both ordinary aggregate CSVs are byte-identical to `confocal_260808_fixed` |
+| `<LOCAL_RUN_ROOT>\he_20260812\02_pilot_r2_od018` | eight-section H&E H0-H3 engineering pilot | **review overlays and pipeline development only** — no immune lineage or mouse-level biological result |
+| `<LOCAL_RUN_ROOT>\validated` / `superseded` | earlier WSI pilot outputs | provenance |
+| `<LOCAL_RUN_ROOT>\archive_202607_pre_revision` | 14 July runs (12.0 GB) moved off the system drive | provenance |
 
 A confocal run is ~7.6 GB: 5.9 GB of uncompressed 2048² mask TIFFs, 1.7 GB of QC
 PNGs, and 2.7 MB of actual numbers. Masks must be kept
@@ -109,7 +109,7 @@ exploratory override exists for engineering validation only. A corrected-algebra
 engineering run exists under `confocal_260809_rerun` (39 LEFT fields; pooled
 fractions M2 7.384278%, M4-1 6.363576%, M4-2 0%, M6 0.000346%), with an
 `EXPLORATORY_ONLY.md` warning. These are not reportable. The earlier endpoint numbers
-(`D:\IFQ_Runs\confocal_260808\endpoint_areas.csv`, `endpoint.log`) were produced
+(`<LOCAL_RUN_ROOT>\confocal_260808\endpoint_areas.csv`, `endpoint.log`) were produced
 by the **superseded** spec — `endpoint : ectopic_pod_over_damaged`,
 `numerator: KRT5_pod_mask AND NOT T1A_membrane_positive_mask`, denominator =
 total tissue region, not damaged area. They validated the *machinery*, not the
@@ -140,7 +140,7 @@ in section 3 are area measurements, not the endpoint.
 
 ## 3. The confocal batch, and the bug that nearly ate it
 
-`D:\Microscopy_Images\260808-CW_Confocal\260808-CW` — 4 mice × BOTH panels × ~10 fields
+`<LOCAL_CONFOCAL_DATA>` — 4 mice × BOTH panels × ~10 fields
 = **82 acquisitions**, 2048², 4 ch, single plane, 0.3107 µm/px. The RIGHT panel
 (ProSPC / mRAGE / KRT8) that had been deferred to confocal is now in hand.
 

@@ -1,7 +1,7 @@
-﻿Route 4 legacy (v1.7.2) equivalence -- executed, not asserted
-  v1.7.2 source : X:\GitHub\IFQuant-Lung\launcher\reference\IFQuantLauncher-v1.7.2.cs
-  v1.8.0 source : X:\GitHub\IFQuant-Lung\launcher\IFQuantLauncher.cs
-  env probe     : C:\Users\dream\AppData\Local\Temp\ifq_legacy_eq_11048\EnvProbe.exe
+Route 4 legacy (v1.7.2) equivalence -- executed, not asserted
+  v1.7.2 source : launcher/reference/IFQuantLauncher-v1.7.2.cs
+  current source: launcher/IFQuantLauncher.cs
+  env probe     : <temporary-build>/EnvProbe.exe
 
 [a] Oracle transcription of v1.7.2 vs route 4, canonical diff
   PASS  case 1 recommended defaults, panel LEFT: 17 keys, byte-identical
