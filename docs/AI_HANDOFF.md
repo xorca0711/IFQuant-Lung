@@ -18,13 +18,13 @@
 
 | | |
 |---|---|
-| **Repo** | `X:\GitHub\IFQuant-Lung` · GitHub `xorca0711/IFQuant-Lung` |
+| **Repo** | `<REPOSITORY_ROOT>` · GitHub `xorca0711/IFQuant-Lung` |
 | **Domain** | Mouse-lung immunofluorescence quantification |
 | **Study** | IFN-γ *ligand* KO + PR8 influenza; does KO change dysplastic KRT5⁺ repair? |
 | **Reference** | Lin X. et al., *J Clin Invest* 2024;134(19):e176828 (DOI 10.1172/JCI176828) |
 | **Endpoint** | KRT5⁺PDPN⁺ area ÷ damaged alveolar area (PDPN⁻ ∪ KRT5⁺) |
 | **Baseline HEAD** | `e60b7e6` · `main` == `origin/main` before the 2026-08-12 maintenance/H&E work · tags `v1.8.0`, `v1.9.0`, `v1.9.1`, `v2.0.0` |
-| **Research scheme** | [G-SURF](https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9) · M4-1 is **het**, matching raw filenames and `samplesheet.csv` |
+| **Research scheme** | internal G-SURF research scheme (not stored in this repository) · M4-1 is **het**, matching raw filenames and `samplesheet.csv` |
 
 ---
 
@@ -65,9 +65,9 @@ These caused real failures. Check before assuming.
 | **Fiji launcher broken on ARM64** | Invoke the JVM directly: `<fiji>\java\**\java.exe --add-opens=java.base/java.lang=ALL-UNNAMED -javaagent:<fiji>\jars\ij1-patcher-*.jar=init -Djava.awt.headless=true -Dplugins.dir=<fiji> -Xmx1g -cp "<fiji>\jars\*;<fiji>\plugins\*" net.imagej.Main --headless --run <script>` |
 | **Memory: 15.6 GB total** | `-Xmx4g` caused paging (19.1 GB committed, 15,831 hard faults). Cap at 1–2 g; **one JVM at a time**. Full-batch renders were OOM-killed (exit 137) repeatedly. |
 | **PowerShell drops `""` args** | Empty-string arguments to native exes vanish, shifting every later positional. Cost an hour on the equivalence harness. |
-| **Safety guard on drive-root paths** | `Remove-Item X:\<dir>` is blocked. The user must delete those. |
+| **Safety guard on drive-root paths** | `Remove-Item <DRIVE_ROOT>\<dir>` is blocked. The user must delete those. |
 | **git writes to stderr** | PowerShell renders normal git progress as red errors. Check exit codes, not colour. |
-| **`csc.exe`** | `C:\Windows\Microsoft.NET\FrameworkArm64\v4.0.30319\csc.exe`. `/out` and `/target` must precede sources. Use `/main:` when linking the launcher (two entry points). |
+| **`csc.exe`** | `<WINDOWS_FRAMEWORK_CSC>`. `/out` and `/target` must precede sources. Use `/main:` when linking the launcher (two entry points). |
 | **QuPath has no groovy-json** | Use `qupath.lib.io.GsonTools`. Fiji *does* ship gson 2.14. |
 
 ---
@@ -76,14 +76,14 @@ These caused real failures. Check before assuming.
 
 | Path | Contents | Disposable |
 |---|---|---|
-| `D:\Confocal_Images\260808-CW\260808-CW` | **RAW — 391 `.oir`, 82 analysis fields.** Never write here | **NO** |
-| `D:\Confocal_Images\20260806_CW` | 4 `.vsi` + `.ets` (5.3 GB pixel data) | **NO** |
-| `D:\IFQ_Runs\confocal_260808` | pre-fix run — **counts void**, areas valid | yes |
-| `D:\IFQ_Runs\confocal_260808_fixed` | **post-fix run — use this one** | regenerable |
-| `D:\IFQ_Runs\confocal_260809_rerun` | byte-identical independent reproduction; corrected endpoint outputs are **exploratory only** | regenerable |
+| `<LOCAL_CONFOCAL_DATA>` | **RAW — 391 `.oir`, 82 analysis fields.** Never write here | **NO** |
+| `<LOCAL_WSI_DATA>` | 4 `.vsi` + `.ets` (5.3 GB pixel data) | **NO** |
+| `<LOCAL_RUN_ROOT>\confocal_260808` | pre-fix run — **counts void**, areas valid | yes |
+| `<LOCAL_RUN_ROOT>\confocal_260808_fixed` | **post-fix run — use this one** | regenerable |
+| `<LOCAL_RUN_ROOT>\confocal_260809_rerun` | byte-identical independent reproduction; corrected endpoint outputs are **exploratory only** | regenerable |
 | `<repo>\.cache\slide_channels` | deleted 2026-08-09; rebuild ~10 min via `scripts/cache_slide_channels.groovy` | yes |
-| `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW` | 4 H&E VSI slides; 2 analytical 20x BF series per mouse | **NO** |
-| `D:\IFQ_Runs\he_20260812\02_pilot_r2_od018` | current H0-H3 H&E engineering pilot; 8 previews + 8 overlays + section QC | regenerable |
+| `<LOCAL_HE_DATA>` | 4 H&E VSI slides; 2 analytical 20x BF series per mouse | **NO** |
+| `<LOCAL_RUN_ROOT>\he_20260812\02_pilot_r2_od018` | current H0-H3 H&E engineering pilot; 8 previews + 8 overlays + section QC | regenerable |
 
 **Batch design:** 4 mice × 2 panels × ~10 fields. LEFT = DAPI/KRT5-488/AGER-555/T1α-647; RIGHT = DAPI/ProSPC-488/AGER-555/KRT8-647. 2048², single Z, 0.3107 µm/px, 12-bit.
 
@@ -187,7 +187,7 @@ All of these produced **plausible, wrong output with no error**. Assume more exi
   it otherwise; prefer env vars, wrappers, or separate modules.
 - **Never commit image data** (`.vsi/.ets/.nd2/.tif`/tiles/outputs).
 - **Built `.exe` belongs in GitHub Releases**, not git.
-- **Never write to `D:\Confocal_Images`.**
+- **Never write to `<LOCAL_MICROSCOPY_ROOT>`.**
 - **Do not rewrite git history** — `BRANCHING.md` and `launcher/README.md` quote
   SHAs as runnable instructions. `.git` is 9 MB; a rewrite saves a few MB.
 - **`legacy/launchers/IFQuantLauncher-v1.7.2.exe` must not move.** Its path is

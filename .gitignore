@@ -84,3 +84,24 @@ validation/out/
 # Derived whole-slide review snapshots. These are local inspection aids generated
 # from microscopy data; keep them with run outputs rather than at repository root.
 /wsi_slide*_review.png
+
+
+# Local/private research material and credentials. Public source files may
+# describe the study, but raw data, unblinding keys, review packages, local
+# machine overrides, and presentation working files never belong in Git.
+.env
+.env.*
+!.env.example
+/local-private/
+/private/
+config/studies/*.local.json
+config/brightfield/he_stain_profiles/*.local.json
+**/INTERNAL_DO_NOT_SEND/
+**/SEND_TO_REVIEWER/
+**/*UNBLINDING_KEY*
+*.ppt
+*.pptx
+*.oir
+*.oib
+*.svs
+*.scn

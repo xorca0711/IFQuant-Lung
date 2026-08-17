@@ -18,7 +18,7 @@ section-to-mouse aggregation—not a shared measurement engine.
 
 ## 2. Data contract verified on the current cohort
 
-Source: `D:\Microscopy_Images\20260812_CW_H&E_Slidescanner\20260812_CW`
+Source: `<LOCAL_HE_DATA>`
 
 | property | verified value |
 |---|---|
@@ -194,8 +194,8 @@ complete and every required review gate passes.
 ## 7. Scientific references
 
 - G-SURF research scheme: IFN-gamma KO/PR8, KRT5 pod validation and immune/
-  regenerative tracking: https://app.notion.com/p/39c151616b4480d88dffdd8585ba8fd9
-- G-SURF histology-module design: https://app.notion.com/p/3b5151616b448070a35afde6b032059e
+  regenerative tracking: internal research plan (not public)
+- G-SURF histology-module design: internal histology-module plan (not public)
 - QuPath 0.7 H&E stain separation and cell-detection documentation:
   https://qupath.readthedocs.io/en/stable/docs/tutorials/separating_stains.html
   and https://qupath.readthedocs.io/en/stable/docs/tutorials/cell_detection.html
@@ -209,7 +209,7 @@ The H0-H3 engineering pilot is implemented in
 `scripts/Invoke-HePilot.ps1`. It ran against all eight declared analytical
 series. The reviewed second pass is organized at:
 
-`D:\IFQ_Runs\he_20260812\02_pilot_r2_od018`
+`<LOCAL_RUN_ROOT>\he_20260812\02_pilot_r2_od018`
 
 The run uses downsample 64, a provisional H&E stain matrix, and a tissue OD-sum
 threshold of 0.18. Its control-locked dense-hematoxylin candidate threshold is
@@ -229,5 +229,5 @@ Validate any organized pilot output with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-HePilotOutput.ps1 `
-  -OutputRoot D:\IFQ_Runs\he_20260812\02_pilot_r2_od018
+  -OutputRoot <LOCAL_RUN_ROOT>\he_20260812\02_pilot_r2_od018
 ```
