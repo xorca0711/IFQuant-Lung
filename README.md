@@ -134,10 +134,10 @@ embedded engine has drifted from the version it claims equivalence to.
 | | |
 |---|---|
 | **Validated** | tile→slide reconciliation (2.1e-16) · launcher legacy equivalence (84 checks) · KRT5 cutoff from controls · the segmentation defect, its fix, and the measured area regression |
-| **Descriptive only** | the four-animal KRT5⁺ area table above |
+| **Descriptive only** | the four-animal KRT5⁺ area table above, as *per-animal* values. The **M2 vs M4-1 ordering is not** descriptive-only and is listed below |
 | **Exploratory** | AGER and T1α calls — both constitutively expressed, so no negative-control anchor exists; labelled `adaptive_otsu_exploratory` |
 | **Retracted / superseded** | AGER as a co-negativity marker · KRT8 as a discriminator · the KRT5⁺PDPN⁻ endpoint form |
-| **Not established** | any genotype-level inference · a defensible corrected endpoint (executor implemented, T1A/PDPN uncalibrated and manual validation absent) · routes 1 and 2 end-to-end through the launcher UI |
+| **Not established** | **the M2 vs M4-1 KRT5 ordering** — the whole-section dominance curve crosses at threshold ≈400 and the swing across plausible thresholds (2.93 pp) exceeds the difference in dispute (2.13 pp); see [NEGATIVE_RESULTS §5](docs/NEGATIVE_RESULTS.md) · any genotype-level inference · a defensible corrected endpoint (executor implemented, T1A/PDPN uncalibrated and manual validation absent) · routes 1 and 2 end-to-end through the launcher UI |
 
 An explicitly labelled engineering run of the corrected algebra now exists at
 `D:\IFQ_Runs\confocal_260809_rerun`; it is not a reportable endpoint result.
