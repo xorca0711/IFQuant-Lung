@@ -21,9 +21,9 @@ def test_launcher_owns_modern_scale_bar_defaults_but_not_legacy_route():
     launcher = (ROOT / "launcher" / "IFQuantLauncher.cs").read_text(encoding="utf-8")
     routing = (ROOT / "launcher" / "IFQuantLauncher.Routing.cs").read_text(encoding="utf-8")
 
-    assert 'AssemblyFileVersion("1.9.3.0")' in launcher
+    assert 'AssemblyFileVersion("1.9.4.0")' in launcher
     assert '"IFQ_DISPLAY_SCALE_BAR_UM", "IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX"' in launcher
-    assert 'public const string Version = "1.9.3";' in routing
+    assert 'public const string Version = "1.9.4";' in routing
     assert 'env["IFQ_DISPLAY_SCALE_BAR_UM"] = "100";' in routing
     assert 'env["IFQ_DISPLAY_SCALE_BAR_THICKNESS_PX"] = "6";' in routing
 

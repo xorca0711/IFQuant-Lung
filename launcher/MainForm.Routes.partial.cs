@@ -161,6 +161,12 @@ namespace IFQuantLauncher
                 foreach (string stub in new string[]
                          { "fiji-windows-x64.exe", "fiji-windows-arm64.exe" })
                     File.WriteAllBytes(Path.Combine(sandbox, stub), new byte[0]);
+                Directory.CreateDirectory(Path.Combine(sandbox, "java", "stub", "bin"));
+                File.WriteAllBytes(
+                    Path.Combine(sandbox, "java", "stub", "bin", "java.exe"), new byte[0]);
+                Directory.CreateDirectory(Path.Combine(sandbox, "jars"));
+                File.WriteAllBytes(
+                    Path.Combine(sandbox, "jars", "ij1-patcher-smoke.jar"), new byte[0]);
                 fijiBox.Text = sandbox;
                 outputBaseBox.Text = sandbox;
                 inputBox.Text = sandbox;
@@ -547,13 +553,15 @@ namespace IFQuantLauncher
                 "Exploratory allows adaptive Otsu behind a typed confirmation and stamps the " +
                 "run folder. Dry is a smoke test.");
 
+            string launcherInvocation =
+                "launcher exe — fiji-windows-*.exe --headless --console --run (v1.7.2)";
+            string bundledJvmInvocation =
+                "bundled JVM — java.exe + ij1-patcher agent (as scripts/Invoke-Stage2Sharded.ps1)";
             invocationBox = MakeCombo(
-                new string[]
-                {
-                    "launcher exe — fiji-windows-*.exe --headless --console --run (v1.7.2)",
-                    "bundled JVM — java.exe + ij1-patcher agent (as scripts/Invoke-Stage2Sharded.ps1)"
-                },
-                "launcher exe — fiji-windows-*.exe --headless --console --run (v1.7.2)",
+                new string[] { launcherInvocation, bundledJvmInvocation },
+                GetWindowsArchitecture() == "ARM64"
+                    ? bundledJvmInvocation
+                    : launcherInvocation,
                 false);
             table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             table.Controls.Add(MakeLabel("How to start Fiji"), 0, 4);
@@ -945,7 +953,10 @@ namespace IFQuantLauncher
             tierBox.Visible = !legacy;
             tierBox.Enabled = !legacy;
             invocationBox.Enabled = !legacy;
-            if (legacy) invocationBox.SelectedIndex = 0;
+            if (legacy)
+                invocationBox.SelectedIndex = 0;
+            else if (GetWindowsArchitecture() == "ARM64")
+                invocationBox.SelectedIndex = 1;
 
             // Route 2 forces these; hiding them is how the user learns they are
             // not negotiable rather than wondering why they were ignored.
