@@ -20,8 +20,8 @@ using IFQuantLauncher.Routing;
 [assembly: AssemblyCompany("IF Quant Pipeline")]
 [assembly: AssemblyProduct("IF Quant Launcher")]
 [assembly: AssemblyCopyright("Research software")]
-[assembly: AssemblyVersion("1.9.3.0")]
-[assembly: AssemblyFileVersion("1.9.3.0")]
+[assembly: AssemblyVersion("1.9.4.0")]
+[assembly: AssemblyFileVersion("1.9.4.0")]
 
 namespace IFQuantLauncher
 {
@@ -1481,6 +1481,8 @@ namespace IFQuantLauncher
 
         private void RestoreRecommendedSettings()
         {
+            if (invocationBox != null && SelectedRoute != ImageRoute.LegacyFiji172)
+                invocationBox.SelectedIndex = GetWindowsArchitecture() == "ARM64" ? 1 : 0;
             SelectChoice(panelBox, "AUTO");
             SelectChoice(segmenterBox, "classic");
             SelectChoice(projectionBox, "layer_aware");
@@ -2653,9 +2655,27 @@ namespace IFQuantLauncher
 
         internal static string GetWindowsArchitecture()
         {
-            string architecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432");
-            if (string.IsNullOrWhiteSpace(architecture))
-                architecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE");
+            // An AnyCPU .NET Framework launcher can run under x86/x64 emulation
+            // on Windows ARM64. In that case the process-scoped variables can
+            // describe the emulation layer (AMD64) instead of the native OS
+            // (ARM64). The machine-scoped value comes from the system registry
+            // and remains native, so it must win when available.
+            string machineArchitecture = Environment.GetEnvironmentVariable(
+                "PROCESSOR_ARCHITECTURE", EnvironmentVariableTarget.Machine);
+            string wowArchitecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432");
+            string processArchitecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE");
+            return ClassifyWindowsArchitecture(
+                machineArchitecture, wowArchitecture, processArchitecture);
+        }
+
+        internal static string ClassifyWindowsArchitecture(
+            string machineArchitecture, string wowArchitecture, string processArchitecture)
+        {
+            string architecture = !string.IsNullOrWhiteSpace(machineArchitecture)
+                ? machineArchitecture
+                : (!string.IsNullOrWhiteSpace(wowArchitecture)
+                    ? wowArchitecture
+                    : processArchitecture);
             architecture = (architecture ?? "unknown").Trim().ToUpperInvariant();
             if (architecture.Contains("ARM64"))
                 return "ARM64";
@@ -3593,6 +3613,30 @@ namespace IFQuantLauncher
                 FailClosedGate.Evaluate(bogus, null, thresholdMarkers, null);
             if (!bogusGate.Blocked || !HasCode(bogusGate, "H1_PANEL_UNKNOWN")) return 51;
 
+            // Modern ARM64 routes must refuse the Fiji launcher executable and
+            // accept the bundled-JVM path; the frozen legacy route is unchanged.
+            ToolInventory armTools = new ToolInventory();
+            armTools.FijiExecutable = "fiji-windows-arm64.exe";
+            armTools.JavaExecutable = "java.exe";
+            armTools.Ij1PatcherJar = "ij1-patcher.jar";
+            armTools.WindowsArchitecture = "ARM64";
+            RunRequest armRequest = NewLeftRequest(ImageRoute.IfConfocal);
+            armRequest.Invocation = FijiInvocation.LauncherExe;
+            GateResult armLauncherGate =
+                FailClosedGate.Evaluate(armRequest, left, thresholdMarkers, armTools);
+            if (!armLauncherGate.Blocked ||
+                !HasCode(armLauncherGate, "FIJI_ARM64_LAUNCHER_UNRELIABLE")) return 52;
+            armRequest.Invocation = FijiInvocation.BundledJvm;
+            GateResult armJvmGate =
+                FailClosedGate.Evaluate(armRequest, left, thresholdMarkers, armTools);
+            if (armJvmGate.Blocked ||
+                HasCode(armJvmGate, "FIJI_ARM64_LAUNCHER_UNRELIABLE")) return 52;
+
+            RunRequest legacyArm = NewLeftRequest(ImageRoute.LegacyFiji172);
+            legacyArm.Invocation = FijiInvocation.LauncherExe;
+            GateResult legacyArmGate =
+                FailClosedGate.Evaluate(legacyArm, left, thresholdMarkers, armTools);
+            if (HasCode(legacyArmGate, "FIJI_ARM64_LAUNCHER_UNRELIABLE")) return 52;
             return 0;
         }
 
@@ -3782,6 +3826,16 @@ namespace IFQuantLauncher
                         "primaryEndpoint:true",
                         StringComparison.Ordinal) < 0)
                     return 28;
+                if (!string.Equals(
+                        MainForm.ClassifyWindowsArchitecture("ARM64", "AMD64", "x86"),
+                        "ARM64", StringComparison.Ordinal) ||
+                    !string.Equals(
+                        MainForm.ClassifyWindowsArchitecture(null, "ARM64", "AMD64"),
+                        "ARM64", StringComparison.Ordinal) ||
+                    !string.Equals(
+                        MainForm.ClassifyWindowsArchitecture(null, null, "AMD64"),
+                        "X64", StringComparison.Ordinal))
+                    return 29;
                 string mixedRoot = Path.Combine(
                     Path.GetTempPath(),
                     "IFQuantLauncher-mixed-panel-" + Guid.NewGuid().ToString("N"));

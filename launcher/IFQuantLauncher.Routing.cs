@@ -50,8 +50,11 @@ namespace IFQuantLauncher.Routing
         // different binaries had been called v1.8.0. Version 1.9.3 adds a calibrated,
         // thin internal scale bar to visual merge panels while preserving the
         // frozen v1.7.2-compatible legacy route.
-        public const string Version = "1.9.3";
-        public const string AssemblyVersion = "1.9.3.0";
+        // Version 1.9.4 fixes native ARM64 detection and prevents modern routes
+        // from using Fiji's ARM64 launcher executable, which can exit 0 without
+        // running the script or writing a manifest.
+        public const string Version = "1.9.4";
+        public const string AssemblyVersion = "1.9.4.0";
 
         // =============================================================
         // >>> THE ONE LINE THAT RE-ENABLES ROUTE 3 (H&E / brightfield) <<<
@@ -1443,6 +1446,15 @@ namespace IFQuantLauncher.Routing
                     "located under the Fiji folder. Both java.exe (under java\\) and " +
                     "ij1-patcher-*.jar (under jars\\) are required; the patcher is what makes " +
                     "headless ImageJ1 work at all."));
+            if (spec.RequiresFiji && request.Route != ImageRoute.LegacyFiji172 &&
+                request.Invocation == FijiInvocation.LauncherExe && tools != null &&
+                string.Equals(tools.WindowsArchitecture, "ARM64", StringComparison.OrdinalIgnoreCase))
+                result.Findings.Add(new GateFinding(
+                    Severity.Block, "FIJI_ARM64_LAUNCHER_UNRELIABLE",
+                    "Fiji's Windows ARM64 launcher executable can exit 0 without running the " +
+                    "analysis script or writing run_manifest.json. Select 'bundled JVM' under " +
+                    "How to start Fiji; this installation already contains the Java runtime " +
+                    "and ij1-patcher required for that path."));
             if (spec.RequiresQuPath && tools != null && !tools.QuPathPresent)
                 result.Findings.Add(new GateFinding(
                     Severity.Block, "QUPATH_MISSING",
@@ -2215,6 +2227,7 @@ namespace IFQuantLauncher.Routing
         public string FijiDirectory;
         public string JavaExecutable;
         public string Ij1PatcherJar;
+        public string WindowsArchitecture;
         public string QuPathExecutable;
         public string PythonExecutable;
 
@@ -2234,6 +2247,7 @@ namespace IFQuantLauncher.Routing
             string fijiPath, string quPathPath, string pythonPath, string windowsArchitecture)
         {
             ToolInventory tools = new ToolInventory();
+            tools.WindowsArchitecture = windowsArchitecture;
             tools.FijiExecutable = ResolveFiji(fijiPath, windowsArchitecture);
             tools.FijiDirectory = ResolveFijiDirectory(fijiPath, tools.FijiExecutable);
             if (tools.FijiDirectory != null)
